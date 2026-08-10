@@ -1,0 +1,6 @@
+apiVersion: v2
+name: perguntai
+description: PerguntAI — SvelteKit data-analytics assistant (stateless app; Postgres + Blob external)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

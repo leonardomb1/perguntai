@@ -1,0 +1,101 @@
+# PerguntAI Helm values — a STARTER. Assumes the app has been made stateless:
+# durable state in managed Postgres, documents/exports in Azure Blob. No PVC.
+# External (not managed by this chart): Postgres, Blob, Windmill, StarRocks, Foundry.
+
+image:
+  repository: registry.example.com/perguntai
+  tag: latest
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+replicaCount: 2
+
+# adapter-node listens on $PORT (default 3000) and binds 0.0.0.0.
+containerPort: 3000
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: nginx
+  host: perguntai.example.com
+  # Uploads (PDF up to 12 MB) — raise proxy body size on the ingress too.
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "15m"
+  tls:
+    enabled: true
+    secretName: perguntai-tls
+
+# Non-secret env → rendered into a ConfigMap. Fill for your environment.
+config:
+  ORIGIN: "https://perguntai.example.com"
+  BODY_SIZE_LIMIT: "15M" # adapter-node upload cap (PDFs)
+  WINDMILL_BASE_URL: "https://windmill.example.com"
+  WINDMILL_WORKSPACE: "data-analytics"
+  ANTHROPIC_FOUNDRY_BASE_URL: "" # must end in /anthropic/v1
+  # Extra non-Claude models (any OpenAI-compatible /v1 endpoint) and the
+  # deployment default — see .env.example for the entry format.
+  # MODELS_EXTRA: '[{"id":"qwen3.6:35b-a3b","label":"Qwen 3.6","provider":"qwen","baseUrl":"http://ollama:11434/v1","reasoningTag":"think"}]'
+  # DEFAULT_MODEL_ID: "claude-sonnet-5"
+  STARROCKS_HOST: "10.140.0.7"
+  STARROCKS_PORT: "9030"
+  STARROCKS_DATABASE: "gold"
+  SENTRY_ENVIRONMENT: "production"
+  SENTRY_TRACES_SAMPLE_RATE: "1.0"
+
+# Secrets — DO NOT put real values in git. Point at a pre-created Secret
+# (recommended: External Secrets Operator / sealed-secrets), OR inline for a
+# throwaway dev cluster only. Required keys are listed in templates/secret.yaml.
+secret:
+  # If set, the Deployment uses this existing Secret and the chart creates none.
+  existingSecret: ""
+  # Inline (dev only). Ignored when existingSecret is set.
+  data: {}
+  #   JWT_SECRET: ""
+  #   ANTHROPIC_FOUNDRY_API_KEY: ""
+  #   WINDMILL_AUTH_TOKEN: ""
+  #   STARROCKS_SYNC_USER: ""
+  #   STARROCKS_SYNC_PASSWORD: ""
+  #   DATABASE_URL: ""              # → the PgBouncer service (see below), not Postgres directly
+  #   AZURE_BLOB_CONNECTION_STRING: ""
+  #   SENTRY_DSN: ""
+
+# Optional in-cluster PgBouncer. Prefer Azure Flexible Server's built-in pooler
+# or CloudNativePG's pooler; this is a minimal fallback. When enabled, set the
+# app's DATABASE_URL to point at the pgbouncer Service (port 6432).
+pgbouncer:
+  enabled: false
+  image: edoburu/pgbouncer:latest
+  replicaCount: 2
+  poolMode: transaction
+  maxClientConn: 1000
+  defaultPoolSize: 20
+  # Upstream managed Postgres:
+  upstream:
+    host: "your-instance.postgres.database.azure.com"
+    port: 5432
+    dbname: "perguntai"
+  # Auth for pgbouncer→Postgres, from the same Secret keys:
+  authSecretUserKey: PGUSER
+  authSecretPassKey: PGPASSWORD
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

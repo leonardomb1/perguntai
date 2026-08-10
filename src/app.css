@@ -1,0 +1,59 @@
+/* Self-hosted webfonts: DM Sans (UI, ≈ Google Sans) + Source Serif 4
+   (assistant prose, ≈ Anthropic's Tiempos). */
+@import '@fontsource-variable/dm-sans';
+@import '@fontsource-variable/source-serif-4';
+@import 'tailwindcss';
+
+@theme {
+	/* UI face — DM Sans tracks Google Sans (Gemini); the serif is used for
+	   assistant prose in Markdown.svelte, echoing Claude's Tiempos. */
+	--font-sans: 'DM Sans Variable', ui-sans-serif, system-ui, sans-serif;
+	--font-serif: 'Source Serif 4 Variable', Georgia, 'Times New Roman', serif;
+}
+
+html,
+body {
+	height: 100%;
+	font-family: var(--font-sans);
+	/* App-shell layout: ALL scrolling is internal (chat pane, sidebar,
+	   modals). The document itself must never scroll — a document scrollbar
+	   blinking in/out during streaming (rounding at fractional DPI/zoom)
+	   shifts the whole page left/right. */
+	overflow: hidden;
+}
+
+/* Tailwind v4's preflight resets button cursors to default — restore the
+   affordance on every interactive surface. */
+button:not(:disabled),
+[role='button'],
+summary,
+label,
+select {
+	cursor: pointer;
+}
+
+/* Slim, theme-tinted scrollbars for the app's internal scroll areas — the OS
+   default (chunky grey, esp. on WSL/Windows) clashes with the cream UI. The
+   transparent border + padding-box clip insets the thumb so it reads as a
+   thin rounded pill, overlay-style. */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: rgba(120, 113, 100, 0.32) transparent;
+}
+*::-webkit-scrollbar {
+	width: 11px;
+	height: 11px;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+	background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+	background-color: rgba(120, 113, 100, 0.28);
+	border-radius: 9999px;
+	border: 3px solid transparent;
+	background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+	background-color: rgba(120, 113, 100, 0.5);
+}

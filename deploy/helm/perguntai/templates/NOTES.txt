@@ -1,0 +1,18 @@
+PerguntAI deployed as {{ include "perguntai.fullname" . }} ({{ .Values.replicaCount }}+ replicas, stateless).
+
+  URL:      https://{{ .Values.ingress.host }}
+  Replicas: {{ if .Values.autoscaling.enabled }}HPA {{ .Values.autoscaling.minReplicas }}–{{ .Values.autoscaling.maxReplicas }} (CPU {{ .Values.autoscaling.targetCPUUtilizationPercentage }}%){{ else }}fixed {{ .Values.replicaCount }}{{ end }}
+  PgBouncer:{{ if .Values.pgbouncer.enabled }} in-cluster ({{ include "perguntai.fullname" . }}-pgbouncer:6432, {{ .Values.pgbouncer.poolMode }} mode){{ else }} disabled (use Azure Flexible Server / CloudNativePG pooler){{ end }}
+
+PREREQUISITES (this chart assumes them — it does NOT create them):
+  • The app is STATELESS: all durable state in managed Postgres + Azure Blob.
+    A pre-stateless build still writes to DATA_DIR (emptyDir here = data lost on
+    restart). Do the storage migration first.
+  • Store writes use DB-level concurrency (transactions), NOT the old in-memory
+    per-user queue — otherwise replicas race the same record.
+  • Secrets provided via secret.existingSecret (recommended) with keys:
+    JWT_SECRET, ANTHROPIC_FOUNDRY_API_KEY, WINDMILL_AUTH_TOKEN,
+    STARROCKS_SYNC_USER, STARROCKS_SYNC_PASSWORD, DATABASE_URL,
+    AZURE_BLOB_CONNECTION_STRING, SENTRY_DSN{{ if .Values.pgbouncer.enabled }}, PGUSER, PGPASSWORD{{ end }}
+    (DATABASE_URL should point at {{ if .Values.pgbouncer.enabled }}the pgbouncer Service :6432{{ else }}your pooled Postgres endpoint{{ end }}.)
+  • Windmill workers must reach this app for flow agent-step callbacks (ORIGIN).

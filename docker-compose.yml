@@ -1,0 +1,25 @@
+services:
+  perguntai:
+    # CI-built image (private — `docker login ghcr.io` with a read:packages PAT).
+    # `docker compose build` still works for local builds; deploys should
+    # `docker compose pull && docker compose up -d`.
+    image: ghcr.io/your-org/perguntai:latest
+    build: .
+    ports:
+      - '3000:3000'
+    env_file: .env
+    volumes:
+      # all app state (conversations, documents, exports, schema.json) — named
+      # volume, NOT a host bind: bind mounts inherit host ownership (root on
+      # most servers) and break the non-root container user's writes.
+      - perguntai-data:/app/data
+    restart: unless-stopped
+
+  # Schema sync runs at runtime instead of a sidecar: cron a Windmill job to
+  # POST $PERGUNTAI_BASE_URL/api/admin/sync-schema with
+  # `Authorization: Bearer $SCHEMA_SYNC_TOKEN`. It uses the STARROCKS_SYNC_*
+  # service account and writes schema.json into the volume (picked up by mtime).
+  # For a local one-off: node scripts/sync-schema.js (see scripts/sync-schema.js).
+
+volumes:
+  perguntai-data:

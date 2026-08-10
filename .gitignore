@@ -1,0 +1,33 @@
+# Dependencies
+node_modules
+
+# Build output
+/build
+/.svelte-kit
+.output
+.vercel
+.netlify
+.wrangler
+
+# Environment — secrets never enter the repo
+.env
+.env.*
+!.env.example
+
+# App state (conversations, documents, exports) — lives on the server/volume
+data/
+
+# Generated warehouse schema (recreate with `npm run sync-schema`)
+schema.json
+
+# Generated i18n output (recompiled on every build)
+src/lib/paraglide
+project.inlang/cache/
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# OS / editors
+.DS_Store
+Thumbs.db

@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "perguntai.fullname" . }}
+  labels: {{- include "perguntai.labels" . | nindent 4 }}
+spec:
+  # HPA owns replicas when autoscaling is enabled.
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels: {{- include "perguntai.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "perguntai.selectorLabels" . | nindent 8 }}
+      annotations:
+        # Roll pods when the non-secret config changes.
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}{{- toYaml . | nindent 8 }}{{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+          env:
+            - name: PORT
+              value: {{ .Values.containerPort | quote }}
+            # Transient scratch only — ALL durable state is in Postgres + Blob.
+            - name: DATA_DIR
+              value: /data
+          envFrom:
+            - configMapRef:
+                name: {{ include "perguntai.fullname" . }}-config
+            - secretRef:
+                name: {{ include "perguntai.secretName" . }}
+          volumeMounts:
+            - name: scratch
+              mountPath: /data
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: scratch
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "perguntai.fullname" . }}
+  labels: {{- include "perguntai.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector: {{- include "perguntai.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
