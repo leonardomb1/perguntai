@@ -310,8 +310,16 @@ export async function buildAgent(
 		// — and stop the loop early once the user's remaining daily token budget
 		// is spent (otherwise a single multi-step run could blow far past the
 		// limit that is only checked at request start).
+		//
+		// 24, not 10: authoring a document in Tabula is a LOOP, not one call.
+		// create_draft, then per revision read_doc + patch_doc + check_doc, then
+		// render_pdf — so a report written in a few sections with a couple of
+		// compile fixes reaches the high teens before it produces anything, on top
+		// of whatever querying came first. At 10 the run died holding a
+		// half-written draft and no PDF. The token budget below is the guard that
+		// actually scales with cost; this one only stops a pathological loop.
 		stopWhen: [
-			stepCountIs(10),
+			stepCountIs(24),
 			({ steps }) =>
 				tokenBudget !== null &&
 				steps.reduce((sum, step) => sum + weightedTokens(step.usage), 0) >= tokenBudget

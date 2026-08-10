@@ -84,11 +84,21 @@ const WINDMILL_WRITE = new Set([
 ]);
 
 /**
- * Tabula's MCP is small and stable; everything read-only is exposed, and the
- * one write (request_publish) flows through Tabula's own review policy, so the
- * platform — not this chat — decides whether publishing needs approval.
+ * Tabula's MCP is small and stable; everything read-only is exposed, and every
+ * write flows through Tabula's own permissions and review policy, so the
+ * platform — not this chat — decides who may edit and whether publishing needs
+ * approval.
+ *
+ * The draft tools are what make long documents possible at all. Emitting a
+ * report as a `content` argument costs its full length in OUTPUT tokens, again on
+ * every failed compile and every revision — and a single tool call cannot exceed
+ * the model's per-turn output ceiling (see modelMaxOutputTokens), so a long one
+ * simply cannot be written that way. Instead: create_draft once, then patch_doc
+ * per change, check_doc to compile, render_pdf by docId. Only the diff is ever
+ * tokenized, and the finished source never comes back through the model.
  */
 const TABULA_TOOLS = new Set([
+	// Read
 	'search_docs',
 	'list_workspaces',
 	'list_docs',
@@ -96,6 +106,17 @@ const TABULA_TOOLS = new Set([
 	'get_published_doc',
 	'get_backlinks',
 	'list_templates',
+	'read_doc',
+	'list_drafts',
+	// Author and revise
+	'create_draft',
+	'patch_doc',
+	'check_doc',
+	'revert_doc',
+	'keep_doc',
+	'create_doc',
+	'update_doc',
+	// Output
 	'render_pdf',
 	'render_pdf_custom',
 	'request_publish'
