@@ -262,40 +262,56 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div
-	class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+	class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4"
 	transition:fade={{ duration: 150 }}
 	onclick={(e) => e.target === e.currentTarget && onClose()}
 	role="presentation"
 >
 	<div
 		transition:scale={{ start: 0.96, duration: 180 }}
-		class="flex h-[600px] max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl"
+		class="flex h-[600px] max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[85vh] sm:flex-row"
 		role="dialog"
 		aria-modal="true"
 		aria-label={m.settings_title()}
 	>
-		<!-- Section nav -->
-		<nav class="flex w-44 shrink-0 flex-col gap-0.5 border-r border-[#e3e0d5] bg-[#f0eee6] p-3 sm:w-52">
-			<span class="px-2 pt-1 pb-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase">
-				{m.settings_title()}
-			</span>
-			{#each [{ id: 'general', icon: 'settings', label: m.settings_general() }, { id: 'memory', icon: 'sparkle', label: m.settings_memory() }, { id: 'connectors', icon: 'zap', label: m.settings_connectors() }, ...(settings.role === 'admin' ? [{ id: 'admin', icon: 'users', label: m.admin_title() }] : [])] as item (item.id)}
-				<button
-					onclick={() => (section = item.id as Section)}
-					class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition
-						{section === item.id
-						? 'bg-white font-medium text-neutral-900 shadow-sm'
-						: 'text-neutral-600 hover:bg-white/60'}"
+		<!-- Section nav — a scrollable tab strip on phones, a sidebar from sm up.
+		     The wrapper collapses (display:contents) at sm so the nav becomes a
+		     direct flex child of the dialog again. -->
+		<div class="flex shrink-0 items-center border-b border-[#e3e0d5] bg-[#f0eee6] sm:contents">
+			<nav
+				class="flex min-w-0 flex-1 gap-1 overflow-x-auto p-2 sm:w-44 sm:flex-none sm:flex-col sm:gap-0.5 sm:overflow-x-visible sm:border-r sm:border-[#e3e0d5] sm:bg-[#f0eee6] sm:p-3 md:w-52"
+			>
+				<span
+					class="hidden px-2 pt-1 pb-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase sm:block"
 				>
-					<Icon name={item.icon as 'settings' | 'sparkle' | 'zap' | 'users'} size={16} />
-					{item.label}
-				</button>
-			{/each}
-		</nav>
+					{m.settings_title()}
+				</span>
+				{#each [{ id: 'general', icon: 'settings', label: m.settings_general() }, { id: 'memory', icon: 'sparkle', label: m.settings_memory() }, { id: 'connectors', icon: 'zap', label: m.settings_connectors() }, ...(settings.role === 'admin' ? [{ id: 'admin', icon: 'users', label: m.admin_title() }] : [])] as item (item.id)}
+					<button
+						onclick={() => (section = item.id as Section)}
+						class="flex shrink-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm whitespace-nowrap transition
+							{section === item.id
+							? 'bg-white font-medium text-neutral-900 shadow-sm'
+							: 'text-neutral-600 hover:bg-white/60'}"
+					>
+						<Icon name={item.icon as 'settings' | 'sparkle' | 'zap' | 'users'} size={16} />
+						{item.label}
+					</button>
+				{/each}
+			</nav>
+			<button
+				onclick={onClose}
+				class="mr-1 shrink-0 rounded-lg p-2 text-neutral-500 transition hover:bg-white/70 hover:text-neutral-700 sm:hidden"
+				title={m.settings_close()}
+				aria-label={m.settings_close()}
+			>
+				<Icon name="x" size={18} />
+			</button>
+		</div>
 
 		<!-- Content -->
-		<div class="flex min-w-0 flex-1 flex-col">
-			<div class="flex items-center justify-end px-4 pt-3">
+		<div class="flex min-h-0 min-w-0 flex-1 flex-col">
+			<div class="hidden items-center justify-end px-4 pt-3 sm:flex">
 				<button
 					onclick={onClose}
 					class="rounded-lg p-2 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700"
@@ -306,7 +322,7 @@
 				</button>
 			</div>
 
-			<div class="min-h-0 flex-1 overflow-y-auto px-7 pb-4">
+			<div class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pt-4 pb-4 sm:px-7 sm:pt-0">
 				{#if section === 'general'}
 					<h2 class="font-serif text-xl font-semibold text-neutral-900">{m.settings_profile()}</h2>
 
@@ -315,7 +331,9 @@
 						<Avatar {username} size={40} />
 					</div>
 
-					<div class="flex items-center justify-between gap-6 border-b border-[#efede3] py-4">
+					<div
+						class="flex flex-col gap-2 border-b border-[#efede3] py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+					>
 						<label for="set-fullname" class="text-sm font-medium text-neutral-700">
 							{m.settings_full_name()}
 						</label>
@@ -324,11 +342,13 @@
 							type="text"
 							bind:value={fullName}
 							maxlength="80"
-							class="w-56 rounded-xl border border-neutral-300 px-3 py-2 text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+							class="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none sm:w-56"
 						/>
 					</div>
 
-					<div class="flex items-center justify-between gap-6 border-b border-[#efede3] py-4">
+					<div
+						class="flex flex-col gap-2 border-b border-[#efede3] py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+					>
 						<label for="set-displayname" class="text-sm font-medium text-neutral-700">
 							{m.settings_call_you()}
 						</label>
@@ -337,7 +357,7 @@
 							type="text"
 							bind:value={displayName}
 							maxlength="80"
-							class="w-56 rounded-xl border border-neutral-300 px-3 py-2 text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+							class="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none sm:w-56"
 						/>
 					</div>
 
@@ -360,7 +380,9 @@
 						{m.settings_preferences()}
 					</h2>
 					{#if settings.webSearchAvailable}
-						<div class="flex items-center justify-between gap-6 border-b border-[#efede3] py-4">
+						<div
+							class="flex items-center justify-between gap-4 border-b border-[#efede3] py-4 sm:gap-6"
+						>
 							<span class="min-w-0">
 								<span class="block text-sm font-medium text-neutral-700">{m.settings_web_search()}</span>
 								<span class="mt-0.5 block text-xs text-neutral-500">{m.settings_web_search_hint()}</span>
@@ -402,7 +424,9 @@
 						{m.settings_memory_hint()}
 					</p>
 
-					<div class="mt-5 flex items-center justify-between gap-6 border-b border-[#efede3] pb-5">
+					<div
+						class="mt-5 flex items-center justify-between gap-4 border-b border-[#efede3] pb-5 sm:gap-6"
+					>
 						<span class="text-sm font-medium text-neutral-700">{m.settings_memory_toggle()}</span>
 						<button
 							role="switch"
@@ -547,7 +571,7 @@
 
 					{#if adminTab === 'stats'}
 						<!-- STATISTICS TAB -->
-						<div class="mt-4 mb-4 grid grid-cols-2 gap-3">
+						<div class="mt-4 mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
 							{#each [{ label: m.admin_stats_today(), s: usageStats.todaySplit, w: usageStats.totalToday }, { label: m.admin_stats_month(), s: usageStats.monthSplit, w: usageStats.totalMonth }] as card (card.label)}
 								<div class="rounded-xl border border-[#e9e6dd] bg-[#faf9f5] px-4 py-3">
 									<div class="text-xs text-neutral-400">{card.label}</div>
@@ -656,7 +680,7 @@
 										</span>
 									{/if}
 								</div>
-								<div class="mt-2 flex items-center gap-2 pl-[34px]">
+								<div class="mt-2 flex flex-wrap items-center gap-2 sm:pl-[34px]">
 								<SelectMenu
 									options={roleOptions}
 									value={u.role}
@@ -841,7 +865,7 @@
 
 			<!-- Footer (admin + memory apply immediately — no batch save there) -->
 			<div
-				class="flex items-center justify-end gap-3 border-t border-[#efede3] px-7 py-3.5
+				class="flex shrink-0 items-center justify-end gap-3 border-t border-[#efede3] px-4 py-3.5 sm:px-7
 					{section === 'admin' || section === 'memory' ? 'invisible' : ''}"
 			>
 				{#if saveError}
