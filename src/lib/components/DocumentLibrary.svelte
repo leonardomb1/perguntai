@@ -74,12 +74,13 @@
 		<p class="text-xs text-neutral-400">{m.org_docs_empty()}</p>
 	{/if}
 
-	<div class="flex items-center gap-2">
+	<!-- Wraps on narrow screens so the description input keeps a usable width. -->
+	<div class="flex flex-wrap items-center gap-2">
 		<input
 			bind:value={description}
 			maxlength="200"
 			placeholder={m.org_docs_desc_placeholder()}
-			class="min-w-0 flex-1 rounded-lg border border-[#e3e0d5] bg-white px-3 py-1.5 text-xs transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+			class="w-full rounded-lg border border-[#e3e0d5] bg-white px-3 py-1.5 text-xs transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none sm:w-auto sm:min-w-0 sm:flex-1"
 		/>
 		<input
 			bind:this={fileInput}

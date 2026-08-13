@@ -28,7 +28,9 @@
 <div class="rounded-lg border border-[#e3e0d5] bg-white px-2 py-1.5">
 	<div class="flex flex-wrap items-center gap-1.5">
 		{#each values as v (v)}
-			<span class="flex items-center gap-1 rounded-md bg-[#d97757]/12 py-0.5 pr-1 pl-2 text-xs font-medium text-[#bd5d3a]">
+			<span
+				class="flex max-w-full items-center gap-1 rounded-md bg-[#d97757]/12 py-0.5 pr-1 pl-2 text-xs font-medium break-all text-[#bd5d3a]"
+			>
 				{v}
 				<button
 					onclick={() => remove(v)}

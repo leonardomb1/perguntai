@@ -33,6 +33,11 @@
 	type Section = 'knowledge' | 'departments';
 	let section = $state<Section>('knowledge');
 
+	/** Mobile only: the console rail is a drawer, closed by default. */
+	let railOpen = $state(false);
+	/** Mobile only: the departments pane shows either the list or the editor. */
+	let deptDetail = $state(false);
+
 	// Editing shape: match rules always have concrete arrays/string so the chip
 	// editors have a bind target (the server drops empty rules again on save).
 	type EditMatch = { adGroups: string[]; costCenters: string[]; costCenterPrefix: string };
@@ -105,11 +110,18 @@
 			...departments,
 			{ id, name: '', enabled: true, match: { adGroups: [], costCenters: [], costCenterPrefix: '' }, knowledge: [] }
 		];
+		selectDept(id);
+	}
+	function selectDept(id: string) {
 		selectedDeptId = id;
+		deptDetail = true; // no-op above sm, where both panes are visible
 	}
 	function removeDept(id: string) {
 		departments = departments.filter((d) => d.id !== id);
-		if (selectedDeptId === id) selectedDeptId = departments[0]?.id ?? null;
+		if (selectedDeptId === id) {
+			selectedDeptId = departments[0]?.id ?? null;
+			deptDetail = false; // back to the list on mobile
+		}
 	}
 
 	const di = $derived(departments.findIndex((d) => d.id === selectedDeptId));
@@ -126,9 +138,12 @@
 	<title>{m.org_title()} — PerguntAI</title>
 </svelte:head>
 
-<div class="flex h-dvh bg-[#faf9f5] text-neutral-800">
-	<!-- console rail -->
-	<aside class="flex w-60 shrink-0 flex-col border-r border-[#e3e0d5] bg-[#f5f4ee]">
+<div class="relative flex h-dvh overflow-hidden bg-[#faf9f5] text-neutral-800">
+	<!-- console rail — a drawer on phones, a static column from sm up -->
+	<aside
+		class="absolute inset-y-0 left-0 z-30 flex w-60 shrink-0 flex-col border-r border-[#e3e0d5] bg-[#f5f4ee] transition-transform sm:static sm:translate-x-0
+			{railOpen ? 'translate-x-0' : '-translate-x-full'}"
+	>
 		<div class="flex items-center gap-2 border-b border-[#e3e0d5] p-4">
 			<button
 				onclick={() => goto('/')}
@@ -138,15 +153,26 @@
 			>
 				<Icon name="arrow-right" size={15} class="rotate-180" />
 			</button>
-			<div class="min-w-0">
+			<div class="min-w-0 flex-1">
 				<h1 class="truncate text-sm font-semibold">{m.org_title()}</h1>
 				<p class="truncate text-[11px] text-neutral-500">{m.org_console_label()}</p>
 			</div>
+			<button
+				onclick={() => (railOpen = false)}
+				class="shrink-0 rounded-lg p-1.5 text-neutral-500 transition hover:bg-[#d97757]/10 sm:hidden"
+				title={m.close_sidebar()}
+				aria-label={m.close_sidebar()}
+			>
+				<Icon name="x" size={16} />
+			</button>
 		</div>
 		<nav class="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
 			{#each nav as item (item.id)}
 				<button
-					onclick={() => (section = item.id)}
+					onclick={() => {
+						section = item.id;
+						railOpen = false;
+					}}
 					class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition
 						{section === item.id ? 'bg-[#d97757]/10 text-[#bd5d3a]' : 'text-neutral-600 hover:bg-[#eceae1]'}"
 				>
@@ -160,24 +186,40 @@
 		</p>
 	</aside>
 
+	{#if railOpen}
+		<button
+			class="absolute inset-0 z-20 bg-black/20 sm:hidden"
+			onclick={() => (railOpen = false)}
+			aria-label={m.close_sidebar()}
+		></button>
+	{/if}
+
 	<!-- main -->
 	<main class="flex min-w-0 flex-1 flex-col">
-		<header class="flex items-center gap-3 border-b border-[#e3e0d5] bg-white px-6 py-3">
+		<header class="flex items-center gap-3 border-b border-[#e3e0d5] bg-white px-4 py-3 sm:px-6">
+			<button
+				onclick={() => (railOpen = true)}
+				class="-ml-1 shrink-0 rounded-lg border border-[#e3e0d5] p-2 text-neutral-600 sm:hidden"
+				title={m.open_sidebar()}
+				aria-label={m.open_sidebar()}
+			>
+				<Icon name="menu" size={16} />
+			</button>
 			<div class="min-w-0 flex-1">
 				<h2 class="truncate text-sm font-semibold">
 					{section === 'knowledge' ? m.org_nav_knowledge() : m.org_dept_title()}
 				</h2>
-				<p class="truncate text-[11px] text-neutral-500">
+				<p class="hidden truncate text-[11px] text-neutral-500 sm:block">
 					{section === 'knowledge' ? m.org_subtitle() : m.org_dept_subtitle()}
 				</p>
 			</div>
 			{#if savedFlash}
-				<span class="flex items-center gap-1 text-xs font-medium text-emerald-600">
+				<span class="flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-600">
 					<Icon name="check" size={13} />
-					{m.settings_saved()}
+					<span class="hidden sm:inline">{m.settings_saved()}</span>
 				</span>
 			{:else if dirty}
-				<span class="text-xs text-neutral-400">{m.org_unsaved()}</span>
+				<span class="hidden text-xs text-neutral-400 sm:inline">{m.org_unsaved()}</span>
 			{/if}
 			<button
 				onclick={save}
@@ -194,7 +236,7 @@
 			</div>
 		{:else if section === 'knowledge'}
 			<div class="min-h-0 flex-1 overflow-y-auto">
-				<div class="mx-auto max-w-3xl space-y-8 px-6 py-8">
+				<div class="mx-auto max-w-3xl space-y-8 px-4 py-6 sm:px-6 sm:py-8">
 					<section>
 						<h3 class="text-sm font-semibold text-neutral-900">{m.org_general_title()}</h3>
 						<p class="mt-0.5 mb-3 text-xs text-neutral-500">{m.org_general_hint()}</p>
@@ -230,16 +272,21 @@
 				</div>
 			</div>
 		{:else}
-			<!-- departments: master list + editor -->
+			<!-- departments: master list + editor. Side by side from sm up; on
+			     phones the two take turns filling the pane (see `deptDetail`). -->
+
 			<div class="flex min-h-0 flex-1">
-				<div class="flex w-60 shrink-0 flex-col border-r border-[#e3e0d5] bg-[#faf9f5]">
+				<div
+					class="flex w-full shrink-0 flex-col border-r border-[#e3e0d5] bg-[#faf9f5] sm:w-60
+						{deptDetail ? 'max-sm:hidden' : ''}"
+				>
 					<nav class="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
 						{#if departments.length === 0}
 							<p class="px-3 py-6 text-center text-xs text-neutral-400">{m.org_dept_empty()}</p>
 						{:else}
 							{#each departments as dept (dept.id)}
 								<button
-									onclick={() => (selectedDeptId = dept.id)}
+									onclick={() => selectDept(dept.id)}
 									class="group flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition
 										{selectedDeptId === dept.id ? 'bg-[#d97757]/10' : 'hover:bg-[#eceae1]'}"
 								>
@@ -263,13 +310,21 @@
 					</button>
 				</div>
 
-				<div class="min-h-0 flex-1 overflow-y-auto">
+				<div class="min-h-0 flex-1 overflow-y-auto {deptDetail ? '' : 'max-sm:hidden'}">
 					{#if di < 0}
 						<div class="grid h-full place-items-center">
 							<p class="text-sm text-neutral-400">{m.org_dept_none_selected()}</p>
 						</div>
 					{:else}
-						<div class="mx-auto max-w-2xl space-y-7 px-6 py-8">
+						<div class="mx-auto max-w-2xl space-y-7 px-4 py-6 sm:px-6 sm:py-8">
+							<button
+								onclick={() => (deptDetail = false)}
+								class="flex items-center gap-1.5 text-xs font-medium text-neutral-500 transition hover:text-[#bd5d3a] sm:hidden"
+							>
+								<Icon name="arrow-right" size={13} class="rotate-180" />
+								{m.org_nav_departments()}
+							</button>
+
 							<!-- header row: name + enable + delete -->
 							<div class="flex items-center gap-2">
 								<input
