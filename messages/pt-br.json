@@ -8,6 +8,8 @@
 	"login_invalid": "Usuário ou senha inválidos",
 	"login_service_unavailable": "Serviço de autenticação indisponível",
 	"login_failed": "Falha no login",
+	"login_interrupted": "O login não foi concluído. Tente novamente.",
+	"login_signed_out": "Você saiu da sua conta.",
 	"login_unreachable": "Não foi possível conectar ao servidor",
 	"new_chat": "Nova conversa",
 	"open_sidebar": "Abrir menu",

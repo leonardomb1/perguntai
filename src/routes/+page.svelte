@@ -10,7 +10,7 @@
 	import ConversationDocs from '$lib/components/ConversationDocs.svelte';
 	import SettingsModal from '$lib/components/SettingsModal.svelte';
 	import OnboardingModal from '$lib/components/OnboardingModal.svelte';
-	import { getDisplayName, clearSession, hasSession } from '$lib/session';
+	import { getDisplayName, getToken, clearSession, hasSession } from '$lib/session';
 	import { fetchSettings, type PublicSettings } from '$lib/settings';
 	import { newId } from '$lib/id';
 	import type { UIMessage } from 'ai';
@@ -108,9 +108,26 @@
 		}
 	}
 
-	function logout() {
+	/**
+	 * Signing out has a server side now: it drops the stored OIDC refresh token
+	 * (the thing that can still mint warehouse credentials) and returns where to
+	 * go next — the IdP's end-session endpoint, which bounces back to
+	 * /login?signedout. Clearing localStorage alone would leave that token live.
+	 */
+	async function logout() {
+		let redirectTo = '/login?signedout';
+		try {
+			const res = await fetch('/auth/logout', {
+				method: 'POST',
+				headers: { Authorization: `Bearer ${getToken() ?? ''}` }
+			});
+			if (res.ok) redirectTo = (await res.json()).redirectTo ?? redirectTo;
+		} catch {
+			// Offline or server down — still sign out locally.
+		}
 		clearSession();
-		goto('/login');
+		// Full navigation, not goto(): the destination is usually the IdP.
+		location.href = redirectTo;
 	}
 </script>
 
@@ -204,16 +221,6 @@
 		<div class="flex items-center gap-2.5 border-t border-[#e3e0d5] p-3">
 			<Avatar {username} size={32} />
 			<span class="min-w-0 flex-1 truncate text-sm text-neutral-700">{shownName}</span>
-			{#if settings?.role === 'admin' || settings?.role === 'builder'}
-				<button
-					onclick={() => goto('/flows')}
-					class="shrink-0 rounded-lg p-2 text-neutral-500 transition hover:bg-[#d97757]/10 hover:text-[#bd5d3a]"
-					title={m.flows_nav()}
-					aria-label={m.flows_nav()}
-				>
-					<Icon name="zap" size={16} />
-				</button>
-			{/if}
 			<button
 				onclick={() => (settingsOpen = true)}
 				class="shrink-0 rounded-lg p-2 text-neutral-500 transition hover:bg-[#d97757]/10 hover:text-[#bd5d3a]"

@@ -8,6 +8,8 @@
 	"login_invalid": "Invalid username or password",
 	"login_service_unavailable": "Authentication service unavailable",
 	"login_failed": "Login failed",
+	"login_interrupted": "Sign-in didn't complete. Please try again.",
+	"login_signed_out": "You've been signed out.",
 	"login_unreachable": "Could not reach the server",
 	"new_chat": "New chat",
 	"open_sidebar": "Open sidebar",

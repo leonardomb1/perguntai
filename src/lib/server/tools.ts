@@ -8,9 +8,6 @@ import { runEphemeralPython } from './windmill';
 import { createExcelExport, createTextExport, type ExportSheet } from './exports';
 import { checkStatement, readOnlyStatement } from './sql-guard';
 import { saveMemory, removeMemory } from './memory';
-import { flowSpecSchema, validateFlowSemantics } from './flow-validate';
-import { isValidFlowId, listFlows, loadFlow, saveFlowVersion } from './flows';
-import type { FlowSpec } from '$lib/flow-spec';
 
 /**
  * Tools available to the agent. Each tool runs server-side; the agent loop
@@ -236,7 +233,7 @@ const MAX_INLINE_EXPORT_ROWS = 2_000;
  * client renders the output as a download card.
  */
 export function excelReportTool(
-	credentials: { username: string; password: string },
+	credentials: { username: string; password?: string },
 	conversationId: string,
 	depts: { id: string; name: string }[]
 ) {
@@ -390,7 +387,7 @@ const MAX_PYTHON_RESULT_CHARS = 24_000;
  * the script server-side, so large datasets never pass through the model.
  */
 export function pythonTool(
-	credentials: { username: string; password: string },
+	credentials: { username: string; password?: string },
 	conversationId: string,
 	windmillToken: string | null,
 	depts: { id: string; name: string }[]
@@ -498,7 +495,7 @@ export function pythonTool(
  * warehouse doesn't carry it, and the always-cached prompt prefix stays lean.
  * The model calls this the moment it needs to find a table.
  */
-export function warehouseCatalogTool(credentials: { username: string; password: string }) {
+export function warehouseCatalogTool(credentials: { username: string; password?: string }) {
 	return tool({
 		description:
 			'List the available data-warehouse tables/views (names + descriptions) across the synced ' +
@@ -603,7 +600,7 @@ export function memoryTools(username: string, conversationId: string) {
 	};
 }
 
-export function tableSchemaTool(credentials: { username: string; password: string }) {
+export function tableSchemaTool(credentials: { username: string; password?: string }) {
 	return tool({
 		description:
 			'Get the exact columns (names, types, comments) of one or more tables/views from the synced ' +
@@ -688,7 +685,7 @@ function jsonSafe(value: unknown): unknown {
  * (flow sqlCheck, generateExcel, runPython) stay read-only for everyone.
  */
 export function starrocksQueryTool(
-	credentials: { username: string; password: string },
+	credentials: { username: string; password?: string },
 	{ allowWrites = false }: { allowWrites?: boolean } = {}
 ) {
 	return tool({
@@ -745,130 +742,6 @@ export function starrocksQueryTool(
 			} finally {
 				await conn?.end().catch(() => {});
 			}
-		}
-	});
-}
-
-/**
- * AI-composed flows: the model designs a small DAG (trigger → sqlCheck/agent/
- * notify) and saves it as a versioned DRAFT via upsertFlow. Validation errors
- * come back as the tool result so the model repairs and retries — the
- * validator's pass, not the model's claim, is the success signal. Only added
- * to the toolset for builder/admin users (see buildAgent).
- */
-export function upsertFlowTool(
-	ownerUsername: string,
-	conversationId: string,
-	model: string,
-	opts?: { departmentId?: string | null; editor?: string }
-) {
-	return tool({
-		description:
-			'Create a flow, or save a new version of an existing one. A flow is a small automation TREE ' +
-			'(branches never re-join): exactly one trigger (cron schedule or manual), optional sqlCheck gates ' +
-			'(read-only SELECT returning one scalar, compared against a threshold; outgoing edges labeled ' +
-			'branch "trip"/"pass"), agent steps (prompt + tool grants), and notify steps (allowlisted Windmill ' +
-			'script + recipients). ALWAYS send the COMPLETE graph — also when editing (pass flowId from ' +
-			'getFlow; call getFlow first, never edit from memory). Keep node ids stable across edits. Saving ' +
-			'creates a DRAFT version; it only runs after the user ACTIVATES it on the Flows page. If the ' +
-			'result has ok:false, fix EVERY listed error and call again with the full corrected graph.',
-		inputSchema: z.object({
-			description: z
-				.string()
-				.describe('FIRST, one short paragraph: what the flow does and why the graph is shaped this way'),
-			flowId: z
-				.string()
-				.optional()
-				.describe('Omit to create a new flow; pass an existing id (from getFlow) to save a new version'),
-			name: z.string().min(1).max(80).describe('Short human-readable flow name'),
-			flow: flowSpecSchema
-		}),
-		execute: async ({ flowId, name, flow }) => {
-			if (flowId && !isValidFlowId(flowId)) {
-				return {
-					ok: false,
-					errors: [{ path: 'flowId', code: 'unknown_flow', message: `"${flowId}" is not a valid flow id` }]
-				};
-			}
-			const errors = validateFlowSemantics(flow as FlowSpec);
-			if (errors.length > 0) {
-				return {
-					ok: false,
-					errors,
-					hint: 'Fix every listed problem and call upsertFlow again with the FULL corrected graph.'
-				};
-			}
-			const saved = await saveFlowVersion(ownerUsername, {
-				flowId,
-				name,
-				spec: flow as FlowSpec,
-				provenance: { via: 'chat', conversationId, model, createdBy: opts?.editor ?? ownerUsername },
-				// Department is stamped on CREATE (from the page's picker); ignored on edit.
-				departmentId: opts?.departmentId ?? null
-			});
-			if ('error' in saved) {
-				return {
-					ok: false,
-					errors: [
-						saved.error === 'unknown_flow'
-							? {
-									path: 'flowId',
-									code: 'unknown_flow',
-									message: `No flow with id "${flowId}" — call getFlow without arguments to list existing flows, or omit flowId to create`
-								}
-							: { path: 'flow', code: 'too_many_flows', message: 'Flow limit reached — delete flows before creating more' }
-					]
-				};
-			}
-			return {
-				ok: true,
-				flowId: saved.id,
-				version: saved.version,
-				created: saved.created,
-				name,
-				nodeCount: flow.nodes.length,
-				edgeCount: flow.edges.length,
-				status: 'draft',
-				note: 'Draft saved — it runs only after the user activates this version on the Flows page. Tell them to activate it there.'
-			};
-		}
-	});
-}
-
-export function getFlowTool(username: string) {
-	return tool({
-		description:
-			'Read the user’s saved flows. Without flowId: lists all flows (id, name, versions). With flowId: ' +
-			'returns the full graph of the latest (or requested) version. ALWAYS call this before editing an ' +
-			'existing flow with upsertFlow — never edit from memory of an earlier turn.',
-		inputSchema: z.object({
-			flowId: z.string().optional().describe('Omit to list all flows'),
-			version: z.number().int().optional().describe('Specific version; omit for the latest')
-		}),
-		execute: async ({ flowId, version }) => {
-			if (!flowId) {
-				return { flows: await listFlows(username) };
-			}
-			const record = isValidFlowId(flowId) ? await loadFlow(username, flowId) : null;
-			if (!record) {
-				return { error: `No flow with id "${flowId}" — call getFlow without arguments to list flows` };
-			}
-			const wanted = version
-				? record.versions.find((v) => v.version === version)
-				: record.versions.at(-1);
-			if (!wanted) {
-				return {
-					error: `Version ${version} not found — available: ${record.versions.map((v) => v.version).join(', ')}`
-				};
-			}
-			return {
-				id: record.id,
-				name: record.name,
-				version: wanted.version,
-				activeVersion: record.activeVersion,
-				versions: record.versions.map((v) => v.version),
-				spec: wanted.spec
-			};
 		}
 	});
 }

@@ -60,14 +60,6 @@
 		answered: boolean;
 		chosen?: string;
 	};
-	type FlowCardSpec = {
-		flowId: string;
-		name: string;
-		version: number;
-		nodeCount: number;
-		edgeCount: number;
-		created?: boolean;
-	};
 	type Item =
 		| { kind: 'part'; part: Part }
 		| { kind: 'text'; text: string }
@@ -76,7 +68,6 @@
 		| { kind: 'export'; spec: ExportSpec }
 		| { kind: 'artifact'; spec: TabulaPdfSpec }
 		| { kind: 'ask'; spec: AskSpec }
-		| { kind: 'flow'; spec: FlowCardSpec }
 		| { kind: 'tools'; parts: StepPart[] };
 
 	// Claude-style: a document produced during the live turn opens the side
@@ -242,20 +233,6 @@
 					if (spec) {
 						flush();
 						out.push({ kind: 'artifact', spec });
-						continue;
-					}
-				} else if (name === 'upsertFlow') {
-					// Pops out only on success (ok:true). Failed validation attempts
-					// return ok:false and deliberately STAY in the tool timeline, so
-					// the user can watch the model self-repair the graph. Don't use
-					// toolOutput() here — it filters on `output.error`, not our shape.
-					const result =
-						part.state === 'output-available'
-							? (part.output as (FlowCardSpec & { ok?: boolean }) | undefined)
-							: undefined;
-					if (result?.ok === true && result.flowId) {
-						flush();
-						out.push({ kind: 'flow', spec: result });
 						continue;
 					}
 				}
@@ -482,29 +459,6 @@
 						<Icon name="download" size={13} />
 						{m.download()}
 					</button>
-				</div>
-			{:else if item.kind === 'flow'}
-				<div
-					class="flex w-fit max-w-full items-center gap-3 rounded-xl border border-[#e3e0d5] bg-white px-4 py-3"
-				>
-					<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-[#d97757]/12 text-[#bd5d3a]">
-						<Icon name="zap" size={20} />
-					</span>
-					<span class="min-w-0">
-						<span class="block truncate text-sm font-medium text-neutral-800">
-							{item.spec.name}
-						</span>
-						<span class="block text-xs text-neutral-500">
-							v{item.spec.version} · {m.flow_nodes_count({ count: item.spec.nodeCount })} · {m.flow_status_draft()}
-						</span>
-					</span>
-					<a
-						href={`/flows?id=${encodeURIComponent(item.spec.flowId)}`}
-						class="ml-2 flex shrink-0 items-center gap-1.5 rounded-lg bg-[#d97757] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#bd5d3a]"
-					>
-						<Icon name="arrow-right" size={13} />
-						{m.flow_view()}
-					</a>
 				</div>
 			{:else if item.kind === 'ask'}
 				<AskUser

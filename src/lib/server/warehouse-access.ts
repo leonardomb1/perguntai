@@ -16,7 +16,7 @@ const cache = new Map<string, { dbs: Set<string>; at: number }>();
 
 export async function visibleDatabases(credentials: {
 	username: string;
-	password: string;
+	password?: string;
 }): Promise<Set<string> | null> {
 	const hit = cache.get(credentials.username);
 	if (hit && Date.now() - hit.at < TTL_MS) return hit.dbs;

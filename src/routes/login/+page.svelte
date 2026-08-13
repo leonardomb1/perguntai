@@ -2,49 +2,42 @@
 	import { fly, scale } from 'svelte/transition';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getLocale, setLocale } from '$lib/paraglide/runtime';
-	import { goto } from '$app/navigation';
-	import { saveSession } from '$lib/session';
+	import { page } from '$app/state';
+	import { clearSession } from '$lib/session';
 	import logo from '$lib/assets/favicon.svg';
 
-	let username = $state('');
-	let password = $state('');
-	let error = $state<string | null>(null);
-	let loading = $state(false);
-	let notAllowed = $state(false);
+	/**
+	 * Sign-in is delegated to authentik: this page no longer takes credentials,
+	 * it just sends the browser to /auth/login, which starts the OIDC flow.
+	 *
+	 * Outcomes come back as query params rather than fetch results:
+	 *   ?error=not_allowed | interrupted | unavailable
+	 *   ?signedout          — arrived here from logout
+	 */
+	const status = $derived(page.url.searchParams.get('error'));
+	const signedOut = $derived(page.url.searchParams.has('signedout'));
+	const notAllowed = $derived(status === 'not_allowed');
 
-	async function handleSubmit(event: SubmitEvent) {
-		event.preventDefault();
-		if (loading) return;
-		error = null;
-		loading = true;
-		try {
-			const res = await fetch('/api/auth/login', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ username, password })
-			});
-			const data = await res.json();
-			if (!res.ok) {
-				if (res.status === 403 && data.code === 'not_in_allowlist') {
-					notAllowed = true;
-					return;
-				}
-				error =
-					res.status === 401
-						? m.login_invalid()
-						: res.status === 503
-							? m.login_service_unavailable()
-							: (data.error ?? m.login_failed());
-				return;
-			}
-			saveSession(data.token, data.displayName);
-			await goto('/');
-		} catch {
-			error = m.login_unreachable();
-		} finally {
-			loading = false;
-		}
-	}
+	const message = $derived(
+		status === 'interrupted'
+			? m.login_interrupted()
+			: status === 'unavailable'
+				? m.login_service_unavailable()
+				: status
+					? m.login_failed()
+					: null
+	);
+
+	// A stale bearer token would otherwise keep the app's client-side guard
+	// believing there is still a session and bounce the user straight back.
+	$effect(() => {
+		if (signedOut || status) clearSession();
+	});
+
+	// After a deliberate sign-out, ask the IdP to re-authenticate: its session
+	// outlives ours by design, so without this the button is answered silently
+	// and it looks as though signing out did nothing.
+	const signInHref = $derived(signedOut ? '/auth/login?prompt=login' : '/auth/login');
 </script>
 
 <svelte:head>
@@ -82,66 +75,46 @@
 					{m.login_preview_title()}
 				</h2>
 				<p class="mt-2 text-sm leading-relaxed text-neutral-500">
-					{m.login_preview_body({ username })}
+					{m.login_preview_body({ username: '' })}
 				</p>
-				<button
-					onclick={() => (notAllowed = false)}
-					class="mt-5 rounded-xl border border-[#e3e0d5] bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-[#faf9f5]"
+				<a
+					href="/auth/login?prompt=login"
+					data-sveltekit-reload
+					class="mt-5 inline-block rounded-xl border border-[#e3e0d5] bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-[#faf9f5]"
 				>
 					{m.login_preview_back()}
-				</button>
+				</a>
 			</div>
 		{:else}
-			<form
-				onsubmit={handleSubmit}
-				class="space-y-4 rounded-2xl border border-[#e3e0d5] bg-white p-7 shadow-sm"
-			>
-				<div>
-					<label for="username" class="mb-1.5 block text-sm font-medium text-neutral-700">
-						{m.login_username()}
-					</label>
-					<input
-						id="username"
-						type="text"
-						bind:value={username}
-						required
-						autocomplete="username"
-						class="w-full rounded-xl border border-neutral-300 px-3.5 py-2.5 text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
-					/>
-				</div>
+			<div class="space-y-4 rounded-2xl border border-[#e3e0d5] bg-white p-7 shadow-sm">
+				<p class="text-center text-sm text-neutral-500">{m.login_subtitle()}</p>
 
-				<div>
-					<label for="password" class="mb-1.5 block text-sm font-medium text-neutral-700">
-						{m.login_password()}
-					</label>
-					<input
-						id="password"
-						type="password"
-						bind:value={password}
-						required
-						autocomplete="current-password"
-						class="w-full rounded-xl border border-neutral-300 px-3.5 py-2.5 text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
-					/>
-				</div>
-
-				{#if error}
+				{#if signedOut}
+					<p
+						in:fly={{ y: -4, duration: 200 }}
+						class="rounded-xl bg-[#faf9f5] px-3.5 py-2.5 text-center text-sm text-neutral-600"
+						role="status"
+					>
+						{m.login_signed_out()}
+					</p>
+				{:else if message}
 					<p
 						in:fly={{ y: -4, duration: 200 }}
 						class="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm text-red-700"
 						role="alert"
 					>
-						{error}
+						{message}
 					</p>
 				{/if}
 
-				<button
-					type="submit"
-					disabled={loading}
-					class="w-full rounded-xl bg-[#d97757] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#bd5d3a] disabled:opacity-50"
+				<a
+					href={signInHref}
+					data-sveltekit-reload
+					class="block w-full rounded-xl bg-[#d97757] px-4 py-2.5 text-center text-sm font-medium text-white shadow-sm transition hover:bg-[#bd5d3a]"
 				>
-					{loading ? m.login_submitting() : m.login_submit()}
-				</button>
-			</form>
+					{m.login_submit()}
+				</a>
+			</div>
 		{/if}
 	</div>
 </main>
