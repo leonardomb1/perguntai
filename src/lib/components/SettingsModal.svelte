@@ -7,6 +7,7 @@
 	import SelectMenu from './SelectMenu.svelte';
 	import { saveSettings, type PublicSettings } from '$lib/settings';
 	import { goto } from '$app/navigation';
+	import { browser } from '$app/environment';
 	import {
 		addUser,
 		formatLimit,
@@ -20,6 +21,14 @@
 	import MemoryManager from './MemoryManager.svelte';
 	import type { ModelOption } from '$lib/models';
 	import { getToken } from '$lib/session';
+	import { copyText } from '$lib/clipboard';
+	import {
+		createKey,
+		isExpired,
+		listKeys,
+		revokeKey,
+		type PublicApiKey
+	} from '$lib/apiKeys';
 	import { providerLogo } from '$lib/providers';
 	import { clickOutside } from '$lib/actions/clickOutside';
 	import { placeMenu } from '$lib/floating';
@@ -88,8 +97,83 @@
 		onSaved: (updated: PublicSettings) => void;
 	} = $props();
 
-	type Section = 'general' | 'memory' | 'connectors' | 'admin';
+	type Section = 'general' | 'memory' | 'connectors' | 'apikeys' | 'admin';
 	let section = $state<Section>('general');
+
+	// --- personal API keys (loaded lazily when the section opens) ---
+	let keys = $state<PublicApiKey[]>([]);
+	let keysLoaded = $state(false);
+	let keyLabel = $state('');
+	let keyExpiry = $state('0'); // days; '0' = no expiry
+	let creatingKey = $state(false);
+	let keyError = $state(false);
+	/** Plaintext of the key just minted — the server never returns it again. */
+	let freshKey = $state<string | null>(null);
+	let freshCopied = $state(false);
+	let confirmRevoke = $state<string | null>(null);
+
+	// Built in the script so the JSON braces don't need template escaping.
+	const curlExample = [
+		`curl ${browser ? location.origin : ''}/api/chat \\`,
+		'  -H "Authorization: Bearer pai_…" \\',
+		'  -H "Content-Type: application/json" \\',
+		`  -d '{"messages":[{"role":"user","parts":[{"type":"text","text":"Olá"}]}]}'`
+	].join('\n');
+
+	const expiryOptions = $derived([
+		{ value: '30', label: m.apikeys_expiry_days({ n: 30 }) },
+		{ value: '90', label: m.apikeys_expiry_days({ n: 90 }) },
+		{ value: '365', label: m.apikeys_expiry_days({ n: 365 }) },
+		{ value: '0', label: m.apikeys_expiry_never() }
+	]);
+
+	async function refreshKeys() {
+		const list = await listKeys();
+		if (list) keys = list;
+		keysLoaded = true;
+	}
+	$effect(() => {
+		if (section === 'apikeys' && !keysLoaded) void refreshKeys();
+	});
+
+	async function submitNewKey() {
+		if (creatingKey) return;
+		creatingKey = true;
+		keyError = false;
+		const days = Number(keyExpiry);
+		const result = await createKey(keyLabel.trim(), days > 0 ? days : undefined);
+		creatingKey = false;
+		if (!result.ok) {
+			keyError = true;
+			return;
+		}
+		// Shown once, right here — there is no second chance to read it.
+		freshKey = result.key;
+		freshCopied = false;
+		keyLabel = '';
+		await refreshKeys();
+	}
+
+	async function copyFreshKey() {
+		if (!freshKey) return;
+		freshCopied = await copyText(freshKey);
+	}
+
+	async function doRevoke(id: string) {
+		confirmRevoke = null;
+		keyError = false;
+		if (await revokeKey(id)) await refreshKeys();
+		else keyError = true;
+	}
+
+	/** Short, locale-aware date for the key list. */
+	function formatDate(iso: string): string {
+		return new Date(iso).toLocaleDateString(getLocale() === 'en' ? 'en-US' : 'pt-BR', {
+			day: '2-digit',
+			month: 'short',
+			year: 'numeric'
+		});
+	}
 
 	// --- admin panel state (loaded lazily when the section opens) ---
 	let adminUsers = $state<AdminUser[]>([]);
@@ -253,8 +337,10 @@
 
 	function onKeydown(e: KeyboardEvent) {
 		if (e.key !== 'Escape') return;
-		// Escape closes an open model popover first, then the modal.
+		// Escape unwinds one layer at a time: popover, then pending confirm,
+		// then the modal itself.
 		if (openModelsFor) openModelsFor = null;
+		else if (confirmRevoke) confirmRevoke = null;
 		else onClose();
 	}
 </script>
@@ -286,7 +372,7 @@
 				>
 					{m.settings_title()}
 				</span>
-				{#each [{ id: 'general', icon: 'settings', label: m.settings_general() }, { id: 'memory', icon: 'sparkle', label: m.settings_memory() }, { id: 'connectors', icon: 'zap', label: m.settings_connectors() }, ...(settings.role === 'admin' ? [{ id: 'admin', icon: 'users', label: m.admin_title() }] : [])] as item (item.id)}
+				{#each [{ id: 'general', icon: 'settings', label: m.settings_general() }, { id: 'memory', icon: 'sparkle', label: m.settings_memory() }, { id: 'connectors', icon: 'zap', label: m.settings_connectors() }, { id: 'apikeys', icon: 'key', label: m.apikeys_title() }, ...(settings.role === 'admin' ? [{ id: 'admin', icon: 'users', label: m.admin_title() }] : [])] as item (item.id)}
 					<button
 						onclick={() => (section = item.id as Section)}
 						class="flex shrink-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm whitespace-nowrap transition
@@ -294,7 +380,7 @@
 							? 'bg-white font-medium text-neutral-900 shadow-sm'
 							: 'text-neutral-600 hover:bg-white/60'}"
 					>
-						<Icon name={item.icon as 'settings' | 'sparkle' | 'zap' | 'users'} size={16} />
+						<Icon name={item.icon as 'settings' | 'sparkle' | 'zap' | 'key' | 'users'} size={16} />
 						{item.label}
 					</button>
 				{/each}
@@ -540,6 +626,143 @@
 								{removeTabulaToken ? `✓ ${m.settings_tabula_remove()}` : m.settings_tabula_remove()}
 							</button>
 						{/if}
+					</div>
+				{:else if section === 'apikeys'}
+					<h2 class="font-serif text-xl font-semibold text-neutral-900">{m.apikeys_title()}</h2>
+					<p class="mt-1.5 max-w-xl text-sm leading-relaxed text-neutral-500">
+						{m.apikeys_subtitle()}
+					</p>
+
+					<p class="mt-4 text-xs text-neutral-500">{m.apikeys_usage_hint()}</p>
+					<pre
+						class="mt-1.5 overflow-x-auto rounded-xl border border-[#e9e6dd] bg-[#faf9f5] px-3 py-2.5 font-mono text-[11px] leading-relaxed text-neutral-600">{curlExample}</pre>
+
+					<!-- Mint form -->
+					<div
+						class="mt-5 flex flex-col gap-3 border-t border-[#efede3] pt-5 sm:flex-row sm:items-end sm:gap-2"
+					>
+						<div class="min-w-0 flex-1">
+							<label for="set-keylabel" class="mb-1.5 block text-sm font-medium text-neutral-700">
+								{m.apikeys_label()}
+							</label>
+							<input
+								id="set-keylabel"
+								type="text"
+								bind:value={keyLabel}
+								onkeydown={(e) => e.key === 'Enter' && submitNewKey()}
+								maxlength="80"
+								placeholder={m.apikeys_label_placeholder()}
+								class="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm transition placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+							/>
+						</div>
+						<!-- Expiry and submit share one row on phones; sm:contents folds
+						     them back into the parent row from sm up. -->
+						<div class="flex items-end gap-2 sm:contents">
+							<div class="min-w-0 flex-1 sm:flex-none">
+								<span class="mb-1.5 block text-sm font-medium text-neutral-700">{m.apikeys_expiry()}</span>
+								<SelectMenu options={expiryOptions} bind:value={keyExpiry} />
+							</div>
+							<button
+								onclick={submitNewKey}
+								disabled={creatingKey}
+								class="shrink-0 rounded-xl bg-[#d97757] px-3.5 py-2 text-sm font-medium text-white transition hover:bg-[#bd5d3a] disabled:opacity-40"
+							>
+								{creatingKey ? m.apikeys_creating() : m.apikeys_create()}
+							</button>
+						</div>
+					</div>
+
+					{#if keyError}
+						<p class="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{m.apikeys_error()}</p>
+					{/if}
+
+					<!-- One-time reveal — dismissing this drops the only plaintext copy. -->
+					{#if freshKey}
+						<div
+							transition:fade={{ duration: 120 }}
+							class="mt-4 rounded-xl border border-[#d97757]/40 bg-[#fdf3ef] p-4"
+						>
+							<div class="flex items-center gap-2">
+								<Icon name="key" size={14} class="shrink-0 text-[#bd5d3a]" />
+								<span class="text-sm font-semibold text-neutral-900">{m.apikeys_new_title()}</span>
+							</div>
+							<p class="mt-1 text-xs text-neutral-600">{m.apikeys_new_hint()}</p>
+							<div class="mt-2.5 flex flex-col gap-2 sm:flex-row sm:items-center">
+								<code
+									class="min-w-0 flex-1 truncate rounded-lg border border-[#e3d3cb] bg-white px-3 py-2 font-mono text-xs text-neutral-800"
+								>
+									{freshKey}
+								</code>
+								<button
+									onclick={copyFreshKey}
+									class="flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#d97757] px-3 py-2 text-xs font-medium text-white transition hover:bg-[#bd5d3a]"
+								>
+									<Icon name={freshCopied ? 'check' : 'copy'} size={13} />
+									{freshCopied ? m.apikeys_copied() : m.copy()}
+								</button>
+							</div>
+							<button
+								onclick={() => (freshKey = null)}
+								class="mt-2.5 rounded-lg px-2 py-1 text-xs font-medium text-neutral-500 transition hover:bg-white/70 hover:text-neutral-800"
+							>
+								{m.apikeys_done()}
+							</button>
+						</div>
+					{/if}
+
+					<!-- Existing keys -->
+					<div class="mt-5">
+						{#if keysLoaded && keys.length === 0}
+							<p class="text-sm text-neutral-400">{m.apikeys_empty()}</p>
+						{/if}
+						{#each keys as k (k.id)}
+							{@const expired = isExpired(k)}
+							<div class="flex items-center gap-3 border-b border-[#efede3] py-3">
+								<span
+									class="grid size-8 shrink-0 place-items-center rounded-lg {expired
+										? 'bg-neutral-100 text-neutral-400'
+										: 'bg-[#d97757]/12 text-[#bd5d3a]'}"
+								>
+									<Icon name="key" size={14} />
+								</span>
+								<div class="min-w-0 flex-1">
+									<div class="flex items-center gap-2">
+										<span class="truncate text-sm font-medium text-neutral-800">{k.label}</span>
+										{#if expired}
+											<span
+												class="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 uppercase"
+											>
+												{m.apikeys_expired()}
+											</span>
+										{/if}
+									</div>
+									<div class="mt-0.5 text-xs text-neutral-500">
+										{m.apikeys_created_at({ date: formatDate(k.createdAt) })} ·
+										{k.lastUsedAt
+											? m.apikeys_last_used({ date: formatDate(k.lastUsedAt) })
+											: m.apikeys_never_used()}{k.expiresAt
+											? ` · ${m.apikeys_expires_at({ date: formatDate(k.expiresAt) })}`
+											: ''}
+									</div>
+								</div>
+								{#if confirmRevoke === k.id}
+									<button
+										onclick={() => doRevoke(k.id)}
+										title={m.apikeys_revoke_confirm()}
+										class="shrink-0 rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-red-700"
+									>
+										{m.apikeys_revoke()}?
+									</button>
+								{:else}
+									<button
+										onclick={() => (confirmRevoke = k.id)}
+										class="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
+									>
+										{m.apikeys_revoke()}
+									</button>
+								{/if}
+							</div>
+						{/each}
 					</div>
 				{:else}
 					<button
@@ -863,10 +1086,10 @@
 				{/if}
 			</div>
 
-			<!-- Footer (admin + memory apply immediately — no batch save there) -->
+			<!-- Footer (admin, memory and keys apply immediately — no batch save) -->
 			<div
 				class="flex shrink-0 items-center justify-end gap-3 border-t border-[#efede3] px-4 py-3.5 sm:px-7
-					{section === 'admin' || section === 'memory' ? 'invisible' : ''}"
+					{section === 'admin' || section === 'memory' || section === 'apikeys' ? 'invisible' : ''}"
 			>
 				{#if saveError}
 					<span class="text-sm text-red-600">{m.settings_save_failed()}</span>
