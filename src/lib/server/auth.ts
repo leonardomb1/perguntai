@@ -25,22 +25,18 @@ function key(): Uint8Array {
 }
 
 /**
- * Directory attributes captured at login (now from the authentik id_token) and
- * carried in the session token. Job title and cost center enrich the agent's
- * sense of who it's helping; `memberOf` holds the IdP's groups and is what
- * department matching compares against.
- *
- * The field keeps its AD-era name because access.json bindings and the admin
- * UI already key on it; authentik's `groups` claim is mapped onto it. Title and
- * cost centre only appear if the provider is configured to emit those claims.
+ * What the directory said about the person at sign-in, carried in the session
+ * token. `memberOf` holds the groups (each as its DN and its bare name for AD),
+ * and `claims` every other sign-in claim — from the id_token or the LDAP entry
+ * — keyed by claim name, plus the synthetic `user`. Department rules match on
+ * these; title and e-mail also help the agent know who it is helping.
  */
 export interface UserProfile {
 	title: string | null;
 	employeeId: string | null;
 	email: string | null;
 	memberOf: string[];
-	costCenterCode: string | null;
-	costCenterDescription: string | null;
+	claims: Record<string, string[]>;
 }
 
 export interface AuthUser {
@@ -91,8 +87,35 @@ export interface IdentityClaims {
 	groups?: string[];
 	title?: string;
 	employee_id?: string;
-	cost_center?: string;
-	cost_center_description?: string;
+	[claim: string]: unknown;
+}
+
+/** Claims the token carries for the protocol, never worth a rule. */
+const PROTOCOL_CLAIMS = new Set([
+	'acr', 'amr', 'at_hash', 'aud', 'auth_time', 'azp', 'c_hash', 'exp', 'iat', 'iss', 'jti',
+	'nbf', 'nonce', 's_hash', 'session_state', 'sid', 'sub', 'typ'
+]);
+
+function asList(value: unknown): string[] {
+	if (Array.isArray(value)) return value.filter((v): v is string => typeof v === 'string' && v !== '');
+	if (typeof value === 'string') return value ? [value] : [];
+	if (typeof value === 'number' || typeof value === 'boolean') return [String(value)];
+	return [];
+}
+
+/**
+ * Every claim as a bindable attribute, keyed by its own name — mapping a new
+ * attribute at the IdP (or in LDAP_CLAIMS) needs no change here. Groups live
+ * in `memberOf` and are folded back in by profileClaims().
+ */
+function bindableClaims(claims: IdentityClaims, username: string): Record<string, string[]> {
+	const out: Record<string, string[]> = { user: [username] };
+	for (const [name, value] of Object.entries(claims)) {
+		if (PROTOCOL_CLAIMS.has(name) || name === 'groups') continue;
+		const values = asList(value);
+		if (values.length) out[name] = values;
+	}
+	return out;
 }
 
 /**
@@ -123,8 +146,7 @@ export async function sessionFromClaims(
 		employeeId: claims.employee_id ?? null,
 		email: claims.email ?? null,
 		memberOf: Array.isArray(claims.groups) ? claims.groups : [],
-		costCenterCode: claims.cost_center ?? null,
-		costCenterDescription: claims.cost_center_description ?? null
+		claims: bindableClaims(claims, username)
 	};
 
 	const credentials = options.password ? { username, password: options.password } : { username };
@@ -144,11 +166,21 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
 		const { payload } = await jwtDecrypt(token, key());
 		const credentials = payload.credentials as AuthUser['credentials'] | undefined;
 		if (!payload.sub || !credentials?.username) return null;
+		const profile = payload.profile as Partial<UserProfile> | undefined;
 		return {
 			username: payload.sub,
 			displayName: (payload.displayName as string | null) ?? null,
 			credentials,
-			profile: (payload.profile as UserProfile | undefined) ?? undefined
+			// Tokens minted before `claims` existed still verify; they just carry none.
+			profile: profile
+				? {
+						title: profile.title ?? null,
+						employeeId: profile.employeeId ?? null,
+						email: profile.email ?? null,
+						memberOf: Array.isArray(profile.memberOf) ? profile.memberOf : [],
+						claims: profile.claims ?? {}
+					}
+				: undefined
 		};
 	} catch {
 		return null;

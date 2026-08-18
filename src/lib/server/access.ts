@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { env } from '$env/dynamic/private';
 import { DEFAULT_MODEL, MODEL_IDS } from './models';
 import type { UserProfile } from './auth';
+import { matchesDept, sanitizeMatch, type DeptMatch, type ProfileClaims } from '$lib/dept-rules';
 
 /**
  * Runtime access control, replacing the ALLOWED_USERS env var: an admin-managed
@@ -69,20 +70,12 @@ export interface OrgKnowledgeEntry {
 }
 
 /**
- * Which users a department's knowledge applies to. A user matches if ANY
- * populated rule hits their session profile (OR semantics). An all-empty match
- * matches nobody — a department only takes effect once a rule is set. Evaluated
- * per request from the token; no user-profile store exists, so membership is
- * never persisted or enumerable server-side.
+ * Which users a department's knowledge applies to: rules over the sign-in
+ * claims, defined in $lib/dept-rules and shared with the admin console.
+ * Evaluated per request from the token; no user-profile store exists, so
+ * membership is never persisted or enumerable server-side.
  */
-export interface DeptMatch {
-	/** memberOf contains any of these AD groups (case-insensitive). */
-	adGroups?: string[];
-	/** costCenterCode equals any of these. */
-	costCenters?: string[];
-	/** costCenterCode starts with this (for cost-center hierarchies). */
-	costCenterPrefix?: string;
-}
+export type { DeptMatch } from '$lib/dept-rules';
 
 /** A department: a name, a membership rule, and its own knowledge blocks. */
 export interface Department {
@@ -108,7 +101,6 @@ const MAX_ENTRY_BODY = 4000;
 const MAX_ENTRY_TITLE = 120;
 const MAX_ENTRIES = 40;
 const MAX_DEPARTMENTS = 30;
-const MAX_MATCH_LIST = 50;
 
 function sanitizeKnowledge(raw: unknown): OrgKnowledgeEntry[] {
 	if (!Array.isArray(raw)) return [];
@@ -122,27 +114,6 @@ function sanitizeKnowledge(raw: unknown): OrgKnowledgeEntry[] {
 			enabled: e.enabled !== false
 		}))
 		.filter((e) => e.title.trim() || e.body.trim());
-}
-
-function sanitizeStrList(raw: unknown): string[] | undefined {
-	if (!Array.isArray(raw)) return undefined;
-	const list = raw
-		.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
-		.map((x) => x.trim())
-		.slice(0, MAX_MATCH_LIST);
-	return list.length ? list : undefined;
-}
-
-function sanitizeMatch(raw: unknown): DeptMatch {
-	const m = typeof raw === 'object' && raw ? (raw as Record<string, unknown>) : {};
-	const match: DeptMatch = {};
-	const groups = sanitizeStrList(m.adGroups);
-	if (groups) match.adGroups = groups;
-	const ccs = sanitizeStrList(m.costCenters);
-	if (ccs) match.costCenters = ccs;
-	if (typeof m.costCenterPrefix === 'string' && m.costCenterPrefix.trim())
-		match.costCenterPrefix = m.costCenterPrefix.trim().slice(0, 32);
-	return match;
 }
 
 function sanitizeDepartments(raw: unknown): Department[] {
@@ -160,18 +131,10 @@ function sanitizeDepartments(raw: unknown): Department[] {
 		.filter((d) => d.name.trim());
 }
 
-/** True when the profile satisfies any populated rule (empty match → false). */
-function matchesDept(match: DeptMatch, profile: UserProfile): boolean {
-	if (match.adGroups?.length) {
-		const groups = new Set(profile.memberOf.map((g) => g.toLowerCase()));
-		if (match.adGroups.some((g) => groups.has(g.toLowerCase()))) return true;
-	}
-	const cc = profile.costCenterCode;
-	if (cc) {
-		if (match.costCenters?.includes(cc)) return true;
-		if (match.costCenterPrefix && cc.startsWith(match.costCenterPrefix)) return true;
-	}
-	return false;
+/** The claims a department rule sees: every sign-in claim, plus the groups. */
+export function profileClaims(profile: UserProfile | null | undefined): ProfileClaims {
+	if (!profile) return {};
+	return { ...profile.claims, groups: profile.memberOf };
 }
 
 /** Renders one knowledge block, headed by its title (and department name). */
@@ -385,7 +348,8 @@ export async function departmentsForUser(
 ): Promise<Department[]> {
 	if (!profile) return [];
 	const { departments } = await load();
-	return departments.filter((d) => d.enabled && matchesDept(d.match, profile));
+	const claims = profileClaims(profile);
+	return departments.filter((d) => d.enabled && matchesDept(d.match, claims));
 }
 
 /**
@@ -403,8 +367,9 @@ export async function getEffectiveOrgPrompt(profile?: UserProfile | null): Promi
 		if (e.enabled && e.body.trim()) parts.push(blockText(e));
 	}
 	if (profile) {
+		const claims = profileClaims(profile);
 		for (const dept of data.departments) {
-			if (!dept.enabled || !matchesDept(dept.match, profile)) continue;
+			if (!dept.enabled || !matchesDept(dept.match, claims)) continue;
 			for (const e of dept.knowledge) {
 				if (e.enabled && e.body.trim()) parts.push(blockText(e, dept.name));
 			}

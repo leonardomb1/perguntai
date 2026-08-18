@@ -4,6 +4,7 @@ import {
 	getDepartments,
 	getOrgKnowledge,
 	getOrgSystemPrompt,
+	profileClaims,
 	resolveRole,
 	setDepartments,
 	setOrgKnowledge,
@@ -17,10 +18,10 @@ import type { RequestHandler } from './$types';
  * matching users) — all injected into every user's agent. Admin-only; the model
  * may propose entries in chat but never writes this store.
  *
- * GET also returns the calling admin's own directory signals (AD groups, cost
- * center) so the console can seed the department rule editor and show a live
- * "matches you" check — the server has no user-profile store, so the caller's
- * own token is the only membership sample it can offer.
+ * GET also returns the calling admin's own sign-in claims so the console can
+ * seed the department rule editor and show a live "matches you" check — the
+ * server has no user-profile store, so the caller's own token is the only
+ * membership sample it can offer.
  */
 
 export const GET: RequestHandler = async ({ request }) => {
@@ -31,11 +32,7 @@ export const GET: RequestHandler = async ({ request }) => {
 		orgSystemPrompt: await getOrgSystemPrompt(),
 		orgKnowledge: await getOrgKnowledge(),
 		departments: await getDepartments(),
-		you: {
-			memberOf: user.profile?.memberOf ?? [],
-			costCenterCode: user.profile?.costCenterCode ?? null,
-			costCenterDescription: user.profile?.costCenterDescription ?? null
-		}
+		you: { claims: profileClaims(user.profile) }
 	});
 };
 

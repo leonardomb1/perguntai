@@ -1,4 +1,5 @@
 import { getToken } from '$lib/session';
+import { matchesDept, type DeptMatch, type ProfileClaims } from './dept-rules';
 
 /** Client for the admin endpoints (server enforces the admin role again). */
 
@@ -146,11 +147,7 @@ export interface OrgKnowledgeEntry {
 }
 
 /** Membership rule for a department — user matches if ANY populated rule hits. */
-export interface DeptMatch {
-	adGroups?: string[];
-	costCenters?: string[];
-	costCenterPrefix?: string;
-}
+export type { DeptMatch } from './dept-rules';
 
 export interface Department {
 	id: string;
@@ -160,11 +157,9 @@ export interface Department {
 	knowledge: OrgKnowledgeEntry[];
 }
 
-/** The calling admin's own directory signals — seeds the rule editor. */
+/** The calling admin's own sign-in claims — seeds the rule editor. */
 export interface CallerProfile {
-	memberOf: string[];
-	costCenterCode: string | null;
-	costCenterDescription: string | null;
+	claims: ProfileClaims;
 }
 
 export interface OrgConfig {
@@ -183,11 +178,7 @@ export async function getOrg(): Promise<OrgConfig | null> {
 			orgSystemPrompt: data.orgSystemPrompt ?? '',
 			orgKnowledge: Array.isArray(data.orgKnowledge) ? data.orgKnowledge : [],
 			departments: Array.isArray(data.departments) ? data.departments : [],
-			you: {
-				memberOf: Array.isArray(data.you?.memberOf) ? data.you.memberOf : [],
-				costCenterCode: data.you?.costCenterCode ?? null,
-				costCenterDescription: data.you?.costCenterDescription ?? null
-			}
+			you: { claims: sanitizeClaims(data.you?.claims) }
 		};
 	} catch {
 		return null;
@@ -206,18 +197,18 @@ export async function saveOrg(
 	return await res.json().catch(() => null);
 }
 
-/** Client mirror of the server matcher — for the live "matches you" badge. */
+function sanitizeClaims(raw: unknown): ProfileClaims {
+	if (typeof raw !== 'object' || !raw) return {};
+	const out: ProfileClaims = {};
+	for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+		if (Array.isArray(v)) out[k] = v.filter((x): x is string => typeof x === 'string');
+	}
+	return out;
+}
+
+/** The live "matches you" badge — the very same matcher the server enforces. */
 export function matchesProfile(match: DeptMatch, you: CallerProfile): boolean {
-	if (match.adGroups?.length) {
-		const groups = new Set(you.memberOf.map((g) => g.toLowerCase()));
-		if (match.adGroups.some((g) => groups.has(g.toLowerCase()))) return true;
-	}
-	const cc = you.costCenterCode;
-	if (cc) {
-		if (match.costCenters?.includes(cc)) return true;
-		if (match.costCenterPrefix && cc.startsWith(match.costCenterPrefix)) return true;
-	}
-	return false;
+	return matchesDept(match, you.claims);
 }
 
 /** 12345 → "12,3k", 2100000 → "2,1M" */

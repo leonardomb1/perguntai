@@ -39,6 +39,7 @@ const DEFAULT_CLAIM_MAP: Record<string, string> = {
 	name: 'displayName',
 	email: 'mail',
 	title: 'title',
+	department: 'department',
 	employee_id: 'employeeID'
 };
 

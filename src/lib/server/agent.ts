@@ -73,13 +73,12 @@ export async function buildAgent(
 ) {
 	// Profile from the user's settings: who they are and what to call them.
 	const callName = settings.displayName || settings.fullName || user.displayName || user.username;
-	// Directory context (job title, cost center) helps the model tailor answers
+	// Directory context (job title, department) helps the model tailor answers
 	// to the person's role and function without them having to spell it out.
+	const department = user.profile?.claims?.department?.[0];
 	const org =
 		(user.profile?.title ? `Their job title is ${user.profile.title}. ` : '') +
-		(user.profile?.costCenterDescription
-			? `They work in ${user.profile.costCenterDescription}${user.profile.costCenterCode ? ` (cost center ${user.profile.costCenterCode})` : ''}. `
-			: '');
+		(department ? `They work in ${department}. ` : '');
 	const identity =
 		`The current user is ${settings.fullName || user.username} (login: ${user.username}); address them as ${callName}. ` +
 		org +

@@ -5,7 +5,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import KnowledgeBlocks from '$lib/components/KnowledgeBlocks.svelte';
 	import DocumentLibrary from '$lib/components/DocumentLibrary.svelte';
-	import ChipList from '$lib/components/ChipList.svelte';
+	import DeptRuleEditor from '$lib/components/DeptRuleEditor.svelte';
 	import { hasSession } from '$lib/session';
 	import { fetchSettings } from '$lib/settings';
 	import { newId } from '$lib/id';
@@ -17,6 +17,7 @@
 		type Department,
 		type CallerProfile
 	} from '$lib/admin';
+	import { EMPTY_MATCH } from '$lib/dept-rules';
 
 	// Redirect to login without a session; bounce non-admins to chat. The
 	// /api/admin/org routes enforce the admin role again on every request.
@@ -38,10 +39,7 @@
 	/** Mobile only: the departments pane shows either the list or the editor. */
 	let deptDetail = $state(false);
 
-	// Editing shape: match rules always have concrete arrays/string so the chip
-	// editors have a bind target (the server drops empty rules again on save).
-	type EditMatch = { adGroups: string[]; costCenters: string[]; costCenterPrefix: string };
-	type EditDept = Omit<Department, 'match'> & { match: EditMatch };
+	type EditDept = Department;
 
 	let loaded = $state(false);
 	let orgPrompt = $state('');
@@ -49,22 +47,17 @@
 	let departments = $state<EditDept[]>([]);
 	/** Department ids that exist server-side (docs can only attach to saved depts). */
 	let persistedDeptIds = $state(new Set<string>());
-	let you = $state<CallerProfile>({ memberOf: [], costCenterCode: null, costCenterDescription: null });
+	let you = $state<CallerProfile>({ claims: {} });
 	let selectedDeptId = $state<string | null>(null);
 	let saved = $state(''); // JSON snapshot of the last persisted state
 	let saving = $state(false);
 	let savedFlash = $state(false);
 
-	// Ensure every match has editable arrays/string so bind:value has a target
-	// (the server drops empty rules again on save).
+	// The server always answers a complete match; this only guards a stale client.
 	function normalizeDepts(list: Department[]): EditDept[] {
 		return list.map((d) => ({
 			...d,
-			match: {
-				adGroups: d.match.adGroups ?? [],
-				costCenters: d.match.costCenters ?? [],
-				costCenterPrefix: d.match.costCenterPrefix ?? ''
-			},
+			match: { mode: d.match?.mode === 'all' ? 'all' : 'any', rules: d.match?.rules ?? [] },
 			knowledge: d.knowledge ?? []
 		}));
 	}
@@ -108,7 +101,7 @@
 		const id = newId();
 		departments = [
 			...departments,
-			{ id, name: '', enabled: true, match: { adGroups: [], costCenters: [], costCenterPrefix: '' }, knowledge: [] }
+			{ id, name: '', enabled: true, match: { ...EMPTY_MATCH, rules: [] }, knowledge: [] }
 		];
 		selectDept(id);
 	}
@@ -125,7 +118,6 @@
 	}
 
 	const di = $derived(departments.findIndex((d) => d.id === selectedDeptId));
-	const ccSuggestions = $derived(you.costCenterCode ? [you.costCenterCode] : []);
 	const enabledCount = $derived(entries.filter((e) => e.enabled && e.body.trim()).length);
 
 	const nav = [
@@ -366,33 +358,7 @@
 								</div>
 								<p class="mb-3 text-xs text-neutral-500">{m.org_dept_rule_hint()}</p>
 
-								<div class="space-y-4">
-									<div>
-										<p class="mb-1.5 text-xs font-medium text-neutral-600">{m.org_dept_adgroups_label()}</p>
-										<ChipList
-											bind:values={departments[di].match.adGroups}
-											placeholder={m.org_dept_adgroups_placeholder()}
-											suggestions={you.memberOf}
-										/>
-									</div>
-									<div>
-										<p class="mb-1.5 text-xs font-medium text-neutral-600">{m.org_dept_costcenters_label()}</p>
-										<ChipList
-											bind:values={departments[di].match.costCenters}
-											placeholder={m.org_dept_costcenters_placeholder()}
-											suggestions={ccSuggestions}
-										/>
-									</div>
-									<div>
-										<p class="mb-1.5 text-xs font-medium text-neutral-600">{m.org_dept_prefix_label()}</p>
-										<input
-											bind:value={departments[di].match.costCenterPrefix}
-											maxlength="32"
-											placeholder={m.org_dept_prefix_placeholder()}
-											class="w-40 rounded-lg border border-[#e3e0d5] bg-white px-3 py-1.5 font-mono text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
-										/>
-									</div>
-								</div>
+								<DeptRuleEditor bind:match={departments[di].match} you={you.claims} />
 							</section>
 
 							<!-- department knowledge -->

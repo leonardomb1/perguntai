@@ -172,6 +172,11 @@ export function replayStream(key: string): ReadableStream<Uint8Array> | null {
 	});
 }
 
+/** Whether a run — live or within its post-completion grace — is buffered. */
+export function hasRun(key: string): boolean {
+	return streams.has(key);
+}
+
 /** Explicit stop from the UI — aborts the agent run. */
 export function stopRun(key: string): boolean {
 	const entry = streams.get(key);

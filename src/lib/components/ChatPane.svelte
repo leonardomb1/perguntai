@@ -68,7 +68,7 @@
 	// or drop — resume if so (204 no-op otherwise), and retry whenever the
 	// device comes back online after a network switch.
 	onMount(() => {
-		if (initialMessages.length > 0) void chat.resumeStream().catch(() => {});
+		if (initialMessages.length > 0) void resume();
 		const onOnline = () => {
 			resumeAttempts = 0;
 			scheduleResume();
@@ -166,6 +166,33 @@
 	// The server keeps a run alive and buffered independently of our socket;
 	// resumeStream() replays it. Retries are capped so a genuinely down server
 	// still surfaces its error instead of looping.
+	//
+	// The replay is the WHOLE run from its `start`, and the SDK appends replayed
+	// parts onto whatever assistant message is already last — so our own copy of
+	// that turn (persisted continuously, complete or partial) has to go first,
+	// or the answer shows up twice. HEAD tells us whether there is anything to
+	// replay before we drop it; if the replay then fails, the copy comes back.
+	async function resume() {
+		let available = false;
+		try {
+			const probe = await fetch(`/api/chat/${encodeURIComponent(conversationId)}/stream`, {
+				method: 'HEAD',
+				headers: { Authorization: `Bearer ${getToken() ?? ''}` }
+			});
+			available = probe.status === 200;
+		} catch {
+			return;
+		}
+		if (!available) return;
+
+		const backup = chat.messages;
+		if (backup.at(-1)?.role === 'assistant') chat.messages = backup.slice(0, -1);
+		await chat.resumeStream().catch(() => {});
+		if (chat.status === 'error' && chat.messages.at(-1)?.role !== 'assistant') {
+			chat.messages = backup;
+		}
+	}
+
 	let resumeAttempts = 0;
 	let resumeTimer: ReturnType<typeof setTimeout> | null = null;
 	function scheduleResume(error?: Error) {
@@ -176,7 +203,7 @@
 		resumeAttempts += 1;
 		if (resumeTimer) clearTimeout(resumeTimer);
 		resumeTimer = setTimeout(() => {
-			void chat.resumeStream().then(() => {
+			void resume().then(() => {
 				if (chat.status === 'streaming' || chat.status === 'ready') resumeAttempts = 0;
 			});
 		}, 1500 * resumeAttempts);
