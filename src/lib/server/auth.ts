@@ -70,19 +70,20 @@ export interface AuthUser {
 }
 
 /**
- * Mints the app's bearer session from OIDC claims — the sign-in path now that
- * identity comes from authentik rather than an LDAP bind.
+ * Mints the app's bearer session from identity claims — the OIDC id_token,
+ * or the same shape read from the directory by an LDAP bind (see ./ldap).
  *
- * The session deliberately carries NO warehouse credential: StarRocks is
+ * An SSO session deliberately carries NO warehouse credential: StarRocks is
  * reached with an id_token minted per connection from the server-side refresh
- * token, so a stolen bearer token grants the app, not the data warehouse.
+ * token, so a stolen bearer token grants the app, not the data warehouse. A
+ * password sign-in has no refresh token, so it carries the password instead.
  *
  * Directory attributes are mapped onto the shape the rest of the app already
  * consumes. `groups` replaces AD's `memberOf` — department matching compares
  * against whatever strings land here, and authentik ships groups inside the
  * standard `profile` scope.
  */
-export async function sessionFromClaims(claims: {
+export interface IdentityClaims {
 	sub: string;
 	preferred_username?: string;
 	name?: string;
@@ -92,7 +93,28 @@ export async function sessionFromClaims(claims: {
 	employee_id?: string;
 	cost_center?: string;
 	cost_center_description?: string;
-}): Promise<{ token: string; username: string; displayName: string | null }> {
+}
+
+/**
+ * Which doors are open. OIDC needs an issuer, LDAP a directory URL; a
+ * deployment sets either or both.
+ */
+export function authMethods(): { ldap: boolean; oidc: boolean } {
+	return { ldap: !!env.LDAP_URL, oidc: !!env.OIDC_ISSUER };
+}
+
+export async function sessionFromClaims(
+	claims: IdentityClaims,
+	options: {
+		/**
+		 * Set for a password (LDAP) sign-in. There is no refresh token to mint
+		 * warehouse id_tokens from, so the password rides inside the encrypted
+		 * token — the pre-OIDC model — and connectAsUser takes its cleartext
+		 * path. A JWE, so it never leaves this server readable.
+		 */
+		password?: string;
+	} = {}
+): Promise<{ token: string; username: string; displayName: string | null }> {
 	const username = (claims.preferred_username ?? claims.sub).toLowerCase();
 	const displayName = claims.name ?? username;
 
@@ -105,7 +127,8 @@ export async function sessionFromClaims(claims: {
 		costCenterDescription: claims.cost_center_description ?? null
 	};
 
-	const token = await new EncryptJWT({ displayName, credentials: { username }, profile })
+	const credentials = options.password ? { username, password: options.password } : { username };
+	const token = await new EncryptJWT({ displayName, credentials, profile })
 		.setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
 		.setSubject(username)
 		.setIssuedAt()

@@ -41,6 +41,7 @@
 		"dompurify": "^3.4.11",
 		"highlight.js": "^11.11.1",
 		"jose": "^6.2.3",
+		"ldapts": "^9.0.0",
 		"marked": "^18.0.5",
 		"mermaid": "^11.16.0",
 		"mysql2": "^3.22.5",
