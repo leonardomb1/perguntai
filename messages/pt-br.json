@@ -361,5 +361,9 @@
 	"settings_mcp_token_remove": "Remover",
 	"settings_mcp_token_cancel": "Cancelar",
 	"settings_mcp_token_pending": "O token será removido ao salvar.",
-	"settings_mcp_token_undo": "Desfazer"
+	"settings_mcp_token_undo": "Desfazer",
+	"settings_mcp_test": "Testar conexão",
+	"settings_mcp_testing": "Testando…",
+	"settings_mcp_test_ok": "conectado, {count} ferramentas",
+	"settings_mcp_test_unreachable": "não foi possível contatar o servidor"
 }

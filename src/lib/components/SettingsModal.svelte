@@ -306,6 +306,31 @@
 	function removeMcpRow(i: number) {
 		mcpRows = mcpRows.filter((_, idx) => idx !== i);
 	}
+
+	// Connection tests, keyed by card ('windmill' | 'tabula' | row id/index).
+	type TestState = { busy: boolean; ok?: boolean; detail?: string };
+	let tests = $state<Record<string, TestState>>({});
+	async function testConnector(key: string, body: Record<string, unknown>) {
+		tests[key] = { busy: true };
+		try {
+			const res = await fetch('/api/settings/mcp-test', {
+				method: 'POST',
+				headers: { Authorization: `Bearer ${getToken() ?? ''}`, 'Content-Type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+			const data = (await res.json()) as { ok?: boolean; tools?: string[]; error?: string };
+			tests[key] = data.ok
+				? {
+						busy: false,
+						ok: true,
+						detail: m.settings_mcp_test_ok({ count: data.tools?.length ?? 0 }) +
+							(data.tools?.length ? ` — ${data.tools.slice(0, 5).join(', ')}${data.tools.length > 5 ? '…' : ''}` : '')
+					}
+				: { busy: false, ok: false, detail: data.error ?? 'error' };
+		} catch {
+			tests[key] = { busy: false, ok: false, detail: m.settings_mcp_test_unreachable() };
+		}
+	}
 	// svelte-ignore state_referenced_locally
 	let webSearch = $state(settings.webSearch);
 	// svelte-ignore state_referenced_locally
@@ -610,10 +635,27 @@
 										<TokenField tokenSet={set} bind:value={tabulaToken} bind:removeFlag={removeTabulaToken} />
 									{/if}
 								{/key}
+								{#if set}
+									<div class="mt-2 flex items-start gap-2">
+										<button
+											onclick={() => testConnector(builtin.kind, { kind: builtin.kind, ...(isWm ? {} : tabulaToken.trim() ? { token: tabulaToken.trim() } : {}) })}
+											disabled={tests[builtin.kind]?.busy}
+											class="shrink-0 rounded-lg border border-neutral-200 px-2.5 py-1 text-xs font-medium text-neutral-600 transition hover:border-[#d97757]/50 hover:text-[#bd5d3a] disabled:opacity-50"
+										>
+											{tests[builtin.kind]?.busy ? m.settings_mcp_testing() : m.settings_mcp_test()}
+										</button>
+										{#if tests[builtin.kind] && !tests[builtin.kind].busy}
+											<p class="min-w-0 text-xs leading-relaxed break-words {tests[builtin.kind].ok ? 'text-emerald-700' : 'text-red-600'}">
+												{tests[builtin.kind].ok ? '✓ ' : '✗ '}{tests[builtin.kind].detail}
+											</p>
+										{/if}
+									</div>
+								{/if}
 							</div>
 						{/each}
 
 						{#each mcpRows as row, i (row.id ?? i)}
+							{@const tkey = row.id ?? `new-${i}`}
 							<div class="rounded-xl border border-neutral-200 p-3.5">
 								<div class="flex items-center gap-2">
 									<input
@@ -657,6 +699,20 @@
 								{#key saveGen}
 									<TokenField tokenSet={row.tokenSet} bind:value={row.token} bind:removeFlag={row.removeToken} />
 								{/key}
+								<div class="mt-2 flex items-start gap-2">
+									<button
+										onclick={() => testConnector(tkey, { url: row.url.trim(), ...(row.id ? { id: row.id } : {}), ...(row.token.trim() ? { token: row.token.trim() } : {}) })}
+										disabled={tests[tkey]?.busy || !row.url.trim()}
+										class="shrink-0 rounded-lg border border-neutral-200 px-2.5 py-1 text-xs font-medium text-neutral-600 transition hover:border-[#d97757]/50 hover:text-[#bd5d3a] disabled:opacity-50"
+									>
+										{tests[tkey]?.busy ? m.settings_mcp_testing() : m.settings_mcp_test()}
+									</button>
+									{#if tests[tkey] && !tests[tkey].busy}
+										<p class="min-w-0 text-xs leading-relaxed break-words {tests[tkey].ok ? 'text-emerald-700' : 'text-red-600'}">
+											{tests[tkey].ok ? '✓ ' : '✗ '}{tests[tkey].detail}
+										</p>
+									{/if}
+								</div>
 							</div>
 						{/each}
 					</div>

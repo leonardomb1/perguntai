@@ -239,6 +239,42 @@ async function connectTabula(token: string | null, tools: ToolSet): Promise<MCPC
 	}
 }
 
+/**
+ * Probe one MCP server: connect, list tools, disconnect. This is what the
+ * settings "Testar" button calls, so a misconfigured URL (a REST API, an OAuth
+ * audience URI, a typo) fails visibly at save time instead of silently in chat.
+ */
+export async function testMcpServer(server: {
+	url: string;
+	token: string | null;
+}): Promise<{ ok: true; tools: string[] } | { ok: false; error: string }> {
+	let client: MCPClient | null = null;
+	try {
+		client = await Promise.race([
+			createMCPClient({
+				transport: {
+					type: 'http',
+					url: server.url,
+					...(server.token ? { headers: { authorization: `Bearer ${server.token}` } } : {})
+				}
+			}),
+			new Promise<never>((_, reject) =>
+				setTimeout(() => reject(new Error('timeout after 10s')), 10_000)
+			)
+		]);
+		const tools = Object.keys(await client.tools()).sort();
+		return { ok: true, tools };
+	} catch (error) {
+		let message = error instanceof Error ? error.message : String(error);
+		// undici buries the useful part (ECONNREFUSED, DNS, TLS) in the cause.
+		const cause = error instanceof Error ? (error.cause as Error | undefined) : undefined;
+		if (cause?.message && !message.includes(cause.message)) message += ` (${cause.message})`;
+		return { ok: false, error: message.slice(0, 300) };
+	} finally {
+		await client?.close().catch(() => {});
+	}
+}
+
 export async function connectMcpTools(
 	tokens: { windmill: string | null; tabula: string | null },
 	/** allowWrites from AccessUser.windmillWrite; custom = the user's enabled on-demand servers. */
