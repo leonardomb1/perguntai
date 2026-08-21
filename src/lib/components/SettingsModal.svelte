@@ -270,6 +270,25 @@
 	// svelte-ignore state_referenced_locally
 	let tabulaTokenSet = $state(settings.tabulaTokenSet);
 	let removeTabulaToken = $state(false);
+
+	// On-demand MCP servers. Each row edits in place; `token` is write-only
+	// (empty = keep the stored one, which `tokenSet` reports).
+	type McpRow = { id?: string; name: string; url: string; token: string; tokenSet: boolean; enabled: boolean };
+	const rowsFrom = (list: typeof settings.mcpServers): McpRow[] =>
+		list.map((sv) => ({ id: sv.id, name: sv.name, url: sv.url, token: '', tokenSet: sv.tokenSet, enabled: sv.enabled }));
+	// svelte-ignore state_referenced_locally
+	let mcpRows = $state<McpRow[]>(rowsFrom(settings.mcpServers));
+	const mcpSnapshot = (rows: McpRow[]) =>
+		JSON.stringify(rows.map((r) => [r.id, r.name, r.url, r.token, r.enabled]));
+	// svelte-ignore state_referenced_locally
+	let mcpSaved = $state(mcpSnapshot(rowsFrom(settings.mcpServers)));
+	function addMcpRow() {
+		if (mcpRows.length >= 5) return;
+		mcpRows = [...mcpRows, { name: '', url: '', token: '', tokenSet: false, enabled: true }];
+	}
+	function removeMcpRow(i: number) {
+		mcpRows = mcpRows.filter((_, idx) => idx !== i);
+	}
 	// svelte-ignore state_referenced_locally
 	let webSearch = $state(settings.webSearch);
 	// svelte-ignore state_referenced_locally
@@ -296,7 +315,8 @@
 			windmillToken.trim() !== '' ||
 			removeToken ||
 			tabulaToken.trim() !== '' ||
-			removeTabulaToken
+			removeTabulaToken ||
+			mcpSnapshot(mcpRows) !== mcpSaved
 	);
 
 	async function save() {
@@ -317,7 +337,16 @@
 				? { tabulaToken: null }
 				: tabulaToken.trim()
 					? { tabulaToken: tabulaToken.trim() }
-					: {})
+					: {}),
+			mcpServers: mcpRows
+				.filter((r) => r.name.trim() && r.url.trim())
+				.map((r) => ({
+					...(r.id ? { id: r.id } : {}),
+					name: r.name.trim(),
+					url: r.url.trim(),
+					...(r.token.trim() ? { token: r.token.trim() } : {}),
+					enabled: r.enabled
+				}))
 		});
 		saving = false;
 		if (!updated) {
@@ -330,6 +359,8 @@
 		tabulaToken = '';
 		removeTabulaToken = false;
 		tabulaTokenSet = updated.tabulaTokenSet;
+		mcpRows = rowsFrom(updated.mcpServers);
+		mcpSaved = mcpSnapshot(rowsFrom(updated.mcpServers));
 		onSaved(updated);
 		savedFlash = true;
 		setTimeout(() => (savedFlash = false), 2000);
@@ -624,6 +655,72 @@
 									: 'text-red-600 hover:bg-red-50'}"
 							>
 								{removeTabulaToken ? `✓ ${m.settings_tabula_remove()}` : m.settings_tabula_remove()}
+							</button>
+						{/if}
+					</div>
+
+					<div class="mt-6 border-t border-neutral-200 pt-5">
+						<h3 class="text-sm font-semibold text-neutral-900">{m.settings_mcp_title()}</h3>
+						<p class="mt-1 text-sm leading-relaxed text-neutral-500">{m.settings_mcp_desc()}</p>
+						<p class="mt-1 text-xs text-neutral-400">{m.settings_mcp_hint()}</p>
+
+						<div class="mt-4 space-y-3">
+							{#each mcpRows as row, i (row.id ?? i)}
+								<div class="rounded-xl border border-neutral-200 p-3">
+									<div class="flex items-center gap-2">
+										<input
+											bind:value={row.name}
+											maxlength="40"
+											placeholder={m.settings_mcp_name_placeholder()}
+											autocapitalize="none"
+											spellcheck="false"
+											class="w-36 min-w-0 rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+										/>
+										<input
+											bind:value={row.url}
+											maxlength="300"
+											placeholder="https://…/mcp"
+											autocapitalize="none"
+											spellcheck="false"
+											class="min-w-0 flex-1 rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+										/>
+										<button
+											onclick={() => (row.enabled = !row.enabled)}
+											role="switch"
+											aria-checked={row.enabled}
+											title={row.enabled ? m.settings_mcp_enabled() : m.settings_mcp_disabled()}
+											class="relative h-5 w-9 shrink-0 rounded-full transition {row.enabled ? 'bg-[#d97757]' : 'bg-neutral-300'}"
+										>
+											<span class="absolute top-0.5 size-4 rounded-full bg-white transition-all {row.enabled ? 'left-4' : 'left-0.5'}"></span>
+										</button>
+										<button
+											onclick={() => removeMcpRow(i)}
+											class="grid size-8 shrink-0 place-items-center rounded-lg text-neutral-400 transition hover:bg-red-50 hover:text-red-600"
+											title={m.settings_mcp_remove()}
+											aria-label={m.settings_mcp_remove()}
+										>
+											<Icon name="trash" size={14} />
+										</button>
+									</div>
+									<input
+										bind:value={row.token}
+										type="password"
+										maxlength="200"
+										autocomplete="off"
+										placeholder={row.tokenSet ? m.settings_windmill_placeholder_set() : m.settings_mcp_token_placeholder()}
+										class="mt-2 w-full rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition placeholder:font-sans placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+									/>
+								</div>
+							{/each}
+						</div>
+
+						{#if mcpRows.length < 5}
+							<button
+								onclick={addMcpRow}
+								class="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:border-[#d97757]/50 hover:bg-[#d97757]/5 hover:text-[#bd5d3a]"
+							>
+								<Icon name="plus" size={13} />
+								{m.settings_mcp_add()}
 							</button>
 						{/if}
 					</div>

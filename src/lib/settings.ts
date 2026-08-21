@@ -5,12 +5,21 @@ import { getToken } from '$lib/session';
  * browser's point of view: PUT sends it, GET only reports `windmillTokenSet`.
  */
 
+export interface PublicMcpServer {
+	id: string;
+	name: string;
+	url: string;
+	tokenSet: boolean;
+	enabled: boolean;
+}
+
 export interface PublicSettings {
 	fullName: string;
 	displayName: string;
 	systemPrompt: string;
 	windmillTokenSet: boolean;
 	tabulaTokenSet: boolean;
+	mcpServers: PublicMcpServer[];
 	webSearch: boolean;
 	/** Whether the deployment's provider workspace supports server-side web search. */
 	webSearchAvailable?: boolean;
@@ -29,6 +38,8 @@ export interface SettingsPatch {
 	systemPrompt?: string;
 	windmillToken?: string | null;
 	tabulaToken?: string | null;
+	/** Full replacement list; per-entry token: string sets, null clears, undefined keeps. */
+	mcpServers?: Array<{ id?: string; name: string; url: string; token?: string | null; enabled: boolean }>;
 	webSearch?: boolean;
 	memoryEnabled?: boolean;
 	onboarded?: boolean;

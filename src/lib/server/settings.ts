@@ -27,11 +27,36 @@ export interface UserSettings {
 	windmillDeployToken: string | null;
 	/** Decrypted Tabula API token for the docs MCP, or null when unset. */
 	tabulaToken: string | null;
+	/** On-demand MCP servers the user added, tokens decrypted. */
+	mcpServers: McpServer[];
 	/** Anthropic server-side web search tool — opt-in, off by default. */
 	webSearch: boolean;
 	/** Agent-written personal memory — opt-in, off by default (LGPD). */
 	memoryEnabled: boolean;
 	onboarded: boolean;
+}
+
+/**
+ * A user-added MCP server: any HTTP MCP endpoint, connected as the user with
+ * the bearer token they supplied. Read-only wishes are expressed at the server
+ * (e.g. GitHub's hosted MCP has a /readonly URL) — this side only carries the
+ * address and credential.
+ */
+export interface McpServer {
+	id: string;
+	name: string;
+	url: string;
+	token: string | null;
+	enabled: boolean;
+}
+
+/** McpServer as the browser sees it: whether a token exists, never its value. */
+export interface PublicMcpServer {
+	id: string;
+	name: string;
+	url: string;
+	tokenSet: boolean;
+	enabled: boolean;
 }
 
 /** Shape safe to send to the browser — the token itself never leaves the server. */
@@ -41,6 +66,7 @@ export interface PublicSettings {
 	systemPrompt: string;
 	windmillTokenSet: boolean;
 	tabulaTokenSet: boolean;
+	mcpServers: PublicMcpServer[];
 	webSearch: boolean;
 	memoryEnabled: boolean;
 	onboarded: boolean;
@@ -53,6 +79,7 @@ const DEFAULTS: UserSettings = {
 	windmillToken: null,
 	windmillDeployToken: null,
 	tabulaToken: null,
+	mcpServers: [],
 	webSearch: false,
 	memoryEnabled: false,
 	onboarded: false
@@ -61,6 +88,9 @@ const DEFAULTS: UserSettings = {
 const MAX_NAME = 80;
 const MAX_PROMPT = 4000;
 const MAX_TOKEN = 200;
+const MAX_MCP_SERVERS = 5;
+const MAX_MCP_NAME = 40;
+const MAX_MCP_URL = 300;
 
 function settingsPath(username: string): string {
 	const safe = username.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -93,11 +123,35 @@ function decrypt(blob: string): string | null {
 	}
 }
 
+interface StoredMcpServer {
+	id: string;
+	name: string;
+	url: string;
+	tokenEnc: string | null;
+	enabled: boolean;
+}
+
+function sanitizeStoredServers(raw: unknown): StoredMcpServer[] {
+	if (!Array.isArray(raw)) return [];
+	return raw
+		.filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null)
+		.slice(0, MAX_MCP_SERVERS)
+		.map((x) => ({
+			id: typeof x.id === 'string' && x.id ? x.id : crypto.randomUUID(),
+			name: typeof x.name === 'string' ? x.name.slice(0, MAX_MCP_NAME) : '',
+			url: typeof x.url === 'string' ? x.url.slice(0, MAX_MCP_URL) : '',
+			tokenEnc: typeof x.tokenEnc === 'string' ? x.tokenEnc : null,
+			enabled: x.enabled !== false
+		}))
+		.filter((x) => x.name.trim() && /^https?:\/\//.test(x.url));
+}
+
 interface StoredSettings
-	extends Omit<UserSettings, 'windmillToken' | 'windmillDeployToken' | 'tabulaToken'> {
+	extends Omit<UserSettings, 'windmillToken' | 'windmillDeployToken' | 'tabulaToken' | 'mcpServers'> {
 	windmillTokenEnc: string | null;
 	windmillDeployTokenEnc: string | null;
 	tabulaTokenEnc: string | null;
+	mcpServers: StoredMcpServer[];
 }
 
 async function readStored(username: string): Promise<StoredSettings> {
@@ -111,13 +165,20 @@ async function readStored(username: string): Promise<StoredSettings> {
 			windmillDeployTokenEnc:
 				typeof parsed.windmillDeployTokenEnc === 'string' ? parsed.windmillDeployTokenEnc : null,
 			tabulaTokenEnc: typeof parsed.tabulaTokenEnc === 'string' ? parsed.tabulaTokenEnc : null,
+			mcpServers: sanitizeStoredServers(parsed.mcpServers),
 			webSearch: parsed.webSearch === true,
 			memoryEnabled: parsed.memoryEnabled === true,
 			onboarded: parsed.onboarded === true
 		};
 	} catch {
 		const { windmillToken: _, windmillDeployToken: __, tabulaToken: ___, ...rest } = DEFAULTS;
-		return { ...rest, windmillTokenEnc: null, windmillDeployTokenEnc: null, tabulaTokenEnc: null };
+		return {
+			...rest,
+			windmillTokenEnc: null,
+			windmillDeployTokenEnc: null,
+			tabulaTokenEnc: null,
+			mcpServers: []
+		};
 	}
 }
 
@@ -133,6 +194,13 @@ export async function getUserSettings(username: string): Promise<UserSettings> {
 			? decrypt(stored.windmillDeployTokenEnc)
 			: null,
 		tabulaToken: stored.tabulaTokenEnc ? decrypt(stored.tabulaTokenEnc) : null,
+		mcpServers: stored.mcpServers.map((sv) => ({
+			id: sv.id,
+			name: sv.name,
+			url: sv.url,
+			token: sv.tokenEnc ? decrypt(sv.tokenEnc) : null,
+			enabled: sv.enabled
+		})),
 		webSearch: stored.webSearch,
 		memoryEnabled: stored.memoryEnabled,
 		onboarded: stored.onboarded
@@ -147,10 +215,30 @@ export async function getPublicSettings(username: string): Promise<PublicSetting
 		systemPrompt: stored.systemPrompt,
 		windmillTokenSet: stored.windmillTokenEnc !== null,
 		tabulaTokenSet: stored.tabulaTokenEnc !== null,
+		mcpServers: publicServers(stored.mcpServers),
 		webSearch: stored.webSearch,
 		memoryEnabled: stored.memoryEnabled,
 		onboarded: stored.onboarded
 	};
+}
+
+function publicServers(servers: StoredMcpServer[]): PublicMcpServer[] {
+	return servers.map((sv) => ({
+		id: sv.id,
+		name: sv.name,
+		url: sv.url,
+		tokenSet: sv.tokenEnc !== null,
+		enabled: sv.enabled
+	}));
+}
+
+/** One entry of a submitted server list; token undefined = keep the stored one. */
+export interface McpServerPatch {
+	id?: string;
+	name: string;
+	url: string;
+	token?: string | null;
+	enabled?: boolean;
 }
 
 export interface SettingsPatch {
@@ -163,6 +251,8 @@ export interface SettingsPatch {
 	windmillDeployToken?: string | null;
 	/** Tabula docs-MCP token; `null` clears, omitted leaves unchanged. */
 	tabulaToken?: string | null;
+	/** Full replacement list of the user's MCP servers; omitted = unchanged. */
+	mcpServers?: McpServerPatch[];
 	webSearch?: boolean;
 	memoryEnabled?: boolean;
 	onboarded?: boolean;
@@ -191,6 +281,30 @@ export async function saveUserSettings(
 	else if (typeof patch.tabulaToken === 'string' && patch.tabulaToken.trim()) {
 		stored.tabulaTokenEnc = encrypt(patch.tabulaToken.trim().slice(0, MAX_TOKEN));
 	}
+	if (Array.isArray(patch.mcpServers)) {
+		const previous = new Map(stored.mcpServers.map((sv) => [sv.id, sv]));
+		stored.mcpServers = patch.mcpServers.slice(0, MAX_MCP_SERVERS).flatMap((entry) => {
+			const name = typeof entry.name === 'string' ? entry.name.trim().slice(0, MAX_MCP_NAME) : '';
+			const url = typeof entry.url === 'string' ? entry.url.trim().slice(0, MAX_MCP_URL) : '';
+			if (!name || !/^https?:\/\//.test(url)) return [];
+			const kept = entry.id ? previous.get(entry.id) : undefined;
+			const tokenEnc =
+				entry.token === null
+					? null
+					: typeof entry.token === 'string' && entry.token.trim()
+						? encrypt(entry.token.trim().slice(0, MAX_TOKEN))
+						: (kept?.tokenEnc ?? null);
+			return [
+				{
+					id: kept?.id ?? crypto.randomUUID(),
+					name,
+					url,
+					tokenEnc,
+					enabled: entry.enabled !== false
+				}
+			];
+		});
+	}
 	if (typeof patch.webSearch === 'boolean') stored.webSearch = patch.webSearch;
 	if (typeof patch.memoryEnabled === 'boolean') stored.memoryEnabled = patch.memoryEnabled;
 	if (patch.onboarded === true) stored.onboarded = true;
@@ -205,6 +319,7 @@ export async function saveUserSettings(
 		systemPrompt: stored.systemPrompt,
 		windmillTokenSet: stored.windmillTokenEnc !== null,
 		tabulaTokenSet: stored.tabulaTokenEnc !== null,
+		mcpServers: publicServers(stored.mcpServers),
 		webSearch: stored.webSearch,
 		memoryEnabled: stored.memoryEnabled,
 		onboarded: stored.onboarded

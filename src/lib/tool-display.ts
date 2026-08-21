@@ -56,5 +56,18 @@ export function toolDisplay(raw: string): ToolDisplay {
 		const name = raw.slice('tabula_'.length).replaceAll('_', ' ');
 		return { badge: 'Tabula', label: name, title: raw, icon: 'wrench' };
 	}
-	return { badge: BADGES[raw] ?? null, label: raw, title: raw, icon: ICONS[raw] ?? 'wrench' };
+	if (BADGES[raw] || ICONS[raw]) {
+		return { badge: BADGES[raw] ?? null, label: raw, title: raw, icon: ICONS[raw] ?? 'wrench' };
+	}
+	// A user-added MCP server's tool: `<serverslug>_<tool_name>`.
+	const custom = /^([a-z0-9]+)_(.+)$/.exec(raw);
+	if (custom) {
+		return {
+			badge: custom[1].charAt(0).toUpperCase() + custom[1].slice(1),
+			label: custom[2].replaceAll('_', ' '),
+			title: raw,
+			icon: 'zap'
+		};
+	}
+	return { badge: null, label: raw, title: raw, icon: 'wrench' };
 }

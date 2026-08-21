@@ -20,7 +20,6 @@
 
 	let fullName = $state('');
 	let displayName = $state('');
-	let windmillToken = $state('');
 	let saving = $state(false);
 
 	async function finish(skipAll = false) {
@@ -32,7 +31,6 @@
 				: {
 						fullName,
 						displayName,
-						...(windmillToken.trim() ? { windmillToken: windmillToken.trim() } : {}),
 						onboarded: true
 					}
 		);
@@ -137,25 +135,11 @@
 						<Icon name="zap" size={20} />
 					</div>
 					<h2 class="font-serif text-xl font-semibold text-neutral-900">
-						{m.onboarding_windmill_title()}
+						{m.onboarding_connectors_title()}
 					</h2>
 					<p class="mt-1.5 text-sm leading-relaxed text-neutral-500">
-						{m.onboarding_windmill_body()}
+						{m.onboarding_connectors_body()}
 					</p>
-					<p class="mt-1.5 text-xs text-neutral-400">{m.settings_windmill_hint()}</p>
-
-					<label for="ob-windmill" class="mt-5 mb-1.5 block text-sm font-medium text-neutral-700">
-						{m.settings_windmill_token()}
-						<span class="font-normal text-neutral-400">· {m.onboarding_optional()}</span>
-					</label>
-					<input
-						id="ob-windmill"
-						type="password"
-						bind:value={windmillToken}
-						maxlength="200"
-						autocomplete="off"
-						class="w-full rounded-xl border border-neutral-300 px-3.5 py-2.5 font-mono text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
-					/>
 
 					<button
 						onclick={() => finish()}

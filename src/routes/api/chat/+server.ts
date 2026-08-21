@@ -55,7 +55,10 @@ export const POST: RequestHandler = async ({ request }) => {
 	// and run? `access` is already loaded above, so this costs nothing.
 	const mcp = await connectMcpTools(
 		{ windmill: settings.windmillToken, tabula: settings.tabulaToken },
-		{ allowWrites: access?.windmillWrite === true }
+		{
+			allowWrites: access?.windmillWrite === true,
+			custom: settings.mcpServers.filter((sv) => sv.enabled)
+		}
 	);
 
 	// Token accounting: accumulate each step's usage, persist once at the end.

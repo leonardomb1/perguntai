@@ -57,6 +57,18 @@ export const PUT: RequestHandler = async ({ request }) => {
 	else if (typeof body.tabulaToken === 'string' && body.tabulaToken.trim()) {
 		patch.tabulaToken = body.tabulaToken.trim();
 	}
+	if (Array.isArray(body.mcpServers)) {
+		// Server-side sanitation lives in saveUserSettings; this only shapes.
+		patch.mcpServers = body.mcpServers
+			.filter((x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null)
+			.map((x: Record<string, unknown>) => ({
+				id: typeof x.id === 'string' ? x.id : undefined,
+				name: typeof x.name === 'string' ? x.name : '',
+				url: typeof x.url === 'string' ? x.url : '',
+				token: x.token === null ? null : typeof x.token === 'string' ? x.token : undefined,
+				enabled: x.enabled !== false
+			}));
+	}
 	if (typeof body.webSearch === 'boolean') patch.webSearch = body.webSearch;
 	if (typeof body.memoryEnabled === 'boolean') patch.memoryEnabled = body.memoryEnabled;
 	if (body.onboarded === true) patch.onboarded = true;

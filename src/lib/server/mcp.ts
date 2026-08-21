@@ -2,10 +2,11 @@ import { createMCPClient, type MCPClient } from '@ai-sdk/mcp';
 import type { ToolSet } from 'ai';
 import { env } from '$env/dynamic/private';
 import { windmillMcpUrl } from './windmill';
+import type { McpServer } from './settings';
 
 /**
  * Connects the chat to its MCP servers AS THE CALLING USER and returns their
- * tools. Two servers, both optional — when an instance isn't configured or the
+ * tools. Everything is optional — when an instance isn't configured or the
  * user has no token, its tools are skipped and the chat keeps working:
  *
  * - Windmill (`windmill_*`): URL built per request from WINDMILL_BASE_URL/
@@ -14,6 +15,12 @@ import { windmillMcpUrl } from './windmill';
  * - Tabula (`tabula_*`): the documentation platform's MCP at TABULA_MCP_URL,
  *   authenticated with the user's Tabula API token (minted in Tabula under
  *   Settings → API tokens), so doc access mirrors their workspace permissions.
+ * - On-demand (`<name>_*`): any HTTP MCP server the user added in Settings →
+ *   Connectors (URL + optional bearer token) — e.g. GitHub's hosted server at
+ *   https://api.githubcopilot.com/mcp/readonly with a PAT. The credential is
+ *   the user's own, so every call carries exactly their permissions; wanting
+ *   read-only is expressed at the server (GitHub's /readonly URL), because a
+ *   generic client cannot know which foreign tools mutate.
  */
 const VALID_TYPES = new Set(['object', 'array', 'string', 'number', 'integer', 'boolean', 'null']);
 
@@ -166,6 +173,54 @@ async function connectWindmill(
 	}
 }
 
+/**
+ * Tools per custom server. Foreign servers can expose dozens of tools, and
+ * every schema rides in the cached prompt prefix — the same bloat that forced
+ * Windmill down to a facade. Alphabetical keeps the kept set stable across
+ * sessions (cache-friendly); the cut is logged, never silent.
+ */
+const MAX_CUSTOM_TOOLS = 30;
+
+function slugOf(name: string): string {
+	return (
+		name
+			.toLowerCase()
+			.normalize('NFD')
+			.replace(/[\u0300-\u036f]/g, '')
+			.replace(/[^a-z0-9]+/g, '_')
+			.replace(/^_+|_+$/g, '')
+			.slice(0, 24) || 'mcp'
+	);
+}
+
+async function connectCustom(server: McpServer, tools: ToolSet): Promise<MCPClient | null> {
+	try {
+		const client = await createMCPClient({
+			transport: {
+				type: 'http',
+				url: server.url,
+				...(server.token ? { headers: { authorization: `Bearer ${server.token}` } } : {})
+			}
+		});
+		const prefix = slugOf(server.name);
+		const entries = Object.entries(await client.tools()).sort(([a], [b]) => a.localeCompare(b));
+		if (entries.length > MAX_CUSTOM_TOOLS) {
+			console.warn(
+				`MCP "${server.name}": serving first ${MAX_CUSTOM_TOOLS} of ${entries.length} tools (alphabetical)`
+			);
+		}
+		for (const [name, toolDef] of entries.slice(0, MAX_CUSTOM_TOOLS)) {
+			const raw = (toolDef.inputSchema as { jsonSchema?: unknown } | undefined)?.jsonSchema;
+			sanitizeSchema(raw ?? toolDef.inputSchema);
+			tools[`${prefix}_${name}`] = toolDef;
+		}
+		return client;
+	} catch (error) {
+		console.warn(`MCP "${server.name}" unavailable, skipping:`, error);
+		return null;
+	}
+}
+
 async function connectTabula(token: string | null, tools: ToolSet): Promise<MCPClient | null> {
 	const url = env.TABULA_MCP_URL?.replace(/\/+$/, '');
 	if (!url || !token) return null;
@@ -186,14 +241,15 @@ async function connectTabula(token: string | null, tools: ToolSet): Promise<MCPC
 
 export async function connectMcpTools(
 	tokens: { windmill: string | null; tabula: string | null },
-	/** From AccessUser.windmillWrite. Off = read-only workspace access. */
-	{ allowWrites = false }: { allowWrites?: boolean } = {}
+	/** allowWrites from AccessUser.windmillWrite; custom = the user's enabled on-demand servers. */
+	{ allowWrites = false, custom = [] }: { allowWrites?: boolean; custom?: McpServer[] } = {}
 ): Promise<{ tools: ToolSet; close: () => Promise<void> }> {
 	const tools: ToolSet = {};
 	const clients = (
 		await Promise.all([
 			connectWindmill(tokens.windmill, allowWrites, tools),
-			connectTabula(tokens.tabula, tools)
+			connectTabula(tokens.tabula, tools),
+			...custom.map((server) => connectCustom(server, tools))
 		])
 	).filter((c): c is MCPClient => c !== null);
 
