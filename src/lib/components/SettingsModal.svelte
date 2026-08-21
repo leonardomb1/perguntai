@@ -4,6 +4,7 @@
 	import { getLocale, setLocale } from '$lib/paraglide/runtime';
 	import Avatar from './Avatar.svelte';
 	import Icon from './Icon.svelte';
+	import TokenField from './TokenField.svelte';
 	import SelectMenu from './SelectMenu.svelte';
 	import { saveSettings, type PublicSettings } from '$lib/settings';
 	import { goto } from '$app/navigation';
@@ -273,18 +274,34 @@
 
 	// On-demand MCP servers. Each row edits in place; `token` is write-only
 	// (empty = keep the stored one, which `tokenSet` reports).
-	type McpRow = { id?: string; name: string; url: string; token: string; tokenSet: boolean; enabled: boolean };
+	type McpRow = {
+		id?: string;
+		name: string;
+		url: string;
+		token: string;
+		tokenSet: boolean;
+		removeToken: boolean;
+		enabled: boolean;
+	};
 	const rowsFrom = (list: typeof settings.mcpServers): McpRow[] =>
-		list.map((sv) => ({ id: sv.id, name: sv.name, url: sv.url, token: '', tokenSet: sv.tokenSet, enabled: sv.enabled }));
+		list.map((sv) => ({
+			id: sv.id,
+			name: sv.name,
+			url: sv.url,
+			token: '',
+			tokenSet: sv.tokenSet,
+			removeToken: false,
+			enabled: sv.enabled
+		}));
 	// svelte-ignore state_referenced_locally
 	let mcpRows = $state<McpRow[]>(rowsFrom(settings.mcpServers));
 	const mcpSnapshot = (rows: McpRow[]) =>
-		JSON.stringify(rows.map((r) => [r.id, r.name, r.url, r.token, r.enabled]));
+		JSON.stringify(rows.map((r) => [r.id, r.name, r.url, r.token, r.removeToken, r.enabled]));
 	// svelte-ignore state_referenced_locally
 	let mcpSaved = $state(mcpSnapshot(rowsFrom(settings.mcpServers)));
 	function addMcpRow() {
 		if (mcpRows.length >= 5) return;
-		mcpRows = [...mcpRows, { name: '', url: '', token: '', tokenSet: false, enabled: true }];
+		mcpRows = [...mcpRows, { name: '', url: '', token: '', tokenSet: false, removeToken: false, enabled: true }];
 	}
 	function removeMcpRow(i: number) {
 		mcpRows = mcpRows.filter((_, idx) => idx !== i);
@@ -304,6 +321,8 @@
 	}
 
 	let saving = $state(false);
+	/** Bumped on save so every TokenField resets its local editing state. */
+	let saveGen = $state(0);
 	let savedFlash = $state(false);
 	let saveError = $state(false);
 
@@ -344,7 +363,7 @@
 					...(r.id ? { id: r.id } : {}),
 					name: r.name.trim(),
 					url: r.url.trim(),
-					...(r.token.trim() ? { token: r.token.trim() } : {}),
+					...(r.removeToken ? { token: null } : r.token.trim() ? { token: r.token.trim() } : {}),
 					enabled: r.enabled
 				}))
 		});
@@ -361,6 +380,7 @@
 		tabulaTokenSet = updated.tabulaTokenSet;
 		mcpRows = rowsFrom(updated.mcpServers);
 		mcpSaved = mcpSnapshot(rowsFrom(updated.mcpServers));
+		saveGen++;
 		onSaved(updated);
 		savedFlash = true;
 		setTimeout(() => (savedFlash = false), 2000);
@@ -568,77 +588,31 @@
 					<p class="mt-1.5 text-sm leading-relaxed text-neutral-500">{m.settings_mcp_desc()}</p>
 
 					<div class="mt-5 space-y-3">
-						<!-- Built-in: Windmill -->
-						<div class="rounded-xl border border-neutral-200 p-3.5">
-							<div class="flex items-center gap-2">
-								<span class="text-sm font-semibold text-neutral-900">Windmill</span>
-								<span class="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-neutral-500 uppercase">{m.settings_mcp_builtin_badge()}</span>
-								<span class="ml-auto flex items-center gap-1.5 text-xs text-neutral-500">
-									<span class="size-2 rounded-full {tokenSet && !removeToken ? 'bg-emerald-500' : 'bg-neutral-300'}"></span>
-									{tokenSet && !removeToken ? m.settings_windmill_set() : m.settings_windmill_unset()}
-								</span>
+						{#each [{ kind: 'windmill' }, { kind: 'tabula' }] as builtin (builtin.kind)}
+							{@const isWm = builtin.kind === 'windmill'}
+							{@const set = isWm ? tokenSet : tabulaTokenSet}
+							{@const removing = isWm ? removeToken : removeTabulaToken}
+							<div class="rounded-xl border border-neutral-200 p-3.5">
+								<div class="flex items-center gap-2">
+									<span class="text-sm font-semibold text-neutral-900">{isWm ? 'Windmill' : 'Tabula'}</span>
+									<span class="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-neutral-500 uppercase">{m.settings_mcp_builtin_badge()}</span>
+									<span class="ml-auto flex items-center gap-1.5 text-xs {set && !removing ? 'text-neutral-500' : 'text-neutral-400'}">
+										<span class="size-2 rounded-full {set && !removing ? 'bg-emerald-500' : 'bg-neutral-300'}"></span>
+										{set && !removing ? m.settings_mcp_token_set() : m.settings_mcp_token_unset()}
+									</span>
+								</div>
+								<p class="mt-1.5 text-xs leading-relaxed text-neutral-500">{isWm ? m.settings_windmill_desc() : m.settings_tabula_desc()}</p>
+								<p class="mt-0.5 text-[11px] text-neutral-400">{isWm ? m.settings_windmill_hint() : m.settings_tabula_hint()}</p>
+								{#key saveGen}
+									{#if isWm}
+										<TokenField tokenSet={set} bind:value={windmillToken} bind:removeFlag={removeToken} />
+									{:else}
+										<TokenField tokenSet={set} bind:value={tabulaToken} bind:removeFlag={removeTabulaToken} />
+									{/if}
+								{/key}
 							</div>
-							<p class="mt-1.5 text-xs leading-relaxed text-neutral-500">{m.settings_windmill_desc()}</p>
-							<p class="mt-0.5 text-[11px] text-neutral-400">{m.settings_windmill_hint()}</p>
-							<input
-								type="password"
-								bind:value={windmillToken}
-								oninput={() => (removeToken = false)}
-								maxlength="200"
-								autocomplete="off"
-								placeholder={tokenSet ? m.settings_windmill_placeholder_set() : m.settings_mcp_token_placeholder()}
-								class="mt-2.5 w-full rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition placeholder:font-sans placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
-							/>
-							{#if tokenSet}
-								<button
-									onclick={() => {
-										removeToken = !removeToken;
-										if (removeToken) windmillToken = '';
-									}}
-									class="mt-2 rounded-lg px-2 py-1 text-xs font-medium transition
-										{removeToken ? 'bg-red-50 text-red-700' : 'text-red-600 hover:bg-red-50'}"
-								>
-									{removeToken ? `✓ ${m.settings_windmill_remove()}` : m.settings_windmill_remove()}
-								</button>
-							{/if}
-						</div>
+						{/each}
 
-						<!-- Built-in: Tabula -->
-						<div class="rounded-xl border border-neutral-200 p-3.5">
-							<div class="flex items-center gap-2">
-								<span class="text-sm font-semibold text-neutral-900">Tabula</span>
-								<span class="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-neutral-500 uppercase">{m.settings_mcp_builtin_badge()}</span>
-								<span class="ml-auto flex items-center gap-1.5 text-xs text-neutral-500">
-									<span class="size-2 rounded-full {tabulaTokenSet && !removeTabulaToken ? 'bg-emerald-500' : 'bg-neutral-300'}"></span>
-									{tabulaTokenSet && !removeTabulaToken ? m.settings_tabula_set() : m.settings_tabula_unset()}
-								</span>
-							</div>
-							<p class="mt-1.5 text-xs leading-relaxed text-neutral-500">{m.settings_tabula_desc()}</p>
-							<p class="mt-0.5 text-[11px] text-neutral-400">{m.settings_tabula_hint()}</p>
-							<input
-								type="password"
-								bind:value={tabulaToken}
-								oninput={() => (removeTabulaToken = false)}
-								maxlength="200"
-								autocomplete="off"
-								placeholder={tabulaTokenSet ? m.settings_windmill_placeholder_set() : m.settings_mcp_token_placeholder()}
-								class="mt-2.5 w-full rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition placeholder:font-sans placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
-							/>
-							{#if tabulaTokenSet}
-								<button
-									onclick={() => {
-										removeTabulaToken = !removeTabulaToken;
-										if (removeTabulaToken) tabulaToken = '';
-									}}
-									class="mt-2 rounded-lg px-2 py-1 text-xs font-medium transition
-										{removeTabulaToken ? 'bg-red-50 text-red-700' : 'text-red-600 hover:bg-red-50'}"
-								>
-									{removeTabulaToken ? `✓ ${m.settings_tabula_remove()}` : m.settings_tabula_remove()}
-								</button>
-							{/if}
-						</div>
-
-						<!-- User-added servers -->
 						{#each mcpRows as row, i (row.id ?? i)}
 							<div class="rounded-xl border border-neutral-200 p-3.5">
 								<div class="flex items-center gap-2">
@@ -648,16 +622,12 @@
 										placeholder={m.settings_mcp_name_placeholder()}
 										autocapitalize="none"
 										spellcheck="false"
-										class="w-36 min-w-0 rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+										class="w-32 min-w-0 rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm font-semibold transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
 									/>
-									<input
-										bind:value={row.url}
-										maxlength="300"
-										placeholder="https://…/mcp"
-										autocapitalize="none"
-										spellcheck="false"
-										class="min-w-0 flex-1 rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
-									/>
+									<span class="ml-auto flex items-center gap-1.5 text-xs {row.tokenSet && !row.removeToken ? 'text-neutral-500' : 'text-neutral-400'}">
+										<span class="size-2 rounded-full {row.tokenSet && !row.removeToken ? 'bg-emerald-500' : 'bg-neutral-300'}"></span>
+										{row.tokenSet && !row.removeToken ? m.settings_mcp_token_set() : m.settings_mcp_token_unset()}
+									</span>
 									<button
 										onclick={() => (row.enabled = !row.enabled)}
 										role="switch"
@@ -677,13 +647,16 @@
 									</button>
 								</div>
 								<input
-									bind:value={row.token}
-									type="password"
-									maxlength="200"
-									autocomplete="off"
-									placeholder={row.tokenSet ? m.settings_windmill_placeholder_set() : m.settings_mcp_token_placeholder()}
-									class="mt-2 w-full rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition placeholder:font-sans placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+									bind:value={row.url}
+									maxlength="300"
+									placeholder="https://…/mcp"
+									autocapitalize="none"
+									spellcheck="false"
+									class="mt-2 w-full rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
 								/>
+								{#key saveGen}
+									<TokenField tokenSet={row.tokenSet} bind:value={row.token} bind:removeFlag={row.removeToken} />
+								{/key}
 							</div>
 						{/each}
 					</div>
