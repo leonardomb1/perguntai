@@ -185,7 +185,7 @@
 	"settings_tabula_unset": "No token configured",
 	"settings_tabula_remove": "Remove Tabula token",
 	"settings_mcp_title": "MCP servers",
-	"settings_mcp_desc": "Connect extra tool servers (MCP over HTTP). Their tools run with the token you provide — your permissions, nobody else's.",
+	"settings_mcp_desc": "The assistant's tools come from MCP servers. Windmill and Tabula are the platform defaults — just add your token to activate each. You can also add other servers with their own URL and token.",
 	"settings_mcp_hint": "Example — GitHub read-only: https://api.githubcopilot.com/mcp/readonly with a personal access token.",
 	"settings_mcp_name_placeholder": "name (e.g. github)",
 	"settings_mcp_token_placeholder": "access token (optional)",
@@ -362,5 +362,6 @@
 	"org_dept_yours_empty": "Your session carries no claims. Sign out and in again to load them.",
 	"org_dept_kb_title": "Department knowledge",
 	"org_dept_kb_hint": "Injected only for users who match the rule above.",
-	"org_dept_chip_remove": "Remove"
+	"org_dept_chip_remove": "Remove",
+	"settings_mcp_builtin_badge": "default"
 }

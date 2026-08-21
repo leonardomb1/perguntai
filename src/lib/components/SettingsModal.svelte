@@ -564,166 +564,140 @@
 						<MemoryManager />
 					</div>
 				{:else if section === 'connectors'}
-					<h2 class="font-serif text-xl font-semibold text-neutral-900">Windmill</h2>
-					<p class="mt-1.5 text-sm leading-relaxed text-neutral-500">
-						{m.settings_windmill_desc()}
-					</p>
-					<p class="mt-1 text-xs text-neutral-400">{m.settings_windmill_hint()}</p>
+					<h2 class="font-serif text-xl font-semibold text-neutral-900">{m.settings_mcp_title()}</h2>
+					<p class="mt-1.5 text-sm leading-relaxed text-neutral-500">{m.settings_mcp_desc()}</p>
 
-					<div class="mt-5 flex items-center gap-2 text-sm">
-						<span
-							class="size-2 rounded-full {tokenSet && !removeToken
-								? 'bg-emerald-500'
-								: 'bg-neutral-300'}"
-						></span>
-						<span class="text-neutral-600">
-							{tokenSet && !removeToken ? m.settings_windmill_set() : m.settings_windmill_unset()}
-						</span>
-					</div>
-
-					<div class="mt-3">
-						<label for="set-windmill" class="mb-1.5 block text-sm font-medium text-neutral-700">
-							{m.settings_windmill_token()}
-						</label>
-						<input
-							id="set-windmill"
-							type="password"
-							bind:value={windmillToken}
-							oninput={() => (removeToken = false)}
-							maxlength="200"
-							autocomplete="off"
-							placeholder={tokenSet ? m.settings_windmill_placeholder_set() : ''}
-							class="w-full rounded-xl border border-neutral-300 px-3 py-2.5 font-mono text-sm transition placeholder:font-sans placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
-						/>
-					</div>
-
-					{#if tokenSet}
-						<button
-							onclick={() => {
-								removeToken = !removeToken;
-								if (removeToken) windmillToken = '';
-							}}
-							class="mt-3 rounded-lg px-2.5 py-1.5 text-xs font-medium transition
-								{removeToken
-								? 'bg-red-50 text-red-700'
-								: 'text-red-600 hover:bg-red-50'}"
-						>
-							{removeToken ? `✓ ${m.settings_windmill_remove()}` : m.settings_windmill_remove()}
-						</button>
-					{/if}
-
-					<div class="mt-6 border-t border-neutral-200 pt-5">
-						<p class="text-sm leading-relaxed text-neutral-500">{m.settings_tabula_desc()}</p>
-						<p class="mt-1 text-xs text-neutral-400">{m.settings_tabula_hint()}</p>
-
-						<div class="mt-4 flex items-center gap-2 text-sm">
-							<span
-								class="size-2 rounded-full {tabulaTokenSet && !removeTabulaToken
-									? 'bg-emerald-500'
-									: 'bg-neutral-300'}"
-							></span>
-							<span class="text-neutral-600">
-								{tabulaTokenSet && !removeTabulaToken ? m.settings_tabula_set() : m.settings_tabula_unset()}
-							</span>
+					<div class="mt-5 space-y-3">
+						<!-- Built-in: Windmill -->
+						<div class="rounded-xl border border-neutral-200 p-3.5">
+							<div class="flex items-center gap-2">
+								<span class="text-sm font-semibold text-neutral-900">Windmill</span>
+								<span class="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-neutral-500 uppercase">{m.settings_mcp_builtin_badge()}</span>
+								<span class="ml-auto flex items-center gap-1.5 text-xs text-neutral-500">
+									<span class="size-2 rounded-full {tokenSet && !removeToken ? 'bg-emerald-500' : 'bg-neutral-300'}"></span>
+									{tokenSet && !removeToken ? m.settings_windmill_set() : m.settings_windmill_unset()}
+								</span>
+							</div>
+							<p class="mt-1.5 text-xs leading-relaxed text-neutral-500">{m.settings_windmill_desc()}</p>
+							<p class="mt-0.5 text-[11px] text-neutral-400">{m.settings_windmill_hint()}</p>
+							<input
+								type="password"
+								bind:value={windmillToken}
+								oninput={() => (removeToken = false)}
+								maxlength="200"
+								autocomplete="off"
+								placeholder={tokenSet ? m.settings_windmill_placeholder_set() : m.settings_mcp_token_placeholder()}
+								class="mt-2.5 w-full rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition placeholder:font-sans placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+							/>
+							{#if tokenSet}
+								<button
+									onclick={() => {
+										removeToken = !removeToken;
+										if (removeToken) windmillToken = '';
+									}}
+									class="mt-2 rounded-lg px-2 py-1 text-xs font-medium transition
+										{removeToken ? 'bg-red-50 text-red-700' : 'text-red-600 hover:bg-red-50'}"
+								>
+									{removeToken ? `✓ ${m.settings_windmill_remove()}` : m.settings_windmill_remove()}
+								</button>
+							{/if}
 						</div>
 
-						<div class="mt-3">
-							<label for="set-tabula" class="mb-1.5 block text-sm font-medium text-neutral-700">
-								{m.settings_tabula_token()}
-							</label>
+						<!-- Built-in: Tabula -->
+						<div class="rounded-xl border border-neutral-200 p-3.5">
+							<div class="flex items-center gap-2">
+								<span class="text-sm font-semibold text-neutral-900">Tabula</span>
+								<span class="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-neutral-500 uppercase">{m.settings_mcp_builtin_badge()}</span>
+								<span class="ml-auto flex items-center gap-1.5 text-xs text-neutral-500">
+									<span class="size-2 rounded-full {tabulaTokenSet && !removeTabulaToken ? 'bg-emerald-500' : 'bg-neutral-300'}"></span>
+									{tabulaTokenSet && !removeTabulaToken ? m.settings_tabula_set() : m.settings_tabula_unset()}
+								</span>
+							</div>
+							<p class="mt-1.5 text-xs leading-relaxed text-neutral-500">{m.settings_tabula_desc()}</p>
+							<p class="mt-0.5 text-[11px] text-neutral-400">{m.settings_tabula_hint()}</p>
 							<input
-								id="set-tabula"
 								type="password"
 								bind:value={tabulaToken}
 								oninput={() => (removeTabulaToken = false)}
 								maxlength="200"
 								autocomplete="off"
-								placeholder={tabulaTokenSet ? m.settings_windmill_placeholder_set() : ''}
-								class="w-full rounded-xl border border-neutral-300 px-3 py-2.5 font-mono text-sm transition placeholder:font-sans placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+								placeholder={tabulaTokenSet ? m.settings_windmill_placeholder_set() : m.settings_mcp_token_placeholder()}
+								class="mt-2.5 w-full rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition placeholder:font-sans placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
 							/>
+							{#if tabulaTokenSet}
+								<button
+									onclick={() => {
+										removeTabulaToken = !removeTabulaToken;
+										if (removeTabulaToken) tabulaToken = '';
+									}}
+									class="mt-2 rounded-lg px-2 py-1 text-xs font-medium transition
+										{removeTabulaToken ? 'bg-red-50 text-red-700' : 'text-red-600 hover:bg-red-50'}"
+								>
+									{removeTabulaToken ? `✓ ${m.settings_tabula_remove()}` : m.settings_tabula_remove()}
+								</button>
+							{/if}
 						</div>
 
-						{#if tabulaTokenSet}
-							<button
-								onclick={() => {
-									removeTabulaToken = !removeTabulaToken;
-									if (removeTabulaToken) tabulaToken = '';
-								}}
-								class="mt-3 rounded-lg px-2.5 py-1.5 text-xs font-medium transition
-									{removeTabulaToken
-									? 'bg-red-50 text-red-700'
-									: 'text-red-600 hover:bg-red-50'}"
-							>
-								{removeTabulaToken ? `✓ ${m.settings_tabula_remove()}` : m.settings_tabula_remove()}
-							</button>
-						{/if}
-					</div>
-
-					<div class="mt-6 border-t border-neutral-200 pt-5">
-						<h3 class="text-sm font-semibold text-neutral-900">{m.settings_mcp_title()}</h3>
-						<p class="mt-1 text-sm leading-relaxed text-neutral-500">{m.settings_mcp_desc()}</p>
-						<p class="mt-1 text-xs text-neutral-400">{m.settings_mcp_hint()}</p>
-
-						<div class="mt-4 space-y-3">
-							{#each mcpRows as row, i (row.id ?? i)}
-								<div class="rounded-xl border border-neutral-200 p-3">
-									<div class="flex items-center gap-2">
-										<input
-											bind:value={row.name}
-											maxlength="40"
-											placeholder={m.settings_mcp_name_placeholder()}
-											autocapitalize="none"
-											spellcheck="false"
-											class="w-36 min-w-0 rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
-										/>
-										<input
-											bind:value={row.url}
-											maxlength="300"
-											placeholder="https://…/mcp"
-											autocapitalize="none"
-											spellcheck="false"
-											class="min-w-0 flex-1 rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
-										/>
-										<button
-											onclick={() => (row.enabled = !row.enabled)}
-											role="switch"
-											aria-checked={row.enabled}
-											title={row.enabled ? m.settings_mcp_enabled() : m.settings_mcp_disabled()}
-											class="relative h-5 w-9 shrink-0 rounded-full transition {row.enabled ? 'bg-[#d97757]' : 'bg-neutral-300'}"
-										>
-											<span class="absolute top-0.5 size-4 rounded-full bg-white transition-all {row.enabled ? 'left-4' : 'left-0.5'}"></span>
-										</button>
-										<button
-											onclick={() => removeMcpRow(i)}
-											class="grid size-8 shrink-0 place-items-center rounded-lg text-neutral-400 transition hover:bg-red-50 hover:text-red-600"
-											title={m.settings_mcp_remove()}
-											aria-label={m.settings_mcp_remove()}
-										>
-											<Icon name="trash" size={14} />
-										</button>
-									</div>
+						<!-- User-added servers -->
+						{#each mcpRows as row, i (row.id ?? i)}
+							<div class="rounded-xl border border-neutral-200 p-3.5">
+								<div class="flex items-center gap-2">
 									<input
-										bind:value={row.token}
-										type="password"
-										maxlength="200"
-										autocomplete="off"
-										placeholder={row.tokenSet ? m.settings_windmill_placeholder_set() : m.settings_mcp_token_placeholder()}
-										class="mt-2 w-full rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition placeholder:font-sans placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+										bind:value={row.name}
+										maxlength="40"
+										placeholder={m.settings_mcp_name_placeholder()}
+										autocapitalize="none"
+										spellcheck="false"
+										class="w-36 min-w-0 rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
 									/>
+									<input
+										bind:value={row.url}
+										maxlength="300"
+										placeholder="https://…/mcp"
+										autocapitalize="none"
+										spellcheck="false"
+										class="min-w-0 flex-1 rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+									/>
+									<button
+										onclick={() => (row.enabled = !row.enabled)}
+										role="switch"
+										aria-checked={row.enabled}
+										title={row.enabled ? m.settings_mcp_enabled() : m.settings_mcp_disabled()}
+										class="relative h-5 w-9 shrink-0 rounded-full transition {row.enabled ? 'bg-[#d97757]' : 'bg-neutral-300'}"
+									>
+										<span class="absolute top-0.5 size-4 rounded-full bg-white transition-all {row.enabled ? 'left-4' : 'left-0.5'}"></span>
+									</button>
+									<button
+										onclick={() => removeMcpRow(i)}
+										class="grid size-8 shrink-0 place-items-center rounded-lg text-neutral-400 transition hover:bg-red-50 hover:text-red-600"
+										title={m.settings_mcp_remove()}
+										aria-label={m.settings_mcp_remove()}
+									>
+										<Icon name="trash" size={14} />
+									</button>
 								</div>
-							{/each}
-						</div>
-
-						{#if mcpRows.length < 5}
-							<button
-								onclick={addMcpRow}
-								class="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:border-[#d97757]/50 hover:bg-[#d97757]/5 hover:text-[#bd5d3a]"
-							>
-								<Icon name="plus" size={13} />
-								{m.settings_mcp_add()}
-							</button>
-						{/if}
+								<input
+									bind:value={row.token}
+									type="password"
+									maxlength="200"
+									autocomplete="off"
+									placeholder={row.tokenSet ? m.settings_windmill_placeholder_set() : m.settings_mcp_token_placeholder()}
+									class="mt-2 w-full rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition placeholder:font-sans placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+								/>
+							</div>
+						{/each}
 					</div>
+
+					{#if mcpRows.length < 5}
+						<button
+							onclick={addMcpRow}
+							class="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:border-[#d97757]/50 hover:bg-[#d97757]/5 hover:text-[#bd5d3a]"
+						>
+							<Icon name="plus" size={13} />
+							{m.settings_mcp_add()}
+						</button>
+					{/if}
+					<p class="mt-2 text-[11px] text-neutral-400">{m.settings_mcp_hint()}</p>
 				{:else if section === 'apikeys'}
 					<h2 class="font-serif text-xl font-semibold text-neutral-900">{m.apikeys_title()}</h2>
 					<p class="mt-1.5 max-w-xl text-sm leading-relaxed text-neutral-500">
