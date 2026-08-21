@@ -55,20 +55,43 @@ export function similarity(a: Float32Array, b: Float32Array): number {
 	return dot;
 }
 
+const MAX_RETRIES = 6;
+/** Backoff ceiling — a Retry-After beyond this means the quota is the problem. */
+const MAX_RETRY_WAIT_MS = 65_000;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function requestEmbeddings(inputs: string[]): Promise<Float32Array[]> {
 	const base = env.EMBEDDINGS_BASE_URL!.replace(/\/+$/, '');
 	const key = env.EMBEDDINGS_API_KEY ?? '';
 
-	const res = await fetch(`${base}/embeddings`, {
-		method: 'POST',
-		headers: {
-			'content-type': 'application/json',
-			// Both header styles: Azure wants api-key, everyone else a bearer.
-			...(key ? { authorization: `Bearer ${key}`, 'api-key': key } : {})
-		},
-		body: JSON.stringify({ model: embeddingsModel(), input: inputs }),
-		signal: AbortSignal.timeout(timeoutMs())
-	});
+	let res: Response;
+	for (let attempt = 0; ; attempt++) {
+		res = await fetch(`${base}/embeddings`, {
+			method: 'POST',
+			headers: {
+				'content-type': 'application/json',
+				// Both header styles: Azure wants api-key, everyone else a bearer.
+				...(key ? { authorization: `Bearer ${key}`, 'api-key': key } : {})
+			},
+			body: JSON.stringify({ model: embeddingsModel(), input: inputs }),
+			signal: AbortSignal.timeout(timeoutMs())
+		});
+		// Azure S0 quotas throttle a large document mid-way as a matter of course;
+		// waiting out Retry-After is normal operation, not an error. 5xx gets the
+		// same patience, capped, so a blip does not un-embed a 1,600-chunk upload.
+		if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
+			const after = Number(res.headers.get('retry-after'));
+			const wait = Math.min(
+				Number.isFinite(after) && after > 0 ? after * 1000 : 2000 * 2 ** attempt,
+				MAX_RETRY_WAIT_MS
+			);
+			await res.body?.cancel().catch(() => {});
+			await sleep(wait);
+			continue;
+		}
+		break;
+	}
 	if (!res.ok) {
 		const detail = await res.text().catch(() => '');
 		throw new Error(`embeddings: ${res.status} ${detail.slice(0, 200)}`);
