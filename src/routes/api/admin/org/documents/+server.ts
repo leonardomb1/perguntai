@@ -19,7 +19,7 @@ import type { RequestHandler } from './$types';
  * uploaded here is retrievable by everyone in that scope via the assistant.
  */
 
-const MAX_TEXT_SIZE = 2 * 1024 * 1024; // 2 MB
+const MAX_TEXT_SIZE = 16 * 1024 * 1024; // 16 MB — large manuals are the point
 const MAX_PDF_SIZE = 12 * 1024 * 1024; // 12 MB
 const MAX_TABLE_SIZE = 8 * 1024 * 1024; // 8 MB
 const TABLE_TYPES = /\.(csv|xlsx|xls)$/i;

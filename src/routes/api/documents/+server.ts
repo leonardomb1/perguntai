@@ -4,7 +4,9 @@ import { addDoc, addTabularDoc, listDocs, removeDoc } from '$lib/server/rag';
 import { parseWorkbook } from '$lib/server/workbook';
 import type { RequestHandler } from './$types';
 
-const MAX_TEXT_SIZE = 2 * 1024 * 1024; // 2 MB
+// Large manuals are the point of retrieval — the ceiling is the request body
+// (BODY_SIZE_LIMIT), not the reader. Chunking keeps memory flat either way.
+const MAX_TEXT_SIZE = 16 * 1024 * 1024; // 16 MB
 const MAX_TABLE_SIZE = 8 * 1024 * 1024; // 8 MB — xlsx compresses heavily
 const TEXT_TYPES = /\.(txt|md|markdown|json|sql|log)$/i;
 const TABLE_TYPES = /\.(csv|xlsx|xls)$/i;
@@ -47,7 +49,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		if (TEXT_TYPES.test(file.name)) {
 			if (file.size > MAX_TEXT_SIZE) {
-				return json({ error: 'File exceeds 2 MB limit' }, { status: 413 });
+				return json({ error: 'File exceeds 16 MB limit' }, { status: 413 });
 			}
 			const doc = await addDoc(user.username, conversationId, file.name, await file.text());
 			return json({ id: doc.id, name: doc.name, chunks: doc.chunks.length }, { status: 201 });

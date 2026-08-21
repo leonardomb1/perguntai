@@ -12,7 +12,7 @@ WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
     # uploads go up to 8 MB (spreadsheets); adapter-node defaults to 512K
-    BODY_SIZE_LIMIT=10M \
+    BODY_SIZE_LIMIT=20M \
     DATA_DIR=/app/data \
     SCHEMA_PATH=/app/data/schema.json
 

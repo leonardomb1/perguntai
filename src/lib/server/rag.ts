@@ -2,12 +2,22 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { env } from '$env/dynamic/private';
+import {
+	embedQuery,
+	embedTexts,
+	embeddingsConfigured,
+	embeddingsModel,
+	similarity,
+	unpackVector
+} from './embeddings';
 
 /**
  * Per-user document store for RAG, persisted as JSON on the server filesystem
- * (DATA_DIR, default ./data). Retrieval is lexical BM25 over ~1500-char
- * chunks — dependency-free and good enough for docs/notes; swap `search()`
- * for an embedding-based retriever later without touching callers.
+ * (DATA_DIR, default ./data). Retrieval is hybrid: lexical BM25 over ~1500-char
+ * chunks — markdown-aware, so a chunk knows which chapter it came from — fused
+ * (reciprocal rank) with cosine over embeddings when EMBEDDINGS_BASE_URL is
+ * configured. Without it, or for documents stored before it was, BM25 alone
+ * carries the search, so retrieval never breaks — it just gets sharper.
  */
 
 const MAX_DOCS_PER_USER = 50;
@@ -30,6 +40,13 @@ export interface StoredDoc {
 	/** Conversation the doc was attached in (per-user store); '' for shared docs. */
 	conversationId: string;
 	chunks: string[];
+	/**
+	 * One packed unit vector per chunk (see ./embeddings), absent when the doc
+	 * was stored without an embedding provider. Parallel to `chunks`.
+	 */
+	vectors?: string[];
+	/** Which model produced `vectors` — a different one at search time ignores them. */
+	embModel?: string;
 	/** Present for tabular uploads (CSV/Excel) — structured data for analysis. */
 	sheets?: SheetData[];
 	/** One-line description for the manifest (shared library docs). */
@@ -89,14 +106,13 @@ export const deptScope = (deptId: string) => `dept-${deptId}`;
 const CHUNK_SIZE = 1500;
 const CHUNK_OVERLAP = 200;
 
-export function chunkText(text: string): string[] {
-	const clean = text.replace(/\r\n/g, '\n').trim();
+/** Size-based splitting, breaking on a paragraph or sentence boundary when near. */
+function splitBySize(clean: string): string[] {
 	if (!clean) return [];
 	const chunks: string[] = [];
 	let start = 0;
 	while (start < clean.length) {
 		let end = Math.min(start + CHUNK_SIZE, clean.length);
-		// Prefer to break on a paragraph or sentence boundary near the end.
 		if (end < clean.length) {
 			const slice = clean.slice(start, end);
 			const breakAt = Math.max(slice.lastIndexOf('\n\n'), slice.lastIndexOf('. '));
@@ -107,6 +123,98 @@ export function chunkText(text: string): string[] {
 		start = end - CHUNK_OVERLAP;
 	}
 	return chunks.filter((c) => c.length > 0);
+}
+
+interface MdSection {
+	/** Heading trail down to this section, e.g. ['Compras', 'Aprovação']. */
+	path: string[];
+	body: string;
+}
+
+/**
+ * Split markdown into sections at ATX headings, keeping the heading trail.
+ * Fenced code blocks are opaque — a `#` inside ``` is not a heading.
+ */
+function markdownSections(clean: string): MdSection[] {
+	const sections: MdSection[] = [];
+	const path: { level: number; title: string; hasBody: boolean }[] = [];
+	let body: string[] = [];
+	let inFence = false;
+
+	const push = () => {
+		const text = body.join('\n').trim();
+		if (text) {
+			sections.push({ path: path.map((h) => h.title), body: text });
+			// The text belongs to every ancestor, so all of them now "have body".
+			for (const h of path) h.hasBody = true;
+		}
+		body = [];
+	};
+
+	for (const line of clean.split('\n')) {
+		if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+		const heading = inFence ? null : /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
+		if (heading) {
+			push();
+			const level = heading[1].length;
+			// A same-level sibling replaces the top of the path — unless that top
+			// never got any body text: consecutive headings ('# Doc 05' directly
+			// over '# Fonte: …') act as one stacked title, so the second nests
+			// under the first instead of erasing it from every chunk's trail.
+			while (path.length) {
+				const top = path[path.length - 1];
+				if (top.level > level || (top.level === level && top.hasBody)) path.pop();
+				else break;
+			}
+			path.push({ level, title: heading[2].trim(), hasBody: false });
+		} else {
+			body.push(line);
+		}
+	}
+	push();
+	return sections;
+}
+
+/**
+ * Chunk a document for retrieval. Markdown with real structure is split along
+ * its headings, each chunk prefixed with the heading trail — so "item 4.2.1"
+ * still knows which chapter it belongs to when it surfaces alone; a tiny
+ * section rides with its heading rather than becoming a fragment. Anything
+ * else falls back to plain size-based splitting.
+ */
+export function chunkText(text: string): string[] {
+	const clean = text.replace(/\r\n/g, '\n').trim();
+	if (!clean) return [];
+
+	const sections = markdownSections(clean);
+	// Structure has to be real to be useful: a lone '# Title' is not a book.
+	if (sections.filter((sec) => sec.path.length > 0).length < 2) {
+		return splitBySize(clean);
+	}
+
+	const chunks: string[] = [];
+	for (const section of sections) {
+		const trail = section.path.length ? `[${section.path.join(' > ')}]\n` : '';
+		for (const piece of splitBySize(section.body)) {
+			chunks.push(`${trail}${piece}`);
+		}
+	}
+	return chunks;
+}
+
+/**
+ * Best-effort vectors for a doc's chunks. Failure (no provider, provider down)
+ * degrades the document to lexical-only retrieval rather than failing the
+ * upload — the text is the point; the vectors are an upgrade.
+ */
+async function tryEmbed(doc: StoredDoc): Promise<void> {
+	if (!embeddingsConfigured()) return;
+	try {
+		doc.vectors = await embedTexts(doc.chunks);
+		doc.embModel = embeddingsModel();
+	} catch (err) {
+		console.warn(`rag: could not embed "${doc.name}" — stored for lexical search only`, err);
+	}
 }
 
 // --- CRUD ---
@@ -143,6 +251,7 @@ export async function addDoc(
 		chunks: chunkText(content)
 	};
 	if (doc.chunks.length === 0) throw new Error('Document contains no extractable text');
+	await tryEmbed(doc);
 	docs.push(doc);
 	await writeStore(username, docs);
 	return doc;
@@ -300,6 +409,7 @@ export async function addSharedDoc(
 		chunks,
 		...(summary?.trim() ? { summary: summary.trim().slice(0, 200) } : {})
 	};
+	await tryEmbed(doc);
 	docs.push(doc);
 	await writeSharedStore(scope, docs);
 	return doc;
@@ -373,11 +483,12 @@ interface CorpusEntry {
 	document: string;
 	source: string;
 	chunk: string;
+	/** Packed unit vector for this chunk, when its document was embedded. */
+	vector?: string;
 }
 
-/** BM25 over a pre-gathered set of (document, source, chunk) entries. */
-function rankChunks(corpus: CorpusEntry[], query: string, topK: number): SearchHit[] {
-	if (corpus.length === 0) return [];
+/** BM25 scores over the corpus, aligned by index. */
+function bm25Scores(corpus: CorpusEntry[], query: string): number[] {
 	const queryTerms = [...new Set(tokenize(query))];
 	const tokenized = corpus.map((c) => tokenize(c.chunk));
 	const avgLen = tokenized.reduce((s, t) => s + t.length, 0) / tokenized.length;
@@ -389,7 +500,7 @@ function rankChunks(corpus: CorpusEntry[], query: string, topK: number): SearchH
 
 	const k1 = 1.5;
 	const b = 0.75;
-	const scores = tokenized.map((tokens, i) => {
+	return tokenized.map((tokens) => {
 		let score = 0;
 		for (const term of queryTerms) {
 			const n = df.get(term) ?? 0;
@@ -398,19 +509,79 @@ function rankChunks(corpus: CorpusEntry[], query: string, topK: number): SearchH
 			const tf = tokens.filter((t) => t === term).length;
 			score += (idf * tf * (k1 + 1)) / (tf + k1 * (1 - b + (b * tokens.length) / avgLen));
 		}
-		return { ...corpus[i], score };
+		return score;
 	});
+}
 
+/** Indexes of the top `k` positive scores, best first. */
+function topIndexes(scores: number[], k: number): number[] {
 	return scores
-		.filter((s) => s.score > 0)
-		.sort((a, b2) => b2.score - a.score)
+		.map((score, i) => ({ score, i }))
+		.filter((x) => x.score > 0)
+		.sort((a, b) => b.score - a.score)
+		.slice(0, k)
+		.map((x) => x.i);
+}
+
+/** Reciprocal-rank fusion constant — the standard 60 from the RRF paper. */
+const RRF_K = 60;
+/** How deep each ranking contributes to the fusion. */
+const FUSE_DEPTH = 30;
+
+/**
+ * Rank the corpus for a query: BM25 always; cosine over embedded chunks when a
+ * provider is configured, fused by reciprocal rank. Exact terms (codes, SKUs,
+ * section numbers) keep their lexical bite while paraphrases still hit — and a
+ * corpus with no vectors, or an unreachable provider, is plain BM25 as before.
+ */
+async function rankChunks(
+	corpus: CorpusEntry[],
+	query: string,
+	topK: number
+): Promise<SearchHit[]> {
+	if (corpus.length === 0) return [];
+
+	const lexical = bm25Scores(corpus, query);
+	const lexicalTop = topIndexes(lexical, FUSE_DEPTH);
+
+	let semanticTop: number[] = [];
+	if (embeddingsConfigured() && corpus.some((c) => c.vector)) {
+		try {
+			const q = await embedQuery(query);
+			const semantic = corpus.map((c) => (c.vector ? similarity(q, unpackVector(c.vector)) : 0));
+			semanticTop = topIndexes(semantic, FUSE_DEPTH);
+		} catch (err) {
+			console.warn('rag: query embedding failed — lexical results only', err);
+		}
+	}
+
+	const fused = new Map<number, number>();
+	for (const ranking of [lexicalTop, semanticTop]) {
+		ranking.forEach((index, rank) => {
+			fused.set(index, (fused.get(index) ?? 0) + 1 / (RRF_K + rank + 1));
+		});
+	}
+
+	return [...fused.entries()]
+		.sort((a, b) => b[1] - a[1])
 		.slice(0, topK)
-		.map(({ document, source, chunk, score }) => ({
-			document,
-			source,
-			excerpt: chunk,
-			score: Math.round(score * 100) / 100
+		.map(([index, score]) => ({
+			document: corpus[index].document,
+			source: corpus[index].source,
+			excerpt: corpus[index].chunk,
+			score: Math.round(score * 1000) / 1000
 		}));
+}
+
+/** A document's chunks as corpus entries, with vectors when the model matches. */
+function entriesOf(doc: StoredDoc, source: string): CorpusEntry[] {
+	const usable = doc.vectors?.length === doc.chunks.length && doc.embModel === embeddingsModel();
+	return doc.chunks.map((chunk, i) => ({
+		document: doc.name,
+		source,
+		chunk,
+		...(usable ? { vector: doc.vectors![i] } : {})
+	}));
 }
 
 /** Conversation-scoped search (per-user store only). */
@@ -422,7 +593,7 @@ export async function search(
 ): Promise<SearchHit[]> {
 	const docs = (await readStore(username)).filter((d) => d.conversationId === conversationId);
 	return rankChunks(
-		docs.flatMap((d) => d.chunks.map((chunk) => ({ document: d.name, source: 'conversation', chunk }))),
+		docs.flatMap((d) => entriesOf(d, 'conversation')),
 		query,
 		topK
 	);
@@ -442,11 +613,9 @@ export async function searchAllDocuments(
 ): Promise<SearchHit[]> {
 	const corpus: CorpusEntry[] = [];
 	for (const d of (await readStore(username)).filter((d) => d.conversationId === conversationId))
-		for (const chunk of d.chunks) corpus.push({ document: d.name, source: 'conversation', chunk });
-	for (const d of await readSharedStore(orgScope))
-		for (const chunk of d.chunks) corpus.push({ document: d.name, source: 'organization', chunk });
+		corpus.push(...entriesOf(d, 'conversation'));
+	for (const d of await readSharedStore(orgScope)) corpus.push(...entriesOf(d, 'organization'));
 	for (const dep of depts)
-		for (const d of await readSharedStore(deptScope(dep.id)))
-			for (const chunk of d.chunks) corpus.push({ document: d.name, source: dep.name, chunk });
+		for (const d of await readSharedStore(deptScope(dep.id))) corpus.push(...entriesOf(d, dep.name));
 	return rankChunks(corpus, query, topK);
 }
