@@ -137,7 +137,12 @@ export async function sessionFromClaims(
 		 */
 		password?: string;
 	} = {}
-): Promise<{ token: string; username: string; displayName: string | null }> {
+): Promise<{
+	token: string;
+	username: string;
+	displayName: string | null;
+	profile: UserProfile;
+}> {
 	const username = (claims.preferred_username ?? claims.sub).toLowerCase();
 	const displayName = claims.name ?? username;
 
@@ -157,7 +162,7 @@ export async function sessionFromClaims(
 		.setExpirationTime(TOKEN_TTL)
 		.encrypt(key());
 
-	return { token, username, displayName };
+	return { token, username, displayName, profile };
 }
 
 /** Decrypts and validates a bearer token, returning the authenticated user or null. */
@@ -221,11 +226,11 @@ export async function authenticateRequest(request: Request): Promise<AuthUser | 
 	// Access is re-checked on EVERY request (not just at login) — blocking a
 	// user in the admin panel locks them out on their next request, even
 	// though their stateless token is still cryptographically valid.
-	if (user && !(await isUserAllowed(user.username))) return null;
+	if (user && !(await isUserAllowed(user.username, user.profile))) return null;
 	if (user) {
 		// Resolved live (same cached access.json read as isUserAllowed above), so
 		// admin/platform-admin status is always current, never a stale token claim.
-		user.isAdmin = (await resolveRole(user.username)) === 'admin';
+		user.isAdmin = (await resolveRole(user.username, user.profile)) === 'admin';
 		user.isPlatformAdmin = isEnvAdmin(user.username);
 	}
 	return user;

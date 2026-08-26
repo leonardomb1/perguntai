@@ -10,7 +10,7 @@ export function placeMenu(
 	menuHeight: number,
 	opts: { align: 'left' | 'right'; direction: 'up' | 'down'; gap?: number; minWidth?: number }
 ): { left: number; top: number; minWidth: number } {
-	const gap = opts.gap ?? 6;
+	const gap = opts.gap ?? 4;
 	const margin = 8;
 	const minWidth = Math.max(anchor.width, opts.minWidth ?? 176);
 	const spaceBelow = window.innerHeight - anchor.bottom;

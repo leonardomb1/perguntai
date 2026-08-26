@@ -6,6 +6,7 @@
 	import KnowledgeBlocks from '$lib/components/KnowledgeBlocks.svelte';
 	import DocumentLibrary from '$lib/components/DocumentLibrary.svelte';
 	import DeptRuleEditor from '$lib/components/DeptRuleEditor.svelte';
+	import AdminPanel from '$lib/components/AdminPanel.svelte';
 	import { hasSession } from '$lib/session';
 	import { fetchSettings } from '$lib/settings';
 	import { newId } from '$lib/id';
@@ -31,13 +32,15 @@
 		});
 	});
 
-	type Section = 'knowledge' | 'departments';
+	type Section = 'knowledge' | 'users' | 'stats';
 	let section = $state<Section>('knowledge');
+	/** Users/stats apply immediately — no batch save, so no Save button there. */
+	const adminSection = $derived(section === 'users' || section === 'stats');
 
 	/** Mobile only: the console rail is a drawer, closed by default. */
 	let railOpen = $state(false);
-	/** Mobile only: the departments pane shows either the list or the editor. */
-	let deptDetail = $state(false);
+	/** Mobile only: the knowledge pane shows either the scope list or the editor. */
+	let scopeDetail = $state(false);
 
 	type EditDept = Department;
 
@@ -48,7 +51,8 @@
 	/** Department ids that exist server-side (docs can only attach to saved depts). */
 	let persistedDeptIds = $state(new Set<string>());
 	let you = $state<CallerProfile>({ claims: {} });
-	let selectedDeptId = $state<string | null>(null);
+	/** Knowledge is edited per scope: the whole org, or one department. */
+	let selectedScope = $state<'org' | string>('org');
 	let saved = $state(''); // JSON snapshot of the last persisted state
 	let saving = $state(false);
 	let savedFlash = $state(false);
@@ -74,7 +78,6 @@
 				departments = normalizeDepts(cfg.departments);
 				persistedDeptIds = new Set(cfg.departments.map((d) => d.id));
 				you = cfg.you;
-				selectedDeptId = departments[0]?.id ?? null;
 			}
 			loaded = true;
 			saved = snapshot();
@@ -89,7 +92,9 @@
 			entries = result.orgKnowledge;
 			departments = normalizeDepts(result.departments);
 			persistedDeptIds = new Set(result.departments.map((d) => d.id));
-			if (!departments.some((d) => d.id === selectedDeptId)) selectedDeptId = departments[0]?.id ?? null;
+			if (selectedScope !== 'org' && !departments.some((d) => d.id === selectedScope)) {
+				selectedScope = 'org';
+			}
 			saved = snapshot();
 			savedFlash = true;
 			setTimeout(() => (savedFlash = false), 2000);
@@ -103,27 +108,38 @@
 			...departments,
 			{ id, name: '', enabled: true, match: { ...EMPTY_MATCH, rules: [] }, knowledge: [] }
 		];
-		selectDept(id);
+		selectScope(id);
 	}
-	function selectDept(id: string) {
-		selectedDeptId = id;
-		deptDetail = true; // no-op above sm, where both panes are visible
+	function selectScope(id: 'org' | string) {
+		selectedScope = id;
+		scopeDetail = true; // no-op above sm, where both panes are visible
 	}
 	function removeDept(id: string) {
 		departments = departments.filter((d) => d.id !== id);
-		if (selectedDeptId === id) {
-			selectedDeptId = departments[0]?.id ?? null;
-			deptDetail = false; // back to the list on mobile
+		if (selectedScope === id) {
+			selectedScope = 'org';
+			scopeDetail = false; // back to the list on mobile
 		}
 	}
 
-	const di = $derived(departments.findIndex((d) => d.id === selectedDeptId));
+	const di = $derived(
+		selectedScope === 'org' ? -1 : departments.findIndex((d) => d.id === selectedScope)
+	);
 	const enabledCount = $derived(entries.filter((e) => e.enabled && e.body.trim()).length);
 
 	const nav = [
 		{ id: 'knowledge' as const, icon: 'book' as const, label: m.org_nav_knowledge() },
-		{ id: 'departments' as const, icon: 'building' as const, label: m.org_nav_departments() }
+		{ id: 'users' as const, icon: 'users' as const, label: m.admin_users_title() },
+		{ id: 'stats' as const, icon: 'activity' as const, label: m.admin_stats_tab() }
 	];
+
+	const sectionMeta = $derived(
+		({
+			knowledge: { title: m.org_nav_knowledge(), subtitle: m.org_subtitle() },
+			users: { title: m.admin_users_title(), subtitle: m.org_users_subtitle() },
+			stats: { title: m.admin_stats_tab(), subtitle: m.org_stats_subtitle() }
+		})[section]
+	);
 </script>
 
 <svelte:head>
@@ -136,7 +152,7 @@
 		class="absolute inset-y-0 left-0 z-30 flex w-60 shrink-0 flex-col border-r border-[#e3e0d5] bg-[#f5f4ee] transition-transform sm:static sm:translate-x-0
 			{railOpen ? 'translate-x-0' : '-translate-x-full'}"
 	>
-		<div class="flex items-center gap-2 border-b border-[#e3e0d5] p-4">
+		<div class="flex h-16 items-center gap-2 border-b border-[#e3e0d5] px-4">
 			<button
 				onclick={() => goto('/')}
 				class="grid size-8 shrink-0 place-items-center rounded-lg text-neutral-500 transition hover:bg-[#d97757]/10 hover:text-[#bd5d3a]"
@@ -173,9 +189,6 @@
 				</button>
 			{/each}
 		</nav>
-		<p class="border-t border-[#e3e0d5] p-3 text-[11px] leading-snug text-neutral-500">
-			{m.org_rail_footer()}
-		</p>
 	</aside>
 
 	{#if railOpen}
@@ -188,7 +201,7 @@
 
 	<!-- main -->
 	<main class="flex min-w-0 flex-1 flex-col">
-		<header class="flex items-center gap-3 border-b border-[#e3e0d5] bg-white px-4 py-3 sm:px-6">
+		<header class="flex h-16 shrink-0 items-center gap-3 border-b border-[#e3e0d5] bg-white px-4 sm:px-6">
 			<button
 				onclick={() => (railOpen = true)}
 				class="-ml-1 shrink-0 rounded-lg border border-[#e3e0d5] p-2 text-neutral-600 sm:hidden"
@@ -198,89 +211,67 @@
 				<Icon name="menu" size={16} />
 			</button>
 			<div class="min-w-0 flex-1">
-				<h2 class="truncate text-sm font-semibold">
-					{section === 'knowledge' ? m.org_nav_knowledge() : m.org_dept_title()}
-				</h2>
-				<p class="hidden truncate text-[11px] text-neutral-500 sm:block">
-					{section === 'knowledge' ? m.org_subtitle() : m.org_dept_subtitle()}
-				</p>
+				<h2 class="truncate text-sm font-semibold">{sectionMeta.title}</h2>
+				<p class="hidden truncate text-[11px] text-neutral-500 sm:block">{sectionMeta.subtitle}</p>
 			</div>
-			{#if savedFlash}
-				<span class="flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-600">
-					<Icon name="check" size={13} />
-					<span class="hidden sm:inline">{m.settings_saved()}</span>
-				</span>
-			{:else if dirty}
-				<span class="hidden text-xs text-neutral-400 sm:inline">{m.org_unsaved()}</span>
+			{#if !adminSection}
+				{#if savedFlash}
+					<span class="flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-600">
+						<Icon name="check" size={13} />
+						<span class="hidden sm:inline">{m.settings_saved()}</span>
+					</span>
+				{:else if dirty}
+					<span class="hidden text-xs text-neutral-400 sm:inline">{m.org_unsaved()}</span>
+				{/if}
+				<button
+					onclick={save}
+					disabled={!dirty || saving}
+					class="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#d97757] px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-[#bd5d3a] disabled:opacity-40"
+				>
+					{saving ? m.org_saving() : m.settings_save()}
+				</button>
 			{/if}
-			<button
-				onclick={save}
-				disabled={!dirty || saving}
-				class="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#d97757] px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-[#bd5d3a] disabled:opacity-40"
-			>
-				{saving ? m.org_saving() : m.settings_save()}
-			</button>
 		</header>
 
-		{#if !loaded}
+		{#if adminSection}
+			<div class="min-h-0 flex-1 overflow-y-auto">
+				<div class="max-w-3xl px-4 py-5 sm:px-6">
+					<AdminPanel view={section === 'users' ? 'users' : 'stats'} />
+				</div>
+			</div>
+		{:else if !loaded}
 			<div class="grid flex-1 place-items-center">
 				<span class="size-7 animate-spin rounded-full border-[3px] border-[#e3e0d5] border-t-[#d97757]"></span>
 			</div>
-		{:else if section === 'knowledge'}
-			<div class="min-h-0 flex-1 overflow-y-auto">
-				<div class="mx-auto max-w-3xl space-y-8 px-4 py-6 sm:px-6 sm:py-8">
-					<section>
-						<h3 class="text-sm font-semibold text-neutral-900">{m.org_general_title()}</h3>
-						<p class="mt-0.5 mb-3 text-xs text-neutral-500">{m.org_general_hint()}</p>
-						<textarea
-							bind:value={orgPrompt}
-							maxlength="4000"
-							rows="4"
-							placeholder={m.org_general_placeholder()}
-							class="w-full resize-y rounded-xl border border-[#e3e0d5] bg-white px-3.5 py-3 text-sm leading-relaxed transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
-						></textarea>
-					</section>
-
-					<section>
-						<div class="mb-3 flex items-end justify-between gap-3">
-							<div>
-								<h3 class="text-sm font-semibold text-neutral-900">{m.org_kb_title()}</h3>
-								<p class="mt-0.5 text-xs text-neutral-500">{m.org_kb_hint()}</p>
-							</div>
-							<span class="shrink-0 text-[11px] text-neutral-400">{m.org_kb_active({ count: enabledCount })}</span>
-						</div>
-						<KnowledgeBlocks bind:entries />
-					</section>
-
-					<section>
-						<h3 class="text-sm font-semibold text-neutral-900">{m.org_docs_title()}</h3>
-						<p class="mt-0.5 mb-3 text-xs text-neutral-500">{m.org_docs_hint()}</p>
-						<DocumentLibrary scope="org" />
-					</section>
-
-					<p class="border-t border-[#efede3] pt-4 text-[11px] leading-relaxed text-neutral-400">
-						{m.org_footer_note()}
-					</p>
-				</div>
-			</div>
 		{:else}
-			<!-- departments: master list + editor. Side by side from sm up; on
-			     phones the two take turns filling the pane (see `deptDetail`). -->
-
+			<!-- knowledge: scope list (org + departments) + editor. Side by side
+			     from sm up; on phones the two take turns (see `scopeDetail`). -->
 			<div class="flex min-h-0 flex-1">
 				<div
 					class="flex w-full shrink-0 flex-col border-r border-[#e3e0d5] bg-[#faf9f5] sm:w-60
-						{deptDetail ? 'max-sm:hidden' : ''}"
+						{scopeDetail ? 'max-sm:hidden' : ''}"
 				>
 					<nav class="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
+						<button
+							onclick={() => selectScope('org')}
+							class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition
+								{selectedScope === 'org' ? 'bg-[#d97757]/10 text-[#bd5d3a]' : 'text-neutral-600 hover:bg-[#eceae1]'}"
+						>
+							<Icon name="building" size={15} />
+							<span class="min-w-0 flex-1 truncate">{m.org_scope_org()}</span>
+						</button>
+
+						<p class="px-3 pt-4 pb-1 text-[10px] font-semibold tracking-wide text-neutral-400 uppercase">
+							{m.org_nav_departments()}
+						</p>
 						{#if departments.length === 0}
-							<p class="px-3 py-6 text-center text-xs text-neutral-400">{m.org_dept_empty()}</p>
+							<p class="px-3 py-4 text-center text-xs text-neutral-400">{m.org_dept_empty()}</p>
 						{:else}
 							{#each departments as dept (dept.id)}
 								<button
-									onclick={() => selectDept(dept.id)}
+									onclick={() => selectScope(dept.id)}
 									class="group flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition
-										{selectedDeptId === dept.id ? 'bg-[#d97757]/10' : 'hover:bg-[#eceae1]'}"
+										{selectedScope === dept.id ? 'bg-[#d97757]/10' : 'hover:bg-[#eceae1]'}"
 								>
 									<span class="size-1.5 shrink-0 rounded-full {dept.enabled ? 'bg-[#1baf7a]' : 'bg-neutral-300'}"></span>
 									<span class="min-w-0 flex-1 truncate {dept.name.trim() ? 'font-medium' : 'text-neutral-400 italic'}">
@@ -302,19 +293,62 @@
 					</button>
 				</div>
 
-				<div class="min-h-0 flex-1 overflow-y-auto {deptDetail ? '' : 'max-sm:hidden'}">
-					{#if di < 0}
+				<div class="min-h-0 flex-1 overflow-y-auto {scopeDetail ? '' : 'max-sm:hidden'}">
+					{#if selectedScope === 'org'}
+						<div class="max-w-2xl space-y-4 px-4 py-5 sm:px-6">
+							<button
+								onclick={() => (scopeDetail = false)}
+								class="flex items-center gap-1.5 text-xs font-medium text-neutral-500 transition hover:text-[#bd5d3a] sm:hidden"
+							>
+								<Icon name="arrow-right" size={13} class="rotate-180" />
+								{m.org_nav_knowledge()}
+							</button>
+
+							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+								<h3 class="text-sm font-semibold text-neutral-900">{m.org_general_title()}</h3>
+								<p class="mt-0.5 mb-3 text-xs text-neutral-500">{m.org_general_hint()}</p>
+								<textarea
+									bind:value={orgPrompt}
+									maxlength="4000"
+									rows="4"
+									placeholder={m.org_general_placeholder()}
+									class="w-full resize-y rounded-lg border border-[#e3e0d5] bg-[#faf9f5]/60 px-3.5 py-3 text-sm leading-relaxed transition focus:border-[#d97757] focus:bg-white focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+								></textarea>
+							</section>
+
+							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+								<div class="mb-3 flex items-end justify-between gap-3">
+									<div>
+										<h3 class="text-sm font-semibold text-neutral-900">{m.org_kb_title()}</h3>
+										<p class="mt-0.5 text-xs text-neutral-500">{m.org_kb_hint()}</p>
+									</div>
+									<span class="shrink-0 text-[11px] text-neutral-400">{m.org_kb_active({ count: enabledCount })}</span>
+								</div>
+								<KnowledgeBlocks bind:entries />
+							</section>
+
+							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+								<h3 class="text-sm font-semibold text-neutral-900">{m.org_docs_title()}</h3>
+								<p class="mt-0.5 mb-3 text-xs text-neutral-500">{m.org_docs_hint()}</p>
+								<DocumentLibrary scope="org" />
+							</section>
+
+							<p class="px-1 text-[11px] leading-relaxed text-neutral-400">
+								{m.org_footer_note()}
+							</p>
+						</div>
+					{:else if di < 0}
 						<div class="grid h-full place-items-center">
 							<p class="text-sm text-neutral-400">{m.org_dept_none_selected()}</p>
 						</div>
 					{:else}
-						<div class="mx-auto max-w-2xl space-y-7 px-4 py-6 sm:px-6 sm:py-8">
+						<div class="max-w-2xl space-y-4 px-4 py-5 sm:px-6">
 							<button
-								onclick={() => (deptDetail = false)}
+								onclick={() => (scopeDetail = false)}
 								class="flex items-center gap-1.5 text-xs font-medium text-neutral-500 transition hover:text-[#bd5d3a] sm:hidden"
 							>
 								<Icon name="arrow-right" size={13} class="rotate-180" />
-								{m.org_nav_departments()}
+								{m.org_nav_knowledge()}
 							</button>
 
 							<!-- header row: name + enable + delete -->
@@ -345,7 +379,7 @@
 							</div>
 
 							<!-- membership rule -->
-							<section>
+							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
 								<div class="mb-2 flex items-center gap-2">
 									<h3 class="text-sm font-semibold text-neutral-900">{m.org_dept_rule_title()}</h3>
 									{#if matchesProfile(departments[di].match, you)}
@@ -362,14 +396,14 @@
 							</section>
 
 							<!-- department knowledge -->
-							<section>
+							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
 								<h3 class="text-sm font-semibold text-neutral-900">{m.org_dept_kb_title()}</h3>
 								<p class="mt-0.5 mb-3 text-xs text-neutral-500">{m.org_dept_kb_hint()}</p>
 								<KnowledgeBlocks bind:entries={departments[di].knowledge} />
 							</section>
 
 							<!-- department documents (only for saved departments) -->
-							<section>
+							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
 								<h3 class="text-sm font-semibold text-neutral-900">{m.org_docs_title()}</h3>
 								<p class="mt-0.5 mb-3 text-xs text-neutral-500">{m.org_dept_docs_hint()}</p>
 								{#if persistedDeptIds.has(departments[di].id)}
@@ -383,7 +417,7 @@
 								{/if}
 							</section>
 
-							<p class="border-t border-[#efede3] pt-4 text-[11px] leading-relaxed text-neutral-400">
+							<p class="px-1 text-[11px] leading-relaxed text-neutral-400">
 								{m.org_footer_note()}
 							</p>
 						</div>

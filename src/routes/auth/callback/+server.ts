@@ -70,7 +70,8 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 
 	// Allowlist gate on the canonical username from the IdP, never on anything
 	// the user typed.
-	if (!(await isUserAllowed(session.username))) redirect(303, '/login?error=not_allowed');
+	if (!(await isUserAllowed(session.username, session.profile)))
+		redirect(303, '/login?error=not_allowed');
 
 	// The refresh token is what lets warehouse queries mint a fresh id_token
 	// long after this login; without it StarRocks access dies in ~5 minutes.

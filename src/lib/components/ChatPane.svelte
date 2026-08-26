@@ -16,7 +16,7 @@
 	import Icon from './Icon.svelte';
 	import { MODEL_STORAGE_KEY, type Provider } from '$lib/models';
 	import { getToken, getDisplayName, clearSession } from '$lib/session';
-	import { saveConversation } from '$lib/history';
+	import { saveConversation, type ConversationMeta } from '$lib/history';
 	import { imageToDataUrl } from '$lib/image';
 	import { newId } from '$lib/id';
 	import logo from '$lib/assets/favicon.svg';
@@ -31,7 +31,8 @@
 		initialMessages: UIMessage[];
 		/** Preferred name from the user's settings — falls back to the login name. */
 		displayName?: string;
-		onSaved: () => void;
+		/** Receives the saved index entry (null on no-op) to update the sidebar in place. */
+		onSaved: (meta: ConversationMeta | null) => void;
 	} = $props();
 
 	// Login username seeds the identicon (must match the sidebar avatar);
@@ -222,6 +223,9 @@
 	let input = $state('');
 	let scrollContainer = $state<HTMLElement | null>(null);
 	let textarea = $state<HTMLTextAreaElement | null>(null);
+	// The composer card — the model menu anchors to it so it opens clear of the
+	// card instead of floating over it.
+	let composerEl = $state<HTMLElement | null>(null);
 
 	// --- composer attachment (uploads into the RAG document store) ---
 	let fileInput = $state<HTMLInputElement | null>(null);
@@ -645,6 +649,7 @@
 		</div>
 	{/if}
 	<div
+		bind:this={composerEl}
 		class="mx-auto max-w-3xl rounded-2xl border border-[#e3e0d5] bg-white p-2 shadow-sm focus-within:border-[#d97757]/50 focus-within:ring-2 focus-within:ring-[#d97757]/15"
 	>
 		{#if pendingAttachments.length > 0}
@@ -736,7 +741,7 @@
 		</div>
 		{#if models.length > 1}
 			<div class="flex items-center px-1 pt-1.5">
-				<ModelPicker {models} bind:value={selectedModel} onSelect={pickModel} />
+				<ModelPicker {models} bind:value={selectedModel} onSelect={pickModel} anchor={composerEl} />
 			</div>
 		{/if}
 	</div>

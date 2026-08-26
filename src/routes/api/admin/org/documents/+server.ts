@@ -27,7 +27,7 @@ const TABLE_TYPES = /\.(csv|xlsx|xls)$/i;
 async function requireAdmin(request: Request) {
 	const user = await authenticateRequest(request);
 	if (!user) return null;
-	return (await resolveRole(user.username)) === 'admin' ? user : null;
+	return (await resolveRole(user.username, user.profile)) === 'admin' ? user : null;
 }
 
 /** Map a scope param ('org' | departmentId) to a store scope, or null if invalid. */

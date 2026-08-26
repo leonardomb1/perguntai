@@ -86,8 +86,35 @@ export interface Department {
 	knowledge: OrgKnowledgeEntry[];
 }
 
+/**
+ * A rule-based grant: the same claim-matching rules departments use, but
+ * granting access capabilities instead of scoping knowledge. Evaluated per
+ * request from the token's claims — membership is never persisted, so when the
+ * IdP moves someone between groups their grants follow on the next request.
+ *
+ * Grants COMPOSE most-permissively: across every matching policy plus the
+ * user's own record, the highest role, the union of models, either write flag,
+ * and the loosest limit win. A per-user record stays the way to make
+ * exceptions (block someone, set a personal limit).
+ */
+export interface AccessPolicy {
+	id: string;
+	name: string;
+	enabled: boolean;
+	match: DeptMatch;
+	role: Role;
+	/** Extra model IDs, on top of DEFAULT_MODEL (same semantics as AccessUser). */
+	allowedModels?: string[];
+	sqlWrite?: boolean;
+	windmillWrite?: boolean;
+	/** Daily token cap granted by this policy; null = uncapped. */
+	maxDailyTokens: number | null;
+}
+
 interface AccessFile {
 	users: Record<string, AccessUser>;
+	/** Rule-based grants over sign-in claims, additive with per-user records. */
+	policies: AccessPolicy[];
 	/** Free-text standing instructions applied to every user (behavioral). */
 	orgSystemPrompt: string;
 	/** Structured, toggleable knowledge blocks (definitions/conventions). */
@@ -101,6 +128,38 @@ const MAX_ENTRY_BODY = 4000;
 const MAX_ENTRY_TITLE = 120;
 const MAX_ENTRIES = 40;
 const MAX_DEPARTMENTS = 30;
+const MAX_POLICIES = 30;
+
+const ROLE_RANK: Record<Role, number> = { user: 0, builder: 1, admin: 2 };
+
+function sanitizePolicies(raw: unknown): AccessPolicy[] {
+	if (!Array.isArray(raw)) return [];
+	return raw
+		.filter((p): p is Record<string, unknown> => typeof p === 'object' && p !== null)
+		.slice(0, MAX_POLICIES)
+		.map((p) => ({
+			id: typeof p.id === 'string' && p.id ? p.id : crypto.randomUUID(),
+			name: typeof p.name === 'string' ? p.name.slice(0, MAX_ENTRY_TITLE) : '',
+			enabled: p.enabled !== false,
+			match: sanitizeMatch(p.match),
+			role: (p.role === 'admin' || p.role === 'builder' ? p.role : 'user') as Role,
+			...(Array.isArray(p.allowedModels)
+				? {
+						allowedModels: p.allowedModels.filter(
+							(id): id is string =>
+								typeof id === 'string' && MODEL_IDS.includes(id) && id !== DEFAULT_MODEL
+						)
+					}
+				: {}),
+			sqlWrite: p.sqlWrite === true,
+			windmillWrite: p.windmillWrite === true,
+			maxDailyTokens:
+				typeof p.maxDailyTokens === 'number' && p.maxDailyTokens > 0
+					? Math.round(p.maxDailyTokens)
+					: null
+		}))
+		.filter((p) => p.name.trim());
+}
 
 function sanitizeKnowledge(raw: unknown): OrgKnowledgeEntry[] {
 	if (!Array.isArray(raw)) return [];
@@ -169,6 +228,7 @@ async function load(): Promise<AccessFile> {
 		const parsed = JSON.parse(await readFile(path, 'utf8'));
 		const data: AccessFile = {
 			users: typeof parsed.users === 'object' && parsed.users ? parsed.users : {},
+			policies: sanitizePolicies(parsed.policies),
 			orgSystemPrompt: typeof parsed.orgSystemPrompt === 'string' ? parsed.orgSystemPrompt : '',
 			orgKnowledge: sanitizeKnowledge(parsed.orgKnowledge),
 			departments: sanitizeDepartments(parsed.departments)
@@ -177,7 +237,13 @@ async function load(): Promise<AccessFile> {
 		return data;
 	} catch {
 		// First run — seed from the legacy env allowlist, then persist.
-		const seeded: AccessFile = { users: {}, orgSystemPrompt: '', orgKnowledge: [], departments: [] };
+		const seeded: AccessFile = {
+			users: {},
+			policies: [],
+			orgSystemPrompt: '',
+			orgKnowledge: [],
+			departments: []
+		};
 		const legacy = (env.ALLOWED_USERS ?? '')
 			.split(',')
 			.map((u) => u.trim().toLowerCase())
@@ -203,31 +269,59 @@ async function save(data: AccessFile): Promise<void> {
 	cache = null; // next read picks up the new mtime
 }
 
-/** Key lookup used by authenticateRequest — empty list = open mode. */
-export async function isUserAllowed(username: string): Promise<boolean> {
-	if (isEnvAdmin(username)) return true;
-	const { users } = await load();
-	const names = Object.keys(users);
-	if (names.length === 0) return true;
-	const entry = users[username.toLowerCase()];
-	return Boolean(entry && !entry.blocked);
+/** Enabled policies whose rule matches this profile's claims (none without a profile). */
+function matchedPolicies(data: AccessFile, profile?: UserProfile | null): AccessPolicy[] {
+	if (!profile) return [];
+	const claims = profileClaims(profile);
+	return data.policies.filter((p) => p.enabled && matchesDept(p.match, claims));
 }
 
-export async function resolveRole(username: string): Promise<Role> {
+/**
+ * Sign-in / per-request gate. Open mode only while NEITHER users NOR policies
+ * exist; after that, entry to the app comes from a user record (not blocked)
+ * or a matching policy. An explicit per-user block always wins — a policy can
+ * never re-admit a blocked user.
+ */
+export async function isUserAllowed(
+	username: string,
+	profile?: UserProfile | null
+): Promise<boolean> {
+	if (isEnvAdmin(username)) return true;
+	const data = await load();
+	const entry = data.users[username.toLowerCase()];
+	if (entry?.blocked) return false;
+	if (Object.keys(data.users).length === 0 && data.policies.length === 0) return true;
+	if (entry) return true;
+	return matchedPolicies(data, profile).length > 0;
+}
+
+/** Highest role across the user's own record and every matching policy. */
+export async function resolveRole(username: string, profile?: UserProfile | null): Promise<Role> {
 	if (isEnvAdmin(username)) return 'admin';
-	const { users } = await load();
-	const role = users[username.toLowerCase()]?.role;
-	return role === 'admin' || role === 'builder' ? role : 'user';
+	const data = await load();
+	let best: Role = 'user';
+	const own = data.users[username.toLowerCase()]?.role;
+	if (own === 'admin' || own === 'builder') best = own;
+	for (const p of matchedPolicies(data, profile)) {
+		if (ROLE_RANK[p.role] > ROLE_RANK[best]) best = p.role;
+	}
+	return best;
 }
 
 /**
  * Whether the model may compose write statements under this user's own grants.
  * Deliberately NOT implied by the admin role (unlike resolveAllowedModels):
- * letting an LLM write is a per-person decision, not a rank. Re-read per
- * request, so revoking it takes effect on the user's next message.
+ * letting an LLM write is a per-person decision, not a rank — granted per user
+ * or per policy. Re-read per request, so revoking it takes effect on the
+ * user's next message.
  */
-export async function resolveSqlWrite(username: string): Promise<boolean> {
-	return (await getAccessEntry(username))?.sqlWrite === true;
+export async function resolveSqlWrite(
+	username: string,
+	profile?: UserProfile | null
+): Promise<boolean> {
+	const data = await load();
+	if (data.users[username.toLowerCase()]?.sqlWrite === true) return true;
+	return matchedPolicies(data, profile).some((p) => p.sqlWrite);
 }
 
 /**
@@ -235,8 +329,31 @@ export async function resolveSqlWrite(username: string): Promise<boolean> {
  * token. Same reasoning as resolveSqlWrite: not implied by the admin role, and
  * re-read per request so revoking it lands on the next message.
  */
-export async function resolveWindmillWrite(username: string): Promise<boolean> {
-	return (await getAccessEntry(username))?.windmillWrite === true;
+export async function resolveWindmillWrite(
+	username: string,
+	profile?: UserProfile | null
+): Promise<boolean> {
+	const data = await load();
+	if (data.users[username.toLowerCase()]?.windmillWrite === true) return true;
+	return matchedPolicies(data, profile).some((p) => p.windmillWrite);
+}
+
+/**
+ * Effective daily token cap. A personal limit on the user's record is an
+ * explicit exception and wins outright; otherwise the loosest matching policy
+ * applies (uncapped beats any number); with no record and no policy, uncapped.
+ */
+export async function resolveDailyLimit(
+	username: string,
+	profile?: UserProfile | null
+): Promise<number | null> {
+	const data = await load();
+	const own = data.users[username.toLowerCase()]?.maxDailyTokens;
+	if (typeof own === 'number') return own;
+	const matched = matchedPolicies(data, profile);
+	if (matched.length === 0) return null;
+	if (matched.some((p) => p.maxDailyTokens === null)) return null;
+	return Math.max(...matched.map((p) => p.maxDailyTokens as number));
 }
 
 export async function getAccessEntry(username: string): Promise<AccessUser | null> {
@@ -298,16 +415,47 @@ export async function removeAccessUser(username: string): Promise<void> {
  * extras. Always includes DEFAULT_MODEL, so the result is never empty.
  * Re-read per request, so a revoked grant takes effect on the next message.
  */
-export async function resolveAllowedModels(username: string): Promise<string[]> {
-	if ((await resolveRole(username)) === 'admin') return [...MODEL_IDS];
-	const extra = new Set((await getAccessEntry(username))?.allowedModels ?? []);
+export async function resolveAllowedModels(
+	username: string,
+	profile?: UserProfile | null
+): Promise<string[]> {
+	if ((await resolveRole(username, profile)) === 'admin') return [...MODEL_IDS];
+	const data = await load();
+	const extra = new Set(data.users[username.toLowerCase()]?.allowedModels ?? []);
+	for (const p of matchedPolicies(data, profile)) {
+		for (const id of p.allowedModels ?? []) extra.add(id);
+	}
 	return MODEL_IDS.filter((id) => id === DEFAULT_MODEL || extra.has(id));
 }
 
 /** Validate a requested model against the user's allow-list; fall back to default. */
-export async function resolveModel(username: string, requested: string): Promise<string> {
-	const allowed = await resolveAllowedModels(username);
+export async function resolveModel(
+	username: string,
+	requested: string,
+	profile?: UserProfile | null
+): Promise<string> {
+	const allowed = await resolveAllowedModels(username, profile);
 	return allowed.includes(requested) ? requested : DEFAULT_MODEL;
+}
+
+// --- policy CRUD (admin console) ---
+
+export async function listPolicies(): Promise<AccessPolicy[]> {
+	return (await load()).policies;
+}
+
+/** Replace the policy list wholesale (the console edits it as one document). */
+export async function setPolicies(policies: unknown): Promise<AccessPolicy[]> {
+	const data = await load();
+	data.policies = sanitizePolicies(policies);
+	await save(data);
+	return data.policies;
+}
+
+/** Open mode = nothing gates sign-in yet (no user records AND no policies). */
+export async function isOpenMode(): Promise<boolean> {
+	const data = await load();
+	return Object.keys(data.users).length === 0 && data.policies.length === 0;
 }
 
 export async function getOrgSystemPrompt(): Promise<string> {

@@ -15,8 +15,8 @@ export const GET: RequestHandler = async ({ request }) => {
 	if (!user) return json({ error: 'Unauthorized' }, { status: 401 });
 
 	const catalog = clientModels();
-	const ids = await resolveAllowedModels(user.username);
-	const isAdmin = user.isPlatformAdmin || (await resolveRole(user.username)) === 'admin';
+	const ids = await resolveAllowedModels(user.username, user.profile);
+	const isAdmin = user.isPlatformAdmin || (await resolveRole(user.username, user.profile)) === 'admin';
 	return json({
 		models: catalog.filter((mo) => ids.includes(mo.id)),
 		default: DEFAULT_MODEL,

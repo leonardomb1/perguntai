@@ -26,7 +26,7 @@ import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ request }) => {
 	const user = await authenticateRequest(request);
-	if (!user || (await resolveRole(user.username)) !== 'admin')
+	if (!user || (await resolveRole(user.username, user.profile)) !== 'admin')
 		return json({ error: 'Forbidden' }, { status: 403 });
 	return json({
 		orgSystemPrompt: await getOrgSystemPrompt(),
@@ -38,7 +38,7 @@ export const GET: RequestHandler = async ({ request }) => {
 
 export const PUT: RequestHandler = async ({ request }) => {
 	const user = await authenticateRequest(request);
-	if (!user || (await resolveRole(user.username)) !== 'admin')
+	if (!user || (await resolveRole(user.username, user.profile)) !== 'admin')
 		return json({ error: 'Forbidden' }, { status: 403 });
 	const body = await request.json().catch(() => ({}));
 	if (typeof body.orgSystemPrompt === 'string') await setOrgSystemPrompt(body.orgSystemPrompt);

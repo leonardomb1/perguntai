@@ -89,11 +89,50 @@ export async function removeOrgDocument(scope: string, id: string): Promise<bool
 	return res.ok;
 }
 
-export async function listUsers(): Promise<{ users: AdminUser[]; openMode: boolean } | null> {
+/** A rule-based grant over sign-in claims — see AccessPolicy in server/access. */
+export interface AccessPolicy {
+	id: string;
+	name: string;
+	enabled: boolean;
+	match: DeptMatch;
+	role: 'admin' | 'builder' | 'user';
+	allowedModels?: string[];
+	sqlWrite?: boolean;
+	windmillWrite?: boolean;
+	maxDailyTokens: number | null;
+}
+
+export async function listUsers(): Promise<{
+	users: AdminUser[];
+	policies: AccessPolicy[];
+	openMode: boolean;
+	you: CallerProfile;
+} | null> {
 	try {
 		const res = await fetch('/api/admin/users', { headers: headers() });
 		if (!res.ok) return null;
-		return await res.json();
+		const data = await res.json();
+		return {
+			users: data.users ?? [],
+			policies: data.policies ?? [],
+			openMode: data.openMode === true,
+			you: data.you ?? { claims: {} }
+		};
+	} catch {
+		return null;
+	}
+}
+
+/** Replace the access-policy list; returns the sanitized list or null on failure. */
+export async function savePolicies(policies: AccessPolicy[]): Promise<AccessPolicy[] | null> {
+	try {
+		const res = await fetch('/api/admin/users', {
+			method: 'PUT',
+			headers: headers(),
+			body: JSON.stringify({ policies })
+		});
+		if (!res.ok) return null;
+		return (await res.json()).policies ?? null;
 	} catch {
 		return null;
 	}

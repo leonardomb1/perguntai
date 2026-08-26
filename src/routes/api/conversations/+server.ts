@@ -32,8 +32,13 @@ export const PUT: RequestHandler = async ({ request }) => {
 	if (!isValidConversationId(id) || !Array.isArray(messages)) {
 		return json({ error: 'Expected { id, messages[] }' }, { status: 400 });
 	}
-	await saveConversation(user.username, id, messages, typeof title === 'string' ? title : undefined);
-	return json({ ok: true });
+	const meta = await saveConversation(
+		user.username,
+		id,
+		messages,
+		typeof title === 'string' ? title : undefined
+	);
+	return json({ ok: true, conversation: meta });
 };
 
 /** Rename. */

@@ -17,7 +17,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		(!!token && request.headers.get('authorization') === `Bearer ${token}`) ||
 		(await (async () => {
 			const user = await authenticateRequest(request);
-			return !!user && (await resolveRole(user.username)) === 'admin';
+			return !!user && (await resolveRole(user.username, user.profile)) === 'admin';
 		})());
 	if (!authorized) return json({ error: 'Forbidden' }, { status: 403 });
 

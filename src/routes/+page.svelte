@@ -55,6 +55,14 @@
 		conversations = await listConversations();
 	}
 
+	// Autosave returns the saved conversation's index entry — move/insert it at
+	// the top of the sidebar locally instead of re-fetching the whole list
+	// (saves fire on every streaming pause, so the GETs added up fast).
+	function upsertConversation(meta: ConversationMeta | null) {
+		if (!meta) return;
+		conversations = [meta, ...conversations.filter((c) => c.id !== meta.id)];
+	}
+
 	// One-time migration of pre-server localStorage history, then load the list.
 	$effect(() => {
 		if (!browser || !hasSession()) return;
@@ -207,7 +215,7 @@
 					{/if}
 					<button
 						onclick={(e) => removeConversation(e, convo.id)}
-						class="hidden shrink-0 rounded p-1 text-neutral-400 group-hover:block hover:bg-red-50 hover:text-red-600"
+						class="invisible shrink-0 rounded p-1 text-neutral-400 group-hover:visible hover:bg-red-50 hover:text-red-600 focus-visible:visible"
 						title={m.delete_conversation()}
 						aria-label={m.delete_conversation()}
 					>
@@ -271,7 +279,7 @@
 					conversationId={pane.id}
 					initialMessages={pane.messages}
 					displayName={shownName}
-					onSaved={refreshList}
+					onSaved={upsertConversation}
 				/>
 			{:else}
 				<div class="flex flex-1 items-center justify-center">

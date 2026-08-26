@@ -62,7 +62,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	// Allowlist gate on the canonical account name from the directory, never on
 	// what was typed — AD accepts several aliases for the same account.
 	const session = await sessionFromClaims(result.claims, { password });
-	if (!(await isUserAllowed(session.username))) {
+	if (!(await isUserAllowed(session.username, session.profile))) {
 		return json({ error: 'Not in the preview allowlist', code: 'not_in_allowlist' }, { status: 403 });
 	}
 	return json({ token: session.token, displayName: session.displayName });

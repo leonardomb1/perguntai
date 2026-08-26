@@ -7,7 +7,12 @@ import { buildAgent } from '$lib/server/agent';
 import { withHeartbeat } from '$lib/server/heartbeat';
 import { beginRun, liveStreamKey, recordStream } from '$lib/server/live-streams';
 import { getUserSettings } from '$lib/server/settings';
-import { getAccessEntry, getEffectiveOrgPrompt, resolveModel } from '$lib/server/access';
+import {
+	getEffectiveOrgPrompt,
+	resolveDailyLimit,
+	resolveModel,
+	resolveWindmillWrite
+} from '$lib/server/access';
 import { addUsage, usageToday, weightedTokens } from '$lib/server/usage';
 import type { RequestHandler } from './$types';
 
@@ -21,17 +26,17 @@ export const POST: RequestHandler = async ({ request }) => {
 	// already exhausted; otherwise the REMAINING budget is handed to the agent
 	// as a stop condition, so a multi-step run halts once it spends it instead
 	// of blowing past the limit unchecked.
-	const access = await getAccessEntry(user.username);
+	const dailyLimit = await resolveDailyLimit(user.username, user.profile);
 	let tokenBudget: number | null = null;
-	if (access?.maxDailyTokens) {
+	if (dailyLimit) {
 		const used = await usageToday(user.username);
-		if (used >= access.maxDailyTokens) {
+		if (used >= dailyLimit) {
 			return json(
 				{ error: 'Limite diário de tokens atingido — fale com o administrador ou tente amanhã.' },
 				{ status: 429 }
 			);
 		}
-		tokenBudget = access.maxDailyTokens - used;
+		tokenBudget = dailyLimit - used;
 	}
 
 	const { messages, conversationId, model: requestedModel } = await request.json();
@@ -46,17 +51,21 @@ export const POST: RequestHandler = async ({ request }) => {
 	// The client picks a model per conversation; validate it against the user's
 	// allow-list server-side (never trust the client) — an ineligible or unknown
 	// value silently falls back to the default.
-	const model = await resolveModel(user.username, typeof requestedModel === 'string' ? requestedModel : '');
+	const model = await resolveModel(
+		user.username,
+		typeof requestedModel === 'string' ? requestedModel : '',
+		user.profile
+	);
 
 	// Settings drive personalization (names, custom instructions) and carry the
 	// user's own Windmill token — MCP and runPython act with THEIR permissions.
 	const settings = await getUserSettings(user.username);
 	// Admin-granted: may the model mutate the Windmill workspace, or only read
-	// and run? `access` is already loaded above, so this costs nothing.
+	// and run? Resolved from the user's record plus matching policies.
 	const mcp = await connectMcpTools(
 		{ windmill: settings.windmillToken, tabula: settings.tabulaToken },
 		{
-			allowWrites: access?.windmillWrite === true,
+			allowWrites: await resolveWindmillWrite(user.username, user.profile),
 			custom: settings.mcpServers.filter((sv) => sv.enabled)
 		}
 	);

@@ -2,9 +2,13 @@ import { json } from '@sveltejs/kit';
 import { authenticateRequest } from '$lib/server/auth';
 import {
 	isEnvAdmin,
+	isOpenMode,
 	listAccessUsers,
+	listPolicies,
+	profileClaims,
 	removeAccessUser,
 	resolveRole,
+	setPolicies,
 	upsertAccessUser
 } from '$lib/server/access';
 import { usageSummary } from '$lib/server/usage';
@@ -15,7 +19,7 @@ import type { AuthUser } from '$lib/server/auth';
 async function requireAdmin(request: Request): Promise<AuthUser | Response> {
 	const user = await authenticateRequest(request);
 	if (!user) return json({ error: 'Unauthorized' }, { status: 401 });
-	if ((await resolveRole(user.username)) !== 'admin')
+	if ((await resolveRole(user.username, user.profile)) !== 'admin')
 		return json({ error: 'Forbidden' }, { status: 403 });
 	return user;
 }
@@ -34,7 +38,25 @@ export const GET: RequestHandler = async ({ request }) => {
 		}))
 	);
 	list.sort((a, b) => a.username.localeCompare(b.username));
-	return json({ users: list, openMode: list.length === 0 });
+	return json({
+		users: list,
+		policies: await listPolicies(),
+		openMode: await isOpenMode(),
+		// The caller's own claims, so the console can preview "matches you".
+		you: { claims: profileClaims(admin.profile) }
+	});
+};
+
+/** Replace the access-policy list wholesale (the console edits it as one doc). */
+export const PUT: RequestHandler = async ({ request }) => {
+	const admin = await requireAdmin(request);
+	if (admin instanceof Response) return admin;
+
+	const body = await request.json().catch(() => ({}));
+	if (!Array.isArray(body.policies)) {
+		return json({ error: 'Expected { policies: [] }' }, { status: 400 });
+	}
+	return json({ policies: await setPolicies(body.policies) });
 };
 
 export const POST: RequestHandler = async ({ request }) => {

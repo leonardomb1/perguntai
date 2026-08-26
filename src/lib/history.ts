@@ -44,16 +44,27 @@ export async function loadMessages(id: string): Promise<UIMessage[]> {
 	}
 }
 
-export async function saveConversation(id: string, messages: UIMessage[]): Promise<void> {
-	if (messages.length === 0) return;
+/**
+ * Returns the saved conversation's index entry so callers can update the
+ * sidebar in place instead of re-fetching the whole list; null when the save
+ * was a no-op or failed.
+ */
+export async function saveConversation(
+	id: string,
+	messages: UIMessage[]
+): Promise<ConversationMeta | null> {
+	if (messages.length === 0) return null;
 	try {
-		await fetch('/api/conversations', {
+		const res = await fetch('/api/conversations', {
 			method: 'PUT',
 			headers: headers(true),
 			body: JSON.stringify({ id, messages })
 		});
+		if (!res.ok) return null;
+		return (await res.json()).conversation ?? null;
 	} catch {
 		/* autosave — a failed save retries on the next debounce tick */
+		return null;
 	}
 }
 

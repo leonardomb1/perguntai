@@ -56,13 +56,14 @@ export async function loadMessages(username: string, id: string): Promise<UIMess
 	}
 }
 
+/** Returns the resulting index entry, or null when nothing was written. */
 export async function saveConversation(
 	username: string,
 	id: string,
 	messages: UIMessage[],
 	title?: string
-): Promise<void> {
-	if (messages.length === 0) return;
+): Promise<ConversationMeta | null> {
+	if (messages.length === 0) return null;
 	const dir = userDir(username);
 	const path = join(dir, `${id}.json`);
 	const body = JSON.stringify(messages);
@@ -70,7 +71,7 @@ export async function saveConversation(
 	// Identical content → no-op, so merely viewing a chat never bumps its
 	// position in the list.
 	const existing = await readFile(path, 'utf8').catch(() => null);
-	if (existing === body) return;
+	if (existing === body) return null;
 
 	await mkdir(dir, { recursive: true });
 	await writeFile(path, body);
@@ -88,8 +89,9 @@ export async function saveConversation(
 			?.text.slice(0, 60) ??
 		'New chat';
 
+	const meta: ConversationMeta = { id, title: resolvedTitle, updatedAt: Date.now() };
 	const next = index.filter((c) => c.id !== id);
-	next.unshift({ id, title: resolvedTitle, updatedAt: Date.now() });
+	next.unshift(meta);
 
 	// Evict the oldest beyond the cap, including their files and documents.
 	for (const evicted of next.slice(MAX_CONVERSATIONS)) {
@@ -97,6 +99,7 @@ export async function saveConversation(
 		await removeDocsForConversation(username, evicted.id).catch(() => {});
 	}
 	await writeIndex(username, next.slice(0, MAX_CONVERSATIONS));
+	return meta;
 }
 
 export async function renameConversation(

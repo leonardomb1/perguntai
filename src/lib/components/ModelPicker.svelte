@@ -8,21 +8,33 @@
 	let {
 		models,
 		value = $bindable(),
-		onSelect
+		onSelect,
+		anchor = null
 	}: {
 		models: Model[];
 		value: string;
 		onSelect?: (id: string) => void;
+		/** Positions the menu against this element (e.g. the composer card). */
+		anchor?: HTMLElement | null;
 	} = $props();
 
 	// SelectMenu keys options by `value`; carry the provider through for the logo.
 	const options = $derived(
 		models.map((mo) => ({ value: mo.id, label: mo.label, hint: mo.hint, provider: mo.provider }))
 	);
+
 </script>
 
-<SelectMenu {options} bind:value {onSelect} direction="up" menuClass="min-w-[15rem]">
-	{#snippet leading(o)}
-		<img src={providerLogo(o.provider)} alt="" class="size-4 shrink-0" />
-	{/snippet}
-</SelectMenu>
+{#snippet logo(o: { provider: Provider })}
+	<img src={providerLogo(o.provider)} alt="" class="size-4 shrink-0" />
+{/snippet}
+
+<SelectMenu
+	{options}
+	bind:value
+	{onSelect}
+	direction="up"
+	menuClass="min-w-[15rem]"
+	{anchor}
+	leading={logo}
+/>

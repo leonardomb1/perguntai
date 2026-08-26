@@ -17,7 +17,7 @@ export const GET: RequestHandler = async ({ request }) => {
 	if (!user) return json({ error: 'Unauthorized' }, { status: 401 });
 	return json({
 		...(await getPublicSettings(user.username)),
-		role: await resolveRole(user.username),
+		role: await resolveRole(user.username, user.profile),
 		isAdmin: user.isAdmin ?? false,
 		isPlatformAdmin: user.isPlatformAdmin ?? false,
 		// Lets the UI hide the web-search toggle where the provider workspace
@@ -75,6 +75,6 @@ export const PUT: RequestHandler = async ({ request }) => {
 
 	return json({
 		...(await saveUserSettings(user.username, patch)),
-		role: await resolveRole(user.username)
+		role: await resolveRole(user.username, user.profile)
 	});
 };
