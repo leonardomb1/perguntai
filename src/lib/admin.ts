@@ -238,6 +238,8 @@ export interface AdminKeyOwner {
 	keys: {
 		id: string;
 		label: string;
+		hint?: string;
+		scope: 'chat' | 'full';
 		createdAt: string;
 		lastUsedAt: string | null;
 		expiresAt: string | null;

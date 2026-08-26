@@ -24,7 +24,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	const user = await requireSession(request);
 	if (!user) return json({ error: 'Unauthorized' }, { status: 401 });
 
-	let body: { label?: string; expiresInDays?: number } = {};
+	let body: { label?: string; expiresInDays?: number; scope?: string } = {};
 	try {
 		body = await request.json();
 	} catch {
@@ -35,7 +35,8 @@ export const POST: RequestHandler = async ({ request }) => {
 	const { key, record } = await createKey(
 		user.username,
 		body.label ?? '',
-		Number.isFinite(days) && days > 0 ? days : undefined
+		Number.isFinite(days) && days > 0 ? days : undefined,
+		body.scope === 'full' ? 'full' : 'chat'
 	);
 
 	logAudit({
@@ -46,7 +47,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		action: 'key.create',
 		target: record.label,
 		status: 'ok',
-		detail: { keyId: record.id, expiresAt: record.expiresAt }
+		detail: { keyId: record.id, scope: record.scope, expiresAt: record.expiresAt }
 	});
 	// The plaintext is returned exactly once — only its hash is stored.
 	return json({ key, record }, { status: 201 });

@@ -54,7 +54,7 @@ export interface AuthUser {
 	/** AD directory attributes captured at login (absent on legacy tokens). */
 	profile?: UserProfile;
 	/** Set when the request authenticated with a personal API key. */
-	apiKey?: { id: string; label: string };
+	apiKey?: { id: string; label: string; scope: 'chat' | 'full' };
 	/**
 	 * App admin (access.json role === 'admin', which env admins also are).
 	 * Resolved LIVE by authenticateRequest on every request — deliberately NOT a
@@ -207,12 +207,17 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
  * traffic — deliberate: departments are matched from IdP claims captured at
  * sign-in, and a key never went through one.
  */
-function userFromApiKey(owner: { username: string; keyId: string; keyLabel: string }): AuthUser {
+function userFromApiKey(owner: {
+	username: string;
+	keyId: string;
+	keyLabel: string;
+	scope: 'chat' | 'full';
+}): AuthUser {
 	return {
 		username: owner.username,
 		displayName: owner.username,
 		credentials: { username: owner.username },
-		apiKey: { id: owner.keyId, label: owner.keyLabel }
+		apiKey: { id: owner.keyId, label: owner.keyLabel, scope: owner.scope }
 	};
 }
 
@@ -234,6 +239,15 @@ export async function authenticateRequest(request: Request): Promise<AuthUser | 
 	// user in the admin panel locks them out on their next request, even
 	// though their stateless token is still cryptographically valid.
 	if (user && !(await isUserAllowed(user.username, user.profile))) return null;
+	// Least privilege: a 'chat'-scoped key is data-plane only — the OpenAI-compat
+	// surface, the app's chat endpoint, and the model catalog. Everything else
+	// (conversations, settings, documents, admin) needs a 'full' key or a session.
+	if (user?.apiKey?.scope === 'chat') {
+		const path = new URL(request.url).pathname;
+		const allowed =
+			path.startsWith('/v1/') || path.startsWith('/api/chat') || path === '/api/models';
+		if (!allowed) return null;
+	}
 	if (user) {
 		// Resolved live (same cached access.json read as isUserAllowed above), so
 		// admin/platform-admin status is always current, never a stale token claim.

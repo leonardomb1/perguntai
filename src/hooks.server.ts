@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/sveltekit';
 import { sequence } from '@sveltejs/kit/hooks';
+import { dev } from '$app/environment';
 import { env } from '$env/dynamic/private';
 import type { Handle } from '@sveltejs/kit';
 import { getTextDirection } from '$lib/paraglide/runtime';
@@ -11,6 +12,11 @@ import { paraglideMiddleware } from '$lib/paraglide/server';
 // Agents view; PII capture stays off (recordInputs/recordOutputs false).
 Sentry.init({
 	dsn: env.SENTRY_DSN,
+	// Silent in dev unless explicitly opted in (SENTRY_DEV=1): dev telemetry
+	// pollutes the project, and its async envelope uploads race into
+	// SvelteKit's SSR render window, producing spurious "Avoid calling fetch
+	// eagerly during server-side rendering" warnings in the dev console.
+	enabled: !dev || env.SENTRY_DEV === '1',
 	environment: env.SENTRY_ENVIRONMENT,
 	tracesSampleRate: env.SENTRY_TRACES_SAMPLE_RATE ? Number(env.SENTRY_TRACES_SAMPLE_RATE) : 1,
 	// One switch for LLM/tool I/O capture — the AI-SDK and MCP integrations both

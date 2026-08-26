@@ -9,6 +9,10 @@ import { getToken } from '$lib/session';
 export interface PublicApiKey {
 	id: string;
 	label: string;
+	/** Non-secret prefix…last4 to match keys to the scripts holding them. */
+	hint?: string;
+	/** 'chat' = data plane only (/v1 + chat); 'full' = acts fully as you. */
+	scope: 'chat' | 'full';
 	createdAt: string;
 	lastUsedAt: string | null;
 	expiresAt: string | null;
@@ -31,13 +35,14 @@ export async function listKeys(): Promise<PublicApiKey[] | null> {
 /** On success the `key` field is the ONLY time the plaintext is available. */
 export async function createKey(
 	label: string,
-	expiresInDays?: number
+	expiresInDays?: number,
+	scope: 'chat' | 'full' = 'chat'
 ): Promise<{ ok: true; key: string; record: PublicApiKey } | { ok: false; error: string }> {
 	try {
 		const res = await fetch('/api/keys', {
 			method: 'POST',
 			headers: headers(),
-			body: JSON.stringify({ label, ...(expiresInDays ? { expiresInDays } : {}) })
+			body: JSON.stringify({ label, scope, ...(expiresInDays ? { expiresInDays } : {}) })
 		});
 		const data = await res.json().catch(() => ({}));
 		if (!res.ok) return { ok: false, error: data.error ?? `HTTP ${res.status}` };

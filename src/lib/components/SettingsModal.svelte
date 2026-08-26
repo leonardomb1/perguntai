@@ -23,23 +23,28 @@
 		username,
 		settings,
 		onClose,
-		onSaved
+		onSaved,
+		initial = 'general'
 	}: {
 		/** Login username — seeds the identicon, immutable. */
 		username: string;
 		settings: PublicSettings;
 		onClose: () => void;
 		onSaved: (updated: PublicSettings) => void;
+		/** Section to open on — lets in-app notices deep-link (e.g. connectors). */
+		initial?: 'general' | 'memory' | 'connectors' | 'apikeys';
 	} = $props();
 
 	type Section = 'general' | 'memory' | 'connectors' | 'apikeys';
-	let section = $state<Section>('general');
+	// svelte-ignore state_referenced_locally
+	let section = $state<Section>(initial);
 
 	// --- personal API keys (loaded lazily when the section opens) ---
 	let keys = $state<PublicApiKey[]>([]);
 	let keysLoaded = $state(false);
 	let keyLabel = $state('');
-	let keyExpiry = $state('0'); // days; '0' = no expiry
+	let keyExpiry = $state('90'); // days; '0' = no expiry (90 is the nudged default)
+	let keyScope = $state<'chat' | 'full'>('chat');
 	let creatingKey = $state(false);
 	let keyError = $state(false);
 	/** Plaintext of the key just minted — the server never returns it again. */
@@ -47,13 +52,24 @@
 	let freshCopied = $state(false);
 	let confirmRevoke = $state<string | null>(null);
 
-	// Built in the script so the JSON braces don't need template escaping.
+	// OpenAI-compatible surface: any openai SDK / LangChain / Open WebUI works
+	// by pointing base_url here. Built in the script so JSON braces need no
+	// template escaping.
 	const curlExample = [
-		`curl ${browser ? location.origin : ''}/api/chat \\`,
+		`curl ${browser ? location.origin : ''}/v1/chat/completions \\`,
 		'  -H "Authorization: Bearer pai_…" \\',
 		'  -H "Content-Type: application/json" \\',
-		`  -d '{"messages":[{"role":"user","parts":[{"type":"text","text":"Olá"}]}]}'`
+		`  -d '{"model":"", "messages":[{"role":"user","content":"Olá"}]}'`
 	].join('\n');
+	const pythonExample = [
+		'from openai import OpenAI',
+		`client = OpenAI(base_url="${browser ? location.origin : ''}/v1", api_key="pai_…")`,
+		'r = client.chat.completions.create(model="", messages=[{"role": "user", "content": "Olá"}])'
+	].join('\n');
+	const scopeOptions = $derived([
+		{ value: 'chat', label: m.apikeys_scope_chat(), hint: m.apikeys_scope_chat_hint() },
+		{ value: 'full', label: m.apikeys_scope_full(), hint: m.apikeys_scope_full_hint() }
+	]);
 
 	const expiryOptions = $derived([
 		{ value: '30', label: m.apikeys_expiry_days({ n: 30 }) },
@@ -76,7 +92,7 @@
 		creatingKey = true;
 		keyError = false;
 		const days = Number(keyExpiry);
-		const result = await createKey(keyLabel.trim(), days > 0 ? days : undefined);
+		const result = await createKey(keyLabel.trim(), days > 0 ? days : undefined, keyScope);
 		creatingKey = false;
 		if (!result.ok) {
 			keyError = true;
@@ -118,14 +134,6 @@
 	let displayName = $state(settings.displayName);
 	// svelte-ignore state_referenced_locally
 	let systemPrompt = $state(settings.systemPrompt);
-	let windmillToken = $state('');
-	// svelte-ignore state_referenced_locally
-	let tokenSet = $state(settings.windmillTokenSet);
-	let removeToken = $state(false);
-	let tabulaToken = $state('');
-	// svelte-ignore state_referenced_locally
-	let tabulaTokenSet = $state(settings.tabulaTokenSet);
-	let removeTabulaToken = $state(false);
 
 	// On-demand MCP servers. Each row edits in place; `token` is write-only
 	// (empty = keep the stored one, which `tokenSet` reports).
@@ -211,10 +219,6 @@
 			displayName !== settings.displayName ||
 			systemPrompt !== settings.systemPrompt ||
 			webSearch !== settings.webSearch ||
-			windmillToken.trim() !== '' ||
-			removeToken ||
-			tabulaToken.trim() !== '' ||
-			removeTabulaToken ||
 			mcpSnapshot(mcpRows) !== mcpSaved
 	);
 
@@ -227,16 +231,6 @@
 			displayName,
 			systemPrompt,
 			webSearch,
-			...(removeToken
-				? { windmillToken: null }
-				: windmillToken.trim()
-					? { windmillToken: windmillToken.trim() }
-					: {}),
-			...(removeTabulaToken
-				? { tabulaToken: null }
-				: tabulaToken.trim()
-					? { tabulaToken: tabulaToken.trim() }
-					: {}),
 			mcpServers: mcpRows
 				.filter((r) => r.name.trim() && r.url.trim())
 				.map((r) => ({
@@ -252,12 +246,6 @@
 			saveError = true;
 			return;
 		}
-		windmillToken = '';
-		removeToken = false;
-		tokenSet = updated.windmillTokenSet;
-		tabulaToken = '';
-		removeTabulaToken = false;
-		tabulaTokenSet = updated.tabulaTokenSet;
 		mcpRows = rowsFrom(updated.mcpServers);
 		mcpSaved = mcpSnapshot(rowsFrom(updated.mcpServers));
 		saveGen++;
@@ -481,47 +469,6 @@
 					<p class="mt-1.5 text-sm leading-relaxed text-neutral-500">{m.settings_mcp_desc()}</p>
 
 					<div class="mt-5 space-y-3">
-						{#each [{ kind: 'windmill' }, { kind: 'tabula' }] as builtin (builtin.kind)}
-							{@const isWm = builtin.kind === 'windmill'}
-							{@const set = isWm ? tokenSet : tabulaTokenSet}
-							{@const removing = isWm ? removeToken : removeTabulaToken}
-							<div class="rounded-xl border border-neutral-200 p-3.5">
-								<div class="flex items-center gap-2">
-									<span class="text-sm font-semibold text-neutral-900">{isWm ? 'Windmill' : 'Tabula'}</span>
-									<span class="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-neutral-500 uppercase">{m.settings_mcp_builtin_badge()}</span>
-									<span class="ml-auto flex items-center gap-1.5 text-xs {set && !removing ? 'text-neutral-500' : 'text-neutral-400'}">
-										<span class="size-2 rounded-full {set && !removing ? 'bg-emerald-500' : 'bg-neutral-300'}"></span>
-										{set && !removing ? m.settings_mcp_token_set() : m.settings_mcp_token_unset()}
-									</span>
-								</div>
-								<p class="mt-1.5 text-xs leading-relaxed text-neutral-500">{isWm ? m.settings_windmill_desc() : m.settings_tabula_desc()}</p>
-								<p class="mt-0.5 text-[11px] text-neutral-400">{isWm ? m.settings_windmill_hint() : m.settings_tabula_hint()}</p>
-								{#key saveGen}
-									{#if isWm}
-										<TokenField tokenSet={set} bind:value={windmillToken} bind:removeFlag={removeToken} />
-									{:else}
-										<TokenField tokenSet={set} bind:value={tabulaToken} bind:removeFlag={removeTabulaToken} />
-									{/if}
-								{/key}
-								{#if set}
-									<div class="mt-2 flex items-start gap-2">
-										<button
-											onclick={() => testConnector(builtin.kind, { kind: builtin.kind, ...(isWm ? {} : tabulaToken.trim() ? { token: tabulaToken.trim() } : {}) })}
-											disabled={tests[builtin.kind]?.busy}
-											class="shrink-0 rounded-lg border border-neutral-200 px-2.5 py-1 text-xs font-medium text-neutral-600 transition hover:border-[#d97757]/50 hover:text-[#bd5d3a] disabled:opacity-50"
-										>
-											{tests[builtin.kind]?.busy ? m.settings_mcp_testing() : m.settings_mcp_test()}
-										</button>
-										{#if tests[builtin.kind] && !tests[builtin.kind].busy}
-											<p class="min-w-0 text-xs leading-relaxed break-words {tests[builtin.kind].ok ? 'text-emerald-700' : 'text-red-600'}">
-												{tests[builtin.kind].ok ? '✓ ' : '✗ '}{tests[builtin.kind].detail}
-											</p>
-										{/if}
-									</div>
-								{/if}
-							</div>
-						{/each}
-
 						{#each mcpRows as row, i (row.id ?? i)}
 							{@const tkey = row.id ?? `new-${i}`}
 							<div class="rounded-xl border border-neutral-200 p-3.5">
@@ -534,10 +481,7 @@
 										spellcheck="false"
 										class="w-32 min-w-0 rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm font-semibold transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
 									/>
-									<span class="ml-auto flex items-center gap-1.5 text-xs {row.tokenSet && !row.removeToken ? 'text-neutral-500' : 'text-neutral-400'}">
-										<span class="size-2 rounded-full {row.tokenSet && !row.removeToken ? 'bg-emerald-500' : 'bg-neutral-300'}"></span>
-										{row.tokenSet && !row.removeToken ? m.settings_mcp_token_set() : m.settings_mcp_token_unset()}
-									</span>
+									<span class="ml-auto"></span>
 									<button
 										onclick={() => (row.enabled = !row.enabled)}
 										role="switch"
@@ -604,6 +548,8 @@
 					<p class="mt-4 text-xs text-neutral-500">{m.apikeys_usage_hint()}</p>
 					<pre
 						class="mt-1.5 overflow-x-auto rounded-xl border border-[#e9e6dd] bg-[#faf9f5] px-3 py-2.5 font-mono text-[11px] leading-relaxed text-neutral-600">{curlExample}</pre>
+					<pre
+						class="mt-1.5 overflow-x-auto rounded-xl border border-[#e9e6dd] bg-[#faf9f5] px-3 py-2.5 font-mono text-[11px] leading-relaxed text-neutral-600">{pythonExample}</pre>
 
 					<!-- Mint form -->
 					<div
@@ -626,6 +572,10 @@
 						<!-- Expiry and submit share one row on phones; sm:contents folds
 						     them back into the parent row from sm up. -->
 						<div class="flex items-end gap-2 sm:contents">
+							<div class="min-w-0 flex-1 sm:flex-none">
+								<span class="mb-1.5 block text-sm font-medium text-neutral-700">{m.apikeys_scope()}</span>
+								<SelectMenu options={scopeOptions} bind:value={keyScope} menuClass="min-w-[15rem]" />
+							</div>
 							<div class="min-w-0 flex-1 sm:flex-none">
 								<span class="mb-1.5 block text-sm font-medium text-neutral-700">{m.apikeys_expiry()}</span>
 								<SelectMenu options={expiryOptions} bind:value={keyExpiry} />
@@ -696,6 +646,12 @@
 								<div class="min-w-0 flex-1">
 									<div class="flex items-center gap-2">
 										<span class="truncate text-sm font-medium text-neutral-800">{k.label}</span>
+										{#if k.hint}
+											<span class="shrink-0 font-mono text-[11px] text-neutral-400">{k.hint}</span>
+										{/if}
+										<span class="shrink-0 rounded bg-[#f0eee6] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 uppercase">
+											{k.scope === 'chat' ? m.apikeys_scope_chat() : m.apikeys_scope_full()}
+										</span>
 										{#if expired}
 											<span
 												class="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 uppercase"

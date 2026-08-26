@@ -69,7 +69,9 @@ export async function buildAgent(
 	 * allow-list by the caller). Stable for the pane's lifetime, so the tool +
 	 * schema prompt cache — which is model-scoped — survives across turns.
 	 */
-	model: string = DEFAULT_MODEL
+	model: string = DEFAULT_MODEL,
+	/** 'api' runs strip interactive-only tools (askUser needs a UI to resolve). */
+	mode: 'ui' | 'api' = 'ui'
 ) {
 	// Profile from the user's settings: who they are and what to call them.
 	const callName = settings.displayName || settings.fullName || user.displayName || user.username;
@@ -263,7 +265,9 @@ export async function buildAgent(
 			'use renderChart for visual patterns — line/area for trends, bar/horizontalBar for comparisons (horizontal when names are long), pie for shares, scatter for correlations — one chart per insight, at most 8 series; use renderDiagram (Mermaid) for processes, flows, sequences, and table relationships. ' +
 			'For downloadable reports/exports (Excel), use generateExcel — prefer its dataQuery per sheet so full result sets are written server-side. ' +
 			'To export prose (documentation, summaries, analyses) as a downloadable file, use generateDocument (.md/.txt/.csv). ' +
-			'For statistics, forecasting, or analysis beyond SQL, use runPython (ephemeral Python with pandas/statsmodels/scikit-learn) — fetch data with its dataQuery option instead of pasting rows, and return compact summaries. ' +
+			(settings.windmillToken
+				? 'For statistics, forecasting, or analysis beyond SQL, use runPython (ephemeral Python with pandas/statsmodels/scikit-learn) — fetch data with its dataQuery option instead of pasting rows, and return compact summaries. '
+				: 'Code execution (runPython) and Windmill automations are UNAVAILABLE: this user has no Windmill token configured. If they ask for Python analysis, forecasting beyond SQL, or automations, do NOT call runPython — explain briefly that these features need their Windmill token, set in Configurações → Conectores. ') +
 			'After rendering a chart, add only a brief takeaway; don’t repeat the numbers. ' +
 			'When a request is ambiguous in a way that a few concrete options would resolve — which period, ' +
 			'status, table/system, or metric — call askUser with 2–5 short options instead of guessing or ' +
@@ -273,6 +277,9 @@ export async function buildAgent(
 			webSearchGuidance +
 			flowGuidance +
 			memoryGuidance +
+			(mode === 'api'
+				? 'You are being called through an API with no interactive UI: never ask the caller to click options; when a request is ambiguous, state your assumption and answer. Prefer text and markdown tables over charts. '
+				: '') +
 			'Answer in the same language the user writes in. Be concise and direct. ' +
 			'For greetings, small talk, or simple connectivity tests, reply in a single short sentence — ' +
 			'do not deliberate and do not offer lists of options unless the user asks. Reserve step-by-step ' +
@@ -294,7 +301,7 @@ export async function buildAgent(
 			generateDocument: documentExportTool(user.username),
 			renderChart: chartTool,
 			renderDiagram: diagramTool,
-			askUser: askUserTool,
+			...(mode === 'ui' ? { askUser: askUserTool } : {}),
 			...(memoryEnabled ? memoryTools(user.username, conversationId) : {}),
 			...webSearchTools,
 			...mcpTools

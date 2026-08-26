@@ -125,6 +125,12 @@
 									<div class="flex items-center gap-2">
 										<Icon name="key" size={13} class="shrink-0 text-neutral-400" />
 										<span class="max-w-52 truncate text-[15px] text-neutral-800">{k.label}</span>
+										{#if k.hint}
+											<span class="shrink-0 font-mono text-[11px] text-neutral-400">{k.hint}</span>
+										{/if}
+										<span class="shrink-0 rounded bg-[#f0eee6] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 uppercase">
+											{k.scope === 'chat' ? m.apikeys_scope_chat() : m.apikeys_scope_full()}
+										</span>
 										{#if k.revokedAt}
 											<span class="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-red-600 uppercase">
 												{m.audit_revoked()}

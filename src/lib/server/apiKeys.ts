@@ -22,11 +22,17 @@ import { env } from '$env/dynamic/private';
 
 const PREFIX = 'pai_';
 
+export type ApiKeyScope = 'chat' | 'full';
+
 export interface ApiKeyRecord {
 	id: string;
 	label: string;
 	/** sha256(key), hex. The key itself is never stored. */
 	hash: string;
+	/** Non-secret display hint (prefix…last4) so owners can match keys to scripts. */
+	hint?: string;
+	/** 'chat' = data plane only (/v1 + /api/chat + /api/models); 'full' = acts fully as the owner. */
+	scope?: ApiKeyScope;
 	createdAt: string;
 	lastUsedAt: string | null;
 	/** ISO date, or null for a key that does not expire. */
@@ -38,6 +44,8 @@ export interface ApiKeyRecord {
 export interface PublicApiKey {
 	id: string;
 	label: string;
+	hint?: string;
+	scope: ApiKeyScope;
 	createdAt: string;
 	lastUsedAt: string | null;
 	expiresAt: string | null;
@@ -70,6 +78,9 @@ export function publicView(key: ApiKeyRecord): PublicApiKey {
 	return {
 		id: key.id,
 		label: key.label,
+		...(key.hint ? { hint: key.hint } : {}),
+		// Legacy keys (pre-scopes) keep behaving as they always did: full.
+		scope: key.scope ?? 'full',
 		createdAt: key.createdAt,
 		lastUsedAt: key.lastUsedAt,
 		expiresAt: key.expiresAt
@@ -84,13 +95,16 @@ export async function listKeys(username: string): Promise<PublicApiKey[]> {
 export async function createKey(
 	username: string,
 	label: string,
-	expiresInDays?: number
+	expiresInDays?: number,
+	scope: ApiKeyScope = 'chat'
 ): Promise<{ key: string; record: PublicApiKey }> {
 	const key = PREFIX + randomBytes(32).toString('base64url');
 	const record: ApiKeyRecord = {
 		id: randomUUID(),
 		label: label.trim().slice(0, 80) || 'API key',
 		hash: hash(key),
+		hint: `${key.slice(0, 7)}…${key.slice(-4)}`,
+		scope,
 		createdAt: new Date().toISOString(),
 		lastUsedAt: null,
 		expiresAt:
@@ -129,7 +143,7 @@ export function looksLikeApiKey(value: string): boolean {
  */
 export async function resolveKeyOwner(
 	rawKey: string
-): Promise<{ username: string; keyId: string; keyLabel: string } | null> {
+): Promise<{ username: string; keyId: string; keyLabel: string; scope: ApiKeyScope } | null> {
 	if (!looksLikeApiKey(rawKey)) return null;
 
 	const dir = join(env.DATA_DIR ?? 'data', 'apikeys');
@@ -157,7 +171,7 @@ export async function resolveKeyOwner(
 			// Best-effort usage stamp; a failed write must not fail the request.
 			key.lastUsedAt = new Date().toISOString();
 			void write(username, keys).catch(() => {});
-			return { username, keyId: key.id, keyLabel: key.label };
+			return { username, keyId: key.id, keyLabel: key.label, scope: key.scope ?? 'full' };
 		}
 	}
 	return null;

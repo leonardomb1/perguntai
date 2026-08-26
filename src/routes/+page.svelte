@@ -280,6 +280,8 @@
 					initialMessages={pane.messages}
 					displayName={shownName}
 					onSaved={upsertConversation}
+					windmillConfigured={settings ? settings.windmillTokenSet : true}
+					onWindmillSaved={(updated) => (settings = updated)}
 				/>
 			{:else}
 				<div class="flex flex-1 items-center justify-center">
