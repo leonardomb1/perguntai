@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { authenticateRequest } from '$lib/server/auth';
 import { createKey, listKeys } from '$lib/server/apiKeys';
+import { logAudit, requestMeta } from '$lib/server/audit';
 import type { RequestHandler } from './$types';
 
 /**
@@ -37,6 +38,16 @@ export const POST: RequestHandler = async ({ request }) => {
 		Number.isFinite(days) && days > 0 ? days : undefined
 	);
 
+	logAudit({
+		actor: user.username,
+		via: 'session',
+		...requestMeta(request),
+		category: 'keys',
+		action: 'key.create',
+		target: record.label,
+		status: 'ok',
+		detail: { keyId: record.id, expiresAt: record.expiresAt }
+	});
 	// The plaintext is returned exactly once — only its hash is stored.
 	return json({ key, record }, { status: 201 });
 };

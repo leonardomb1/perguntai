@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { authenticateRequest } from '$lib/server/auth';
 import { getPublicSettings, saveUserSettings, type SettingsPatch } from '$lib/server/settings';
+import { logAudit, requestMeta } from '$lib/server/audit';
 import { provisionUserTokens } from '$lib/server/windmill';
 import { resolveRole } from '$lib/server/access';
 import { webSearchAvailable } from '$lib/server/agent';
@@ -73,8 +74,36 @@ export const PUT: RequestHandler = async ({ request }) => {
 	if (typeof body.memoryEnabled === 'boolean') patch.memoryEnabled = body.memoryEnabled;
 	if (body.onboarded === true) patch.onboarded = true;
 
+	const saved = await saveUserSettings(user.username, patch);
+	// Connector governance: any change to MCP servers or connector tokens is
+	// an auditable event — who is wiring what into their agent.
+	if (
+		patch.mcpServers !== undefined ||
+		patch.windmillToken !== undefined ||
+		patch.tabulaToken !== undefined
+	) {
+		logAudit({
+			actor: user.username,
+			via: 'session',
+			...requestMeta(request),
+			category: 'connectors',
+			action: 'connectors.update',
+			status: 'ok',
+			detail: {
+				...(patch.mcpServers !== undefined
+					? { mcp: saved.mcpServers.map((sv) => ({ name: sv.name, url: sv.url, enabled: sv.enabled })) }
+					: {}),
+				...(patch.windmillToken !== undefined
+					? { windmillToken: patch.windmillToken === null ? 'removed' : 'set' }
+					: {}),
+				...(patch.tabulaToken !== undefined
+					? { tabulaToken: patch.tabulaToken === null ? 'removed' : 'set' }
+					: {})
+			}
+		});
+	}
 	return json({
-		...(await saveUserSettings(user.username, patch)),
+		...saved,
 		role: await resolveRole(user.username, user.profile)
 	});
 };

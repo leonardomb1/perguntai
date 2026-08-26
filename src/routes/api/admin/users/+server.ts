@@ -13,6 +13,7 @@ import {
 	upsertAccessUser
 } from '$lib/server/access';
 import { listUsageUsers, usageSummary } from '$lib/server/usage';
+import { logAudit, requestMeta } from '$lib/server/audit';
 import type { RequestHandler } from './$types';
 import type { AuthUser } from '$lib/server/auth';
 
@@ -83,11 +84,21 @@ export const GET: RequestHandler = async ({ request }) => {
 		.filter((p) => p.month > 0)
 		.sort((a, b) => b.month - a.month);
 
+	// Org-wide daily series, last 30 days (zeros filled) for the usage chart.
+	const dayTotals: Record<string, number> = {};
+	for (const u of list)
+		for (const [day, w] of Object.entries(u.usage.days)) dayTotals[day] = (dayTotals[day] ?? 0) + w;
+	const daily = Array.from({ length: 30 }, (_, i) => {
+		const day = new Date(Date.now() - (29 - i) * 86_400_000).toISOString().slice(0, 10);
+		return { day, weighted: dayTotals[day] ?? 0 };
+	});
+
 	return json({
 		users: list,
 		policies,
 		deptUsage,
 		policyUsage,
+		daily,
 		openMode: await isOpenMode(),
 		// The caller's own claims, so the console can preview "matches you".
 		you: { claims: profileClaims(admin.profile) }
@@ -103,7 +114,17 @@ export const PUT: RequestHandler = async ({ request }) => {
 	if (!Array.isArray(body.policies)) {
 		return json({ error: 'Expected { policies: [] }' }, { status: 400 });
 	}
-	return json({ policies: await setPolicies(body.policies) });
+	const saved = await setPolicies(body.policies);
+	logAudit({
+		actor: admin.username,
+		via: 'session',
+		...requestMeta(request),
+		category: 'admin',
+		action: 'policies.save',
+		status: 'ok',
+		detail: { count: saved.length, names: saved.map((p) => p.name) }
+	});
+	return json({ policies: saved });
 };
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -123,6 +144,15 @@ export const POST: RequestHandler = async ({ request }) => {
 	} catch (e) {
 		return json({ error: e instanceof Error ? e.message : 'invalid user' }, { status: 400 });
 	}
+	logAudit({
+		actor: admin.username,
+		via: 'session',
+		...requestMeta(request),
+		category: 'admin',
+		action: 'user.add',
+		target: body.username.trim().toLowerCase(),
+		status: 'ok'
+	});
 	return json({ ok: true });
 };
 
@@ -158,6 +188,16 @@ export const PATCH: RequestHandler = async ({ request }) => {
 	} catch (e) {
 		return json({ error: e instanceof Error ? e.message : 'invalid update' }, { status: 400 });
 	}
+	logAudit({
+		actor: admin.username,
+		via: 'session',
+		...requestMeta(request),
+		category: 'admin',
+		action: 'user.patch',
+		target: body.username.trim().toLowerCase(),
+		status: 'ok',
+		detail: patch as Record<string, unknown>
+	});
 	return json({ ok: true });
 };
 
@@ -172,5 +212,14 @@ export const DELETE: RequestHandler = async ({ request, url }) => {
 	} catch (e) {
 		return json({ error: e instanceof Error ? e.message : 'cannot remove' }, { status: 400 });
 	}
+	logAudit({
+		actor: admin.username,
+		via: 'session',
+		...requestMeta(request),
+		category: 'admin',
+		action: 'user.remove',
+		target: username.toLowerCase(),
+		status: 'ok'
+	});
 	return json({ ok: true });
 };

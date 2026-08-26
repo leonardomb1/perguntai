@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { authMethods, isUserAllowed, sessionFromClaims } from '$lib/server/auth';
+import { logAudit, requestMeta } from '$lib/server/audit';
 import { ldapAuthenticate, type LdapRejection } from '$lib/server/ldap';
 import type { RequestHandler } from './$types';
 
@@ -56,6 +57,15 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		return json({ error: 'Authentication service unavailable' }, { status: 503 });
 	}
 	if (!result.ok) {
+		logAudit({
+			actor: username.toLowerCase(),
+			via: 'session',
+			...requestMeta(request),
+			category: 'auth',
+			action: 'login.password',
+			status: 'denied',
+			detail: { reason: result.reason }
+		});
 		return json({ error: 'Sign-in refused', code: result.reason }, { status: STATUS[result.reason] });
 	}
 
@@ -63,7 +73,24 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	// what was typed — AD accepts several aliases for the same account.
 	const session = await sessionFromClaims(result.claims, { password });
 	if (!(await isUserAllowed(session.username, session.profile))) {
+		logAudit({
+			actor: session.username,
+			via: 'session',
+			...requestMeta(request),
+			category: 'auth',
+			action: 'login.password',
+			status: 'denied',
+			detail: { reason: 'not_in_allowlist' }
+		});
 		return json({ error: 'Not in the preview allowlist', code: 'not_in_allowlist' }, { status: 403 });
 	}
+	logAudit({
+		actor: session.username,
+		via: 'session',
+		...requestMeta(request),
+		category: 'auth',
+		action: 'login.password',
+		status: 'ok'
+	});
 	return json({ token: session.token, displayName: session.displayName });
 };

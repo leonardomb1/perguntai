@@ -54,6 +54,8 @@ interface DayUsage extends TokenBreakdown {
 	 */
 	byDept?: Record<string, number>;
 	byPolicy?: Record<string, number>;
+	/** Weighted tokens that arrived via API key (vs interactive chat). */
+	api?: number;
 }
 interface UsageFile {
 	// Legacy days are a bare number (weighted only); new days carry the breakdown.
@@ -69,7 +71,8 @@ function normDay(v: DayUsage | number | undefined): DayUsage {
 		cacheWrite: v?.cacheWrite ?? 0,
 		output: v?.output ?? 0,
 		...(v?.byDept ? { byDept: v.byDept } : {}),
-		...(v?.byPolicy ? { byPolicy: v.byPolicy } : {})
+		...(v?.byPolicy ? { byPolicy: v.byPolicy } : {}),
+		...(v?.api ? { api: v.api } : {})
 	};
 }
 
@@ -99,7 +102,7 @@ export function addUsage(
 	username: string,
 	tokens: number,
 	breakdown?: Partial<TokenBreakdown>,
-	tags?: { depts?: string[]; policies?: string[] }
+	tags?: { depts?: string[]; policies?: string[]; viaApi?: boolean }
 ): Promise<void> {
 	if (!Number.isFinite(tokens) || tokens <= 0) return Promise.resolve();
 	const next = (queues.get(username) ?? Promise.resolve()).then(async () => {
@@ -122,6 +125,7 @@ export function addUsage(
 			day.byPolicy = day.byPolicy ?? {};
 			day.byPolicy[id] = (day.byPolicy[id] ?? 0) + w;
 		}
+		if (tags?.viaApi) day.api = (day.api ?? 0) + w;
 		data.days[key] = day;
 
 		const cutoff = new Date(Date.now() - RETENTION_DAYS * 86_400_000).toISOString().slice(0, 10);
@@ -152,6 +156,11 @@ export interface UsageSummary {
 	monthByDept: Record<string, number>;
 	monthByPolicy: Record<string, number>;
 	todayByDept: Record<string, number>;
+	/** Day → weighted tokens over the retention window (for time series). */
+	days: Record<string, number>;
+	/** Weighted tokens that arrived via API key. */
+	monthApi: number;
+	todayApi: number;
 }
 
 const emptyBreakdown = (): TokenBreakdown => ({ input: 0, cacheRead: 0, cacheWrite: 0, output: 0 });
@@ -170,8 +179,14 @@ export async function usageSummary(username: string): Promise<UsageSummary> {
 	const addInto = (acc: Record<string, number>, m?: Record<string, number>) => {
 		for (const [id, w] of Object.entries(m ?? {})) acc[id] = (acc[id] ?? 0) + w;
 	};
+	const dayWeights: Record<string, number> = {};
+	let monthApi = 0;
+	let todayApi = 0;
 	for (const [day, raw] of Object.entries(days)) {
 		const d = normDay(raw);
+		dayWeights[day] = d.weighted;
+		if (day.startsWith(month)) monthApi += d.api ?? 0;
+		if (day === t) todayApi += d.api ?? 0;
 		if (day.startsWith(month)) {
 			monthW += d.weighted;
 			monthRaw.input += d.input;
@@ -190,7 +205,18 @@ export async function usageSummary(username: string): Promise<UsageSummary> {
 			addInto(todayByDept, d.byDept);
 		}
 	}
-	return { today: todayW, month: monthW, todayRaw, monthRaw, monthByDept, monthByPolicy, todayByDept };
+	return {
+		today: todayW,
+		month: monthW,
+		todayRaw,
+		monthRaw,
+		monthByDept,
+		monthByPolicy,
+		todayByDept,
+		days: dayWeights,
+		monthApi,
+		todayApi
+	};
 }
 
 /**

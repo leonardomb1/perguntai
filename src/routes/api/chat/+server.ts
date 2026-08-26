@@ -16,6 +16,7 @@ import {
 	resolveWindmillWrite
 } from '$lib/server/access';
 import { addUsage, usageToday, weightedTokens } from '$lib/server/usage';
+import { logAudit, requestMeta } from '$lib/server/audit';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -33,6 +34,16 @@ export const POST: RequestHandler = async ({ request }) => {
 	if (dailyLimit) {
 		const used = await usageToday(user.username);
 		if (used >= dailyLimit) {
+			logAudit({
+				actor: user.username,
+				via: user.apiKey ? 'apikey' : 'session',
+				...(user.apiKey ? { keyId: user.apiKey.id, keyLabel: user.apiKey.label } : {}),
+				...requestMeta(request),
+				category: 'chat',
+				action: 'chat.request',
+				status: 'denied',
+				detail: { reason: 'daily_limit' }
+			});
 			return json(
 				{ error: 'Limite diário de tokens atingido — fale com o administrador ou tente amanhã.' },
 				{ status: 429 }
@@ -143,8 +154,23 @@ export const POST: RequestHandler = async ({ request }) => {
 					cacheWrite: raw.cacheWrite,
 					output: raw.output
 				},
-				{ depts: depts.map((d) => d.id), policies: policies.map((p) => p.id) }
+				{
+					depts: depts.map((d) => d.id),
+					policies: policies.map((p) => p.id),
+					viaApi: Boolean(user.apiKey)
+				}
 			).catch((e) => console.warn('usage tracking failed:', e));
+			logAudit({
+				actor: user.username,
+				via: user.apiKey ? 'apikey' : 'session',
+				...(user.apiKey ? { keyId: user.apiKey.id, keyLabel: user.apiKey.label } : {}),
+				...requestMeta(request),
+				category: 'chat',
+				action: 'chat.request',
+				target: model,
+				status: 'ok',
+				detail: { tokens: Math.round(totalTokens), steps: raw.steps }
+			});
 		},
 		// Surface the real failure to the UI instead of the SDK's masked
 		// "An error occurred." (full details stay in the server log).

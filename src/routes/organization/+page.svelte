@@ -6,7 +6,9 @@
 	import KnowledgeBlocks from '$lib/components/KnowledgeBlocks.svelte';
 	import DocumentLibrary from '$lib/components/DocumentLibrary.svelte';
 	import DeptRuleEditor from '$lib/components/DeptRuleEditor.svelte';
+	import HelpTip from '$lib/components/HelpTip.svelte';
 	import AdminPanel from '$lib/components/AdminPanel.svelte';
+	import SecurityPanel from '$lib/components/SecurityPanel.svelte';
 	import { hasSession } from '$lib/session';
 	import { fetchSettings } from '$lib/settings';
 	import { newId } from '$lib/id';
@@ -32,10 +34,10 @@
 		});
 	});
 
-	type Section = 'knowledge' | 'users' | 'stats';
+	type Section = 'knowledge' | 'users' | 'stats' | 'audit';
 	let section = $state<Section>('knowledge');
 	/** Users/stats apply immediately — no batch save, so no Save button there. */
-	const adminSection = $derived(section === 'users' || section === 'stats');
+	const adminSection = $derived(section === 'users' || section === 'stats' || section === 'audit');
 
 	/** Mobile only: the console rail is a drawer, closed by default. */
 	let railOpen = $state(false);
@@ -130,14 +132,16 @@
 	const nav = [
 		{ id: 'knowledge' as const, icon: 'book' as const, label: m.org_nav_knowledge() },
 		{ id: 'users' as const, icon: 'users' as const, label: m.admin_users_title() },
-		{ id: 'stats' as const, icon: 'activity' as const, label: m.admin_stats_tab() }
+		{ id: 'stats' as const, icon: 'activity' as const, label: m.admin_stats_tab() },
+		{ id: 'audit' as const, icon: 'eye' as const, label: m.org_nav_audit() }
 	];
 
 	const sectionMeta = $derived(
 		({
 			knowledge: { title: m.org_nav_knowledge(), subtitle: m.org_subtitle() },
 			users: { title: m.admin_users_title(), subtitle: m.org_users_subtitle() },
-			stats: { title: m.admin_stats_tab(), subtitle: m.org_stats_subtitle() }
+			stats: { title: m.admin_stats_tab(), subtitle: m.org_stats_subtitle() },
+			audit: { title: m.org_nav_audit(), subtitle: m.org_audit_subtitle() }
 		})[section]
 	);
 </script>
@@ -181,7 +185,7 @@
 						section = item.id;
 						railOpen = false;
 					}}
-					class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition
+					class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[15px] font-medium transition
 						{section === item.id ? 'bg-[#d97757]/10 text-[#bd5d3a]' : 'text-neutral-600 hover:bg-[#eceae1]'}"
 				>
 					<Icon name={item.icon} size={16} />
@@ -211,8 +215,8 @@
 				<Icon name="menu" size={16} />
 			</button>
 			<div class="min-w-0 flex-1">
-				<h2 class="truncate text-sm font-semibold">{sectionMeta.title}</h2>
-				<p class="hidden truncate text-[11px] text-neutral-500 sm:block">{sectionMeta.subtitle}</p>
+				<h2 class="truncate text-base font-semibold">{sectionMeta.title}</h2>
+				<p class="hidden truncate text-[13px] text-neutral-500 sm:block">{sectionMeta.subtitle}</p>
 			</div>
 			{#if !adminSection}
 				{#if savedFlash}
@@ -235,8 +239,12 @@
 
 		{#if adminSection}
 			<div class="min-h-0 flex-1 overflow-y-auto">
-				<div class="max-w-3xl px-4 py-5 sm:px-6">
-					<AdminPanel view={section === 'users' ? 'users' : 'stats'} />
+				<div class="mx-auto max-w-5xl px-4 py-5 sm:px-6">
+					{#if section === 'audit'}
+						<SecurityPanel />
+					{:else}
+						<AdminPanel view={section === 'users' ? 'users' : 'stats'} />
+					{/if}
 				</div>
 			</div>
 		{:else if !loaded}
@@ -254,7 +262,7 @@
 					<nav class="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
 						<button
 							onclick={() => selectScope('org')}
-							class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition
+							class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[15px] font-medium transition
 								{selectedScope === 'org' ? 'bg-[#d97757]/10 text-[#bd5d3a]' : 'text-neutral-600 hover:bg-[#eceae1]'}"
 						>
 							<Icon name="building" size={15} />
@@ -270,7 +278,7 @@
 							{#each departments as dept (dept.id)}
 								<button
 									onclick={() => selectScope(dept.id)}
-									class="group flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition
+									class="group flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[15px] transition
 										{selectedScope === dept.id ? 'bg-[#d97757]/10' : 'hover:bg-[#eceae1]'}"
 								>
 									<span class="size-1.5 shrink-0 rounded-full {dept.enabled ? 'bg-[#1baf7a]' : 'bg-neutral-300'}"></span>
@@ -295,7 +303,7 @@
 
 				<div class="min-h-0 flex-1 overflow-y-auto {scopeDetail ? '' : 'max-sm:hidden'}">
 					{#if selectedScope === 'org'}
-						<div class="max-w-2xl space-y-4 px-4 py-5 sm:px-6">
+						<div class="mx-auto max-w-3xl space-y-4 px-4 py-5 sm:px-6">
 							<button
 								onclick={() => (scopeDetail = false)}
 								class="flex items-center gap-1.5 text-xs font-medium text-neutral-500 transition hover:text-[#bd5d3a] sm:hidden"
@@ -305,8 +313,10 @@
 							</button>
 
 							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
-								<h3 class="text-sm font-semibold text-neutral-900">{m.org_general_title()}</h3>
-								<p class="mt-0.5 mb-3 text-xs text-neutral-500">{m.org_general_hint()}</p>
+								<h3 class="mb-3 flex items-center gap-1.5 text-base font-semibold text-neutral-900">
+									{m.org_general_title()}
+									<HelpTip text={m.org_general_hint()} />
+								</h3>
 								<textarea
 									bind:value={orgPrompt}
 									maxlength="4000"
@@ -318,31 +328,30 @@
 
 							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
 								<div class="mb-3 flex items-end justify-between gap-3">
-									<div>
-										<h3 class="text-sm font-semibold text-neutral-900">{m.org_kb_title()}</h3>
-										<p class="mt-0.5 text-xs text-neutral-500">{m.org_kb_hint()}</p>
-									</div>
+									<h3 class="flex items-center gap-1.5 text-base font-semibold text-neutral-900">
+										{m.org_kb_title()}
+										<HelpTip text={`${m.org_kb_hint()} ${m.org_footer_note()}`} />
+									</h3>
 									<span class="shrink-0 text-[11px] text-neutral-400">{m.org_kb_active({ count: enabledCount })}</span>
 								</div>
 								<KnowledgeBlocks bind:entries />
 							</section>
 
 							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
-								<h3 class="text-sm font-semibold text-neutral-900">{m.org_docs_title()}</h3>
-								<p class="mt-0.5 mb-3 text-xs text-neutral-500">{m.org_docs_hint()}</p>
+								<h3 class="mb-3 flex items-center gap-1.5 text-base font-semibold text-neutral-900">
+									{m.org_docs_title()}
+									<HelpTip text={m.org_docs_hint()} />
+								</h3>
 								<DocumentLibrary scope="org" />
 							</section>
 
-							<p class="px-1 text-[11px] leading-relaxed text-neutral-400">
-								{m.org_footer_note()}
-							</p>
 						</div>
 					{:else if di < 0}
 						<div class="grid h-full place-items-center">
 							<p class="text-sm text-neutral-400">{m.org_dept_none_selected()}</p>
 						</div>
 					{:else}
-						<div class="max-w-2xl space-y-4 px-4 py-5 sm:px-6">
+						<div class="mx-auto max-w-3xl space-y-4 px-4 py-5 sm:px-6">
 							<button
 								onclick={() => (scopeDetail = false)}
 								class="flex items-center gap-1.5 text-xs font-medium text-neutral-500 transition hover:text-[#bd5d3a] sm:hidden"
@@ -381,7 +390,10 @@
 							<!-- membership rule -->
 							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
 								<div class="mb-2 flex items-center gap-2">
-									<h3 class="text-sm font-semibold text-neutral-900">{m.org_dept_rule_title()}</h3>
+									<h3 class="flex items-center gap-1.5 text-base font-semibold text-neutral-900">
+										{m.org_dept_rule_title()}
+										<HelpTip text={m.org_dept_rule_hint()} />
+									</h3>
 									{#if matchesProfile(departments[di].match, you)}
 										<span class="flex items-center gap-1 rounded-full bg-[#1baf7a]/12 px-2 py-0.5 text-[11px] font-medium text-[#0d8a5f]">
 											<Icon name="check" size={11} />{m.org_dept_matches_you()}
@@ -390,22 +402,25 @@
 										<span class="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-500">{m.org_dept_matches_you_not()}</span>
 									{/if}
 								</div>
-								<p class="mb-3 text-xs text-neutral-500">{m.org_dept_rule_hint()}</p>
 
 								<DeptRuleEditor bind:match={departments[di].match} you={you.claims} />
 							</section>
 
 							<!-- department knowledge -->
 							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
-								<h3 class="text-sm font-semibold text-neutral-900">{m.org_dept_kb_title()}</h3>
-								<p class="mt-0.5 mb-3 text-xs text-neutral-500">{m.org_dept_kb_hint()}</p>
+								<h3 class="mb-3 flex items-center gap-1.5 text-base font-semibold text-neutral-900">
+									{m.org_dept_kb_title()}
+									<HelpTip text={`${m.org_dept_kb_hint()} ${m.org_footer_note()}`} />
+								</h3>
 								<KnowledgeBlocks bind:entries={departments[di].knowledge} />
 							</section>
 
 							<!-- department documents (only for saved departments) -->
 							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
-								<h3 class="text-sm font-semibold text-neutral-900">{m.org_docs_title()}</h3>
-								<p class="mt-0.5 mb-3 text-xs text-neutral-500">{m.org_dept_docs_hint()}</p>
+								<h3 class="mb-3 flex items-center gap-1.5 text-base font-semibold text-neutral-900">
+									{m.org_docs_title()}
+									<HelpTip text={m.org_dept_docs_hint()} />
+								</h3>
 								{#if persistedDeptIds.has(departments[di].id)}
 									{#key departments[di].id}
 										<DocumentLibrary scope={departments[di].id} />
@@ -417,9 +432,6 @@
 								{/if}
 							</section>
 
-							<p class="px-1 text-[11px] leading-relaxed text-neutral-400">
-								{m.org_footer_note()}
-							</p>
 						</div>
 					{/if}
 				</div>

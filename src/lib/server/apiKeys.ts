@@ -127,7 +127,9 @@ export function looksLikeApiKey(value: string): boolean {
  * the directory is small (one file per user who has ever made a key) and this
  * only runs for requests that actually present a key.
  */
-export async function resolveKeyOwner(rawKey: string): Promise<string | null> {
+export async function resolveKeyOwner(
+	rawKey: string
+): Promise<{ username: string; keyId: string; keyLabel: string } | null> {
 	if (!looksLikeApiKey(rawKey)) return null;
 
 	const dir = join(env.DATA_DIR ?? 'data', 'apikeys');
@@ -155,8 +157,32 @@ export async function resolveKeyOwner(rawKey: string): Promise<string | null> {
 			// Best-effort usage stamp; a failed write must not fail the request.
 			key.lastUsedAt = new Date().toISOString();
 			void write(username, keys).catch(() => {});
-			return username;
+			return { username, keyId: key.id, keyLabel: key.label };
 		}
 	}
 	return null;
+}
+
+/** Every user's keys (revoked included), for the admin security view. */
+export async function listAllKeys(): Promise<
+	{ username: string; keys: (PublicApiKey & { revokedAt: string | null })[] }[]
+> {
+	const dir = join(env.DATA_DIR ?? 'data', 'apikeys');
+	let files: string[];
+	try {
+		const { readdir } = await import('node:fs/promises');
+		files = (await readdir(dir)).filter((f) => f.endsWith('.json'));
+	} catch {
+		return [];
+	}
+	const out = [];
+	for (const file of files) {
+		const username = file.replace(/\.json$/, '');
+		const keys = (await read(username)).map((k) => ({
+			...publicView(k),
+			revokedAt: k.revokedAt
+		}));
+		if (keys.length) out.push({ username, keys });
+	}
+	return out.sort((a, b) => a.username.localeCompare(b.username));
 }

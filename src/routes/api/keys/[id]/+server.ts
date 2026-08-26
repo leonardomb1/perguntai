@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { authenticateRequest } from '$lib/server/auth';
 import { revokeKey } from '$lib/server/apiKeys';
+import { logAudit, requestMeta } from '$lib/server/audit';
 import type { RequestHandler } from './$types';
 
 export const DELETE: RequestHandler = async ({ request, params }) => {
@@ -13,5 +14,16 @@ export const DELETE: RequestHandler = async ({ request, params }) => {
 
 	// Scoped to the caller's own store, so one user can never revoke another's.
 	const revoked = await revokeKey(user.username, params.id);
+	if (revoked) {
+		logAudit({
+			actor: user.username,
+			via: 'session',
+			...requestMeta(request),
+			category: 'keys',
+			action: 'key.revoke',
+			target: params.id,
+			status: 'ok'
+		});
+	}
 	return revoked ? json({ ok: true }) : json({ error: 'Key not found' }, { status: 404 });
 };

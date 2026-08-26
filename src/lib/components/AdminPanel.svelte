@@ -5,6 +5,7 @@
 	import Icon from './Icon.svelte';
 	import SelectMenu from './SelectMenu.svelte';
 	import DeptRuleEditor from './DeptRuleEditor.svelte';
+	import HelpTip from './HelpTip.svelte';
 	import {
 		addUser,
 		formatLimit,
@@ -41,6 +42,34 @@
 	let newUsername = $state('');
 	let deptUsage = $state<TagUsage[]>([]);
 	let policyUsage = $state<TagUsage[]>([]);
+	let daily = $state<{ day: string; weighted: number }[]>([]);
+
+	// Validated categorical palette (fixed order, warm-anchored to the brand;
+	// CVD-checked — the donut's segment gaps + named legend are the required
+	// secondary encoding). Overflow folds into a muted "Other".
+	const DONUT_COLORS = ['#d97757', '#3a6ea8', '#128a5f', '#a3831c', '#7c5cd6', '#b3486e'];
+	const donut = $derived.by(() => {
+		const top = deptUsage.slice(0, 6);
+		const restSum = deptUsage.slice(6).reduce((s, d) => s + d.month, 0);
+		const parts = top.map((d, i) => ({ name: d.name, value: d.month, color: DONUT_COLORS[i] }));
+		if (restSum > 0) parts.push({ name: m.admin_stats_others(), value: restSum, color: '#a8a29a' });
+		const total = Math.max(1, parts.reduce((s, p) => s + p.value, 0));
+		const gap = parts.length > 1 ? 0.7 : 0;
+		let offset = 0;
+		return {
+			total,
+			segs: parts.map((p) => {
+				const share = (p.value / total) * 100;
+				const seg = { ...p, share, len: Math.max(0.1, share - gap), start: offset };
+				offset += share;
+				return seg;
+			})
+		};
+	});
+
+	const dailyMax = $derived(Math.max(1, ...daily.map((d) => d.weighted)));
+	const shortDay = (day: string) => `${day.slice(8, 10)}/${day.slice(5, 7)}`;
+
 
 	// --- access policies (rule-based grants; edited locally, saved as one doc) ---
 	let policies = $state<AccessPolicy[]>([]);
@@ -118,11 +147,18 @@
 			rows,
 			totalToday: rows.reduce((s, u) => s + u.usage.today, 0),
 			totalMonth: rows.reduce((s, u) => s + u.usage.month, 0),
+			todayApi: rows.reduce((s, u) => s + (u.usage.todayApi ?? 0), 0),
+			monthApi: rows.reduce((s, u) => s + (u.usage.monthApi ?? 0), 0),
 			maxMonth: Math.max(1, ...rows.map((u) => u.usage.month)),
 			todaySplit: split(sumRaw((u) => u.usage.todayRaw)),
 			monthSplit: split(sumRaw((u) => u.usage.monthRaw))
 		};
 	});
+	const activeMonth = $derived(adminUsers.filter((u) => u.usage.month > 0).length);
+	const activeToday = $derived(adminUsers.filter((u) => u.usage.today > 0).length);
+	const cachePct = $derived(
+		Math.round((usageStats.monthSplit.cached / Math.max(1, usageStats.monthSplit.total)) * 100)
+	);
 
 	// The deployment's FULL model catalog (env-defined server-side) for the
 	// per-user grant popover — /api/models returns `all` for admins.
@@ -137,6 +173,7 @@
 			you = list.you;
 			deptUsage = list.deptUsage;
 			policyUsage = list.policyUsage;
+			daily = list.daily;
 			// Never clobber unsaved local policy edits with a background refresh.
 			if (!policiesDirty) {
 				policies = normalizePolicies(list.policies);
@@ -227,14 +264,15 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && (openModelsFor = null)} />
 
 {#if view === 'stats'}
-	<div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-		{#each [{ label: m.admin_stats_today(), s: usageStats.todaySplit, w: usageStats.totalToday }, { label: m.admin_stats_month(), s: usageStats.monthSplit, w: usageStats.totalMonth }] as card (card.label)}
+	<!-- KPI tiles -->
+	<div class="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+		{#each [{ label: m.admin_stats_today(), s: usageStats.todaySplit, w: usageStats.totalToday, api: usageStats.todayApi }, { label: m.admin_stats_month(), s: usageStats.monthSplit, w: usageStats.totalMonth, api: usageStats.monthApi }] as card (card.label)}
 			<div class="rounded-xl border border-[#e9e6dd] bg-white px-4 py-3">
-				<div class="text-xs text-neutral-400">{card.label}</div>
-				<div class="font-serif text-2xl font-semibold text-neutral-900">
+				<div class="text-[13px] text-neutral-400">{card.label}</div>
+				<div class="font-serif text-3xl font-semibold text-neutral-900">
 					{formatTokens(card.s.total)}
 				</div>
-				<!-- cached vs uncached split of the raw tokens (2px gap between segments) -->
+				<!-- cached vs uncached split of the raw tokens -->
 				<div class="mt-2 flex h-1.5 w-full gap-0.5 overflow-hidden rounded-full bg-[#f0eee6]">
 					<div
 						class="h-full rounded-full bg-[#1baf7a]"
@@ -252,48 +290,103 @@
 					>
 				</div>
 				<div class="mt-1 text-[11px] text-neutral-400">
-					{m.admin_stats_billed({ n: formatTokens(card.w) })}
+					{m.admin_stats_billed({ n: formatTokens(card.w) })}{card.api > 0
+						? ` · ${m.admin_stats_via_api({ n: formatTokens(card.api) })}`
+						: ''}
 				</div>
 			</div>
 		{/each}
+		<div class="rounded-xl border border-[#e9e6dd] bg-white px-4 py-3">
+			<div class="text-[13px] text-neutral-400">{m.admin_stats_active()}</div>
+			<div class="font-serif text-3xl font-semibold text-neutral-900 tabular-nums">{activeMonth}</div>
+			<div class="mt-1 text-[11px] text-neutral-400">{m.admin_stats_active_today({ n: activeToday })}</div>
+		</div>
+		<div class="rounded-xl border border-[#e9e6dd] bg-white px-4 py-3">
+			<div class="text-[13px] text-neutral-400">{m.admin_stats_cache_rate()}</div>
+			<div class="font-serif text-3xl font-semibold text-neutral-900 tabular-nums">{cachePct}%</div>
+			<div class="mt-1 text-[11px] text-neutral-400">
+				{m.admin_stats_cached_sub({ n: formatTokens(usageStats.monthSplit.cached) })}
+			</div>
+		</div>
 	</div>
+
+	<!-- daily usage, last 30 days -->
+	<div class="mb-4 rounded-xl border border-[#e9e6dd] bg-white px-4 py-3">
+		<div class="mb-3 text-[13px] text-neutral-400">{m.admin_stats_daily()}</div>
+		<div class="flex h-28 items-end gap-[3px]">
+			{#each daily as d (d.day)}
+				<div
+					class="flex-1 rounded-t-[3px] transition-colors {d.weighted > 0
+						? 'bg-[#d97757] hover:bg-[#bd5d3a]'
+						: 'bg-[#efede3]'}"
+					style="height:{d.weighted > 0 ? Math.max(4, Math.round((d.weighted / dailyMax) * 112)) : 2}px"
+					title="{shortDay(d.day)} — {formatTokens(d.weighted)} tokens"
+				></div>
+			{/each}
+		</div>
+		<div class="mt-1.5 flex justify-between text-[11px] text-neutral-400 tabular-nums">
+			<span>{daily.length ? shortDay(daily[0].day) : ''}</span>
+			<span>{daily.length ? shortDay(daily[daily.length - 1].day) : ''}</span>
+		</div>
+	</div>
+
 	{#if deptUsage.length > 0 || policyUsage.length > 0}
-		<div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+		<div class="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
 			{#if deptUsage.length > 0}
-				{@const deptMax = Math.max(1, ...deptUsage.map((d) => d.month))}
+				<!-- department share of the month, as the requested donut -->
 				<div class="rounded-xl border border-[#e9e6dd] bg-white px-4 py-3">
-					<div class="mb-2 text-xs text-neutral-400">{m.admin_stats_by_dept()}</div>
-					<div class="space-y-2">
-						{#each deptUsage as d (d.id)}
-							<div>
-								<div class="flex items-baseline justify-between gap-2">
-									<span class="truncate text-sm font-medium text-neutral-800">{d.name}</span>
-									<span class="shrink-0 text-xs text-neutral-500">
-										{m.admin_usage({ today: formatTokens(d.today ?? 0), month: formatTokens(d.month) })}
-									</span>
-								</div>
-								<div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[#f0eee6]">
-									<div
-										class="h-full rounded-full bg-[#d97757]"
-										style="width:{Math.round((d.month / deptMax) * 100)}%"
-									></div>
+					<div class="mb-2 flex items-center gap-1.5 text-[13px] text-neutral-400">
+						{m.admin_stats_by_dept()}
+						<HelpTip text={m.admin_stats_multi_note()} />
+					</div>
+					<div class="flex flex-wrap items-center gap-5">
+						<div class="relative shrink-0">
+							<svg viewBox="0 0 42 42" class="size-36 -rotate-90">
+								<circle cx="21" cy="21" r="15.9155" fill="none" stroke="#f0eee6" stroke-width="5" />
+								{#each donut.segs as s (s.name)}
+									<circle
+										cx="21"
+										cy="21"
+										r="15.9155"
+										fill="none"
+										stroke={s.color}
+										stroke-width="5"
+										stroke-dasharray="{s.len} {100 - s.len}"
+										stroke-dashoffset={-s.start}
+									>
+										<title>{s.name}: {formatTokens(s.value)} ({Math.round(s.share)}%)</title>
+									</circle>
+								{/each}
+							</svg>
+							<div class="absolute inset-0 grid rotate-0 place-items-center">
+								<div class="text-center">
+									<div class="font-serif text-xl font-semibold text-neutral-900">{formatTokens(donut.total)}</div>
 								</div>
 							</div>
-						{/each}
+						</div>
+						<div class="min-w-0 flex-1 space-y-1.5">
+							{#each donut.segs as s (s.name)}
+								<div class="flex items-baseline gap-2">
+									<span class="size-2.5 shrink-0 self-center rounded-full" style="background:{s.color}"></span>
+									<span class="min-w-0 flex-1 truncate text-[15px] font-medium text-neutral-800">{s.name}</span>
+									<span class="shrink-0 text-[13px] text-neutral-500 tabular-nums">{formatTokens(s.value)}</span>
+									<span class="w-9 shrink-0 text-right text-[13px] text-neutral-400 tabular-nums">{Math.round(s.share)}%</span>
+								</div>
+							{/each}
+						</div>
 					</div>
-					<p class="mt-2.5 text-[11px] leading-snug text-neutral-400">{m.admin_stats_multi_note()}</p>
 				</div>
 			{/if}
 			{#if policyUsage.length > 0}
 				{@const polMax = Math.max(1, ...policyUsage.map((p) => p.month))}
 				<div class="rounded-xl border border-[#e9e6dd] bg-white px-4 py-3">
-					<div class="mb-2 text-xs text-neutral-400">{m.admin_stats_by_policy()}</div>
+					<div class="mb-2 text-[13px] text-neutral-400">{m.admin_stats_by_policy()}</div>
 					<div class="space-y-2">
 						{#each policyUsage as p (p.id)}
 							<div>
 								<div class="flex items-baseline justify-between gap-2">
-									<span class="truncate text-sm font-medium text-neutral-800">{p.name}</span>
-									<span class="shrink-0 text-xs text-neutral-500">{formatTokens(p.month)}</span>
+									<span class="truncate text-[15px] font-medium text-neutral-800">{p.name}</span>
+									<span class="shrink-0 text-[13px] text-neutral-500">{formatTokens(p.month)}</span>
 								</div>
 								<div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[#f0eee6]">
 									<div
@@ -318,22 +411,14 @@
 					<Avatar username={u.username} size={26} />
 					<div class="min-w-0 flex-1">
 						<div class="flex items-baseline gap-2">
-							<span class="truncate text-sm font-medium text-neutral-800">{u.username}</span>
-							{#if u.unlisted}
-								<span
-									class="shrink-0 rounded bg-[#f0eee6] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 uppercase"
-									title={u.policyNames?.join(', ')}
-								>
-									{m.admin_via_policy()}
-								</span>
-							{/if}
+							<span class="truncate text-[15px] font-medium text-neutral-800">{u.username}</span>
 							{#each u.policyNames ?? [] as pn (pn)}
 								<span class="hidden shrink-0 rounded bg-[#d97757]/8 px-1.5 py-0.5 text-[10px] font-medium text-[#bd5d3a] sm:inline">
 									{pn}
 								</span>
 							{/each}
 							<span class="min-w-0 flex-1"></span>
-							<span class="shrink-0 text-xs text-neutral-500">
+							<span class="shrink-0 text-[13px] text-neutral-500">
 								{m.admin_usage({
 									today: formatTokens(u.usage.today),
 									month: formatTokens(u.usage.month)
@@ -356,11 +441,11 @@
 	     role/models/writes/limits. Grants compose most-permissively with the
 	     per-user list below; a per-user block always wins. -->
 	<div class="mb-4 rounded-xl border border-[#e3e0d5] bg-white p-5">
-		<div class="mb-3 flex items-start justify-between gap-3">
-			<div>
-				<h3 class="text-sm font-semibold text-neutral-900">{m.org_policies_title()}</h3>
-				<p class="mt-0.5 text-xs text-neutral-500">{m.org_policies_hint()}</p>
-			</div>
+		<div class="mb-3 flex items-center justify-between gap-3">
+			<h3 class="flex items-center gap-1.5 text-base font-semibold text-neutral-900">
+				{m.org_policies_title()}
+				<HelpTip text={m.org_policies_hint()} />
+			</h3>
 			{#if policiesFlash}
 				<span class="flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-600">
 					<Icon name="check" size={13} />{m.settings_saved()}
@@ -377,7 +462,7 @@
 		</div>
 
 		{#if policies.length === 0}
-			<p class="mb-3 text-xs text-neutral-400">{m.org_policy_empty()}</p>
+			<p class="mb-3 text-[13px] text-neutral-400">{m.org_policy_empty()}</p>
 		{/if}
 
 		<div class="space-y-3">
@@ -496,242 +581,291 @@
 		</button>
 	</div>
 
-	<div class="rounded-xl border border-[#e3e0d5] bg-white p-5">
-	{#if openMode}
-		<p class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-			{m.admin_open_mode()}
-		</p>
-	{/if}
-	{#if adminError}
-		<p class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{adminError}</p>
-	{/if}
+	<!-- One table for everyone — Azure-IAM style: a compact toolbar, then a
+	     dense list with an Origem column separating explicit records from
+	     policy-admitted users. Policy rows are read-only (their grants come
+	     from the matching policies); "Criar exceção" promotes them. -->
+	<div class="rounded-xl border border-[#e3e0d5] bg-white">
+		<div class="flex flex-wrap items-center gap-2 px-4 py-3">
+			<input
+				type="text"
+				bind:value={newUsername}
+				onkeydown={(e) => e.key === 'Enter' && submitNewUser()}
+				placeholder={m.admin_add_placeholder()}
+				class="w-64 min-w-0 rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-[15px] transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+			/>
+			<button
+				onclick={submitNewUser}
+				disabled={!newUsername.trim()}
+				class="shrink-0 rounded-lg bg-[#d97757] px-3 py-1.5 text-sm font-medium text-white transition hover:bg-[#bd5d3a] disabled:opacity-40"
+			>
+				{m.admin_add()}
+			</button>
+			<span class="flex-1"></span>
+			<HelpTip text={m.admin_users_help()} align="right" />
+		</div>
+		{#if openMode}
+			<p class="border-t border-amber-100 bg-amber-50 px-4 py-2 text-[13px] text-amber-700">
+				{m.admin_open_mode()}
+			</p>
+		{/if}
+		{#if adminError}
+			<p class="border-t border-red-100 bg-red-50 px-4 py-2 text-[13px] text-red-700">{adminError}</p>
+		{/if}
 
-	<div class="flex gap-2">
-		<input
-			type="text"
-			bind:value={newUsername}
-			onkeydown={(e) => e.key === 'Enter' && submitNewUser()}
-			placeholder={m.admin_add_placeholder()}
-			class="min-w-0 flex-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
-		/>
-		<button
-			onclick={submitNewUser}
-			disabled={!newUsername.trim()}
-			class="shrink-0 rounded-xl bg-[#d97757] px-3.5 py-2 text-sm font-medium text-white transition hover:bg-[#bd5d3a] disabled:opacity-40"
-		>
-			{m.admin_add()}
-		</button>
-	</div>
-
-	<div class="mt-2">
-		{#each adminUsers as u (u.username)}
-			<div class="border-b border-[#efede3] py-2.5 last:border-b-0 last:pb-0">
-				<div class="flex items-center gap-2.5">
-					<Avatar username={u.username} size={26} />
-					<span class="min-w-0 flex-1 truncate text-sm font-medium text-neutral-800">
-						{u.username}
-					</span>
-					{#if u.envAdmin}
-						<span
-							class="shrink-0 rounded bg-[#f0eee6] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 uppercase"
-							title={m.admin_env_badge_hint()}
-						>
-							{m.admin_env_badge()}
-						</span>
-					{/if}
-					{#if u.unlisted}
-						<span
-							class="shrink-0 rounded bg-[#f0eee6] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 uppercase"
-							title={u.policyNames?.join(', ')}
-						>
-							{m.admin_via_policy()}
-						</span>
-					{/if}
-					{#if u.blocked}
-						<span
-							class="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-red-600 uppercase"
-						>
-							{m.admin_blocked_badge()}
-						</span>
-					{/if}
-				</div>
-				<div class="mt-2 flex flex-wrap items-center gap-2 sm:pl-[34px]">
-					<SelectMenu
-						options={roleOptions}
-						value={u.role}
-						disabled={u.envAdmin}
-						triggerClass="shrink-0"
-						onSelect={(role) =>
-							runAdmin(() => patchUser(u.username, { role: role as 'admin' | 'builder' | 'user' }))}
-					/>
-
-					<!-- Per-user model allow-list. Admins implicitly get all (shown
-					     as read-only ticks); the default model is always granted.
-					     Closes on click-away / Escape. -->
-					<div
-						class="relative shrink-0"
-						use:clickOutside={{
-							enabled: () => openModelsFor === u.username,
-							onOutside: () => (openModelsFor = null)
-						}}
-					>
-						<button
-							type="button"
-							onclick={(e) => {
-								if (openModelsFor === u.username) {
-									openModelsFor = null;
-								} else {
-									openModelsFor = u.username;
-									modelsAnchor = e.currentTarget;
-								}
-							}}
-							title={m.admin_models_title()}
-							aria-haspopup="true"
-							aria-expanded={openModelsFor === u.username}
-							class="flex items-center gap-1.5 rounded-lg border bg-white px-2 py-1 text-xs font-medium text-neutral-600 transition hover:bg-[#faf9f5] {openModelsFor ===
-							u.username
-								? 'border-[#d97757]/40'
-								: 'border-[#e3e0d5]'}"
-						>
-							<Icon name="sparkle" size={12} class="text-[#bd5d3a]" />
-							{allModels.filter((mo) => modelsGranted(u, mo.id)).length}
-							<Icon
-								name="chevron-down"
-								size={11}
-								class="text-neutral-400 transition-transform {openModelsFor === u.username
-									? 'rotate-180'
-									: ''}"
-							/>
-						</button>
-						{#if openModelsFor === u.username}
-							<div
-								bind:this={modelsMenuEl}
-								in:scale={{ duration: 130, start: 0.95, opacity: 0 }}
-								style="position:fixed; left:{modelsPos?.left ?? 0}px; top:{modelsPos?.top ??
-									0}px; min-width:{modelsPos?.minWidth ?? 240}px; transform-origin:top right; visibility:{modelsPos
-									? 'visible'
-									: 'hidden'}"
-								class="z-50 overflow-hidden rounded-2xl border border-[#e3e0d5] bg-white p-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.07)]"
-							>
-								{#each allModels as mo (mo.id)}
-									{@const locked = mo.id === defaultModel || u.role === 'admin' || u.envAdmin}
-									{@const on = modelsGranted(u, mo.id)}
-									<button
-										type="button"
-										disabled={locked}
-										onclick={() => toggleModel(u, mo.id)}
-										class="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition {locked
-											? 'cursor-default'
-											: 'hover:bg-[#faf9f5]'}"
-									>
-										<img
-											src={providerLogo(mo.provider)}
-											alt=""
-											class="size-4 shrink-0 {on ? '' : 'opacity-30 grayscale'}"
-										/>
-										<span class="flex-1 text-sm font-medium {on ? 'text-neutral-800' : 'text-neutral-400'}">
-											{mo.label}
-										</span>
-										{#if mo.id === defaultModel}
-											<span class="text-[10px] tracking-wide text-neutral-400 uppercase"
-												>{m.admin_models_default()}</span
+		{#if adminUsers.length > 0}
+			<div class="overflow-x-auto rounded-b-xl">
+				<table class="w-full text-left">
+					<thead>
+						<tr class="border-y border-[#efede3] bg-[#faf9f5]/60 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase">
+							<th class="py-2 pl-4 font-semibold">{m.admin_col_user()}</th>
+							<th class="px-3 py-2 font-semibold">{m.admin_col_source()}</th>
+							<th class="px-3 py-2 font-semibold">{m.admin_col_role()}</th>
+							<th class="px-3 py-2 font-semibold">{m.admin_col_models()}</th>
+							<th class="px-3 py-2 font-semibold">{m.admin_col_write()}</th>
+							<th class="px-3 py-2 font-semibold">{m.admin_col_limit()}</th>
+							<th class="px-3 py-2 text-right font-semibold">{m.admin_col_usage()}</th>
+							<th class="px-3 py-2 font-semibold">{m.admin_col_active()}</th>
+							<th class="py-2 pr-4"></th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each adminUsers as u (u.username)}
+							<tr class="border-b border-[#efede3] last:border-b-0">
+								<td class="py-2.5 pl-4">
+									<div class="flex items-center gap-2.5">
+										<Avatar username={u.username} size={26} />
+										<span class="max-w-44 truncate text-[15px] font-medium text-neutral-800">{u.username}</span>
+										{#if u.envAdmin}
+											<span
+												class="shrink-0 rounded bg-[#f0eee6] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 uppercase"
+												title={m.admin_env_badge_hint()}
 											>
+												{m.admin_env_badge()}
+											</span>
 										{/if}
-										<span
-											class="grid size-4 shrink-0 place-items-center rounded-md border transition {on
-												? 'border-[#d97757] bg-[#d97757] text-white'
-												: 'border-[#d9d6c8] bg-white'}"
+										{#if u.blocked}
+											<span class="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-red-600 uppercase">
+												{m.admin_blocked_badge()}
+											</span>
+										{/if}
+									</div>
+								</td>
+								<td class="px-3 py-2.5">
+									{#if u.unlisted}
+										<div class="flex max-w-48 flex-wrap gap-1">
+											{#each u.policyNames?.length ? u.policyNames : [m.admin_source_policy()] as pn (pn)}
+												<span class="rounded bg-[#d97757]/8 px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-[#bd5d3a]">{pn}</span>
+											{/each}
+										</div>
+									{:else}
+										<span class="rounded bg-[#f0eee6] px-1.5 py-0.5 text-[11px] font-medium text-neutral-500">{m.admin_source_record()}</span>
+									{/if}
+								</td>
+								{#if u.unlisted}
+									<td class="px-3 py-2.5 text-sm text-neutral-300" title={m.admin_policy_grants_hint()}>—</td>
+									<td class="px-3 py-2.5 text-sm text-neutral-300" title={m.admin_policy_grants_hint()}>—</td>
+									<td class="px-3 py-2.5 text-sm text-neutral-300" title={m.admin_policy_grants_hint()}>—</td>
+									<td class="px-3 py-2.5 text-sm text-neutral-300" title={m.admin_policy_grants_hint()}>—</td>
+								{:else}
+									<td class="px-3 py-2.5">
+										<SelectMenu
+											options={roleOptions}
+											value={u.role}
+											disabled={u.envAdmin}
+											triggerClass="shrink-0"
+											onSelect={(role) =>
+												runAdmin(() => patchUser(u.username, { role: role as 'admin' | 'builder' | 'user' }))}
+										/>
+									</td>
+									<td class="px-3 py-2.5">
+										<div
+											class="relative inline-flex"
+											use:clickOutside={{
+												enabled: () => openModelsFor === u.username,
+												onOutside: () => (openModelsFor = null)
+											}}
 										>
-											{#if on}<Icon name="check" size={11} />{/if}
-										</span>
-									</button>
-								{/each}
-							</div>
-						{/if}
-					</div>
-
-					<!-- Warehouse write grant. Off by default, and not implied by the
-					     admin role: StarRocks already authorizes every statement against
-					     this user's own grants, so this only decides whether the MODEL
-					     may compose a write under them. -->
-					<button
-						type="button"
-						role="switch"
-						aria-checked={u.sqlWrite === true}
-						onclick={() => runAdmin(() => patchUser(u.username, { sqlWrite: !u.sqlWrite }))}
-						title={m.admin_sqlwrite_title()}
-						aria-label={m.admin_sqlwrite_badge()}
-						class="flex shrink-0 items-center rounded-lg border px-2 py-1 transition {u.sqlWrite
-							? 'border-[#d97757]/40 bg-[#fdf3ef] text-[#bd5d3a]'
-							: 'border-[#e3e0d5] bg-white text-neutral-400 hover:bg-[#faf9f5]'}"
-					>
-						<Icon name="square-pen" size={12} />
-					</button>
-
-					<!-- Windmill workspace write grant. Off by default; reading and
-					     running scripts/flows works without it. -->
-					<button
-						type="button"
-						role="switch"
-						aria-checked={u.windmillWrite === true}
-						onclick={() => runAdmin(() => patchUser(u.username, { windmillWrite: !u.windmillWrite }))}
-						title={m.admin_wmwrite_title()}
-						aria-label={m.admin_wmwrite_badge()}
-						class="flex shrink-0 items-center rounded-lg border px-2 py-1 transition {u.windmillWrite
-							? 'border-[#d97757]/40 bg-[#fdf3ef] text-[#bd5d3a]'
-							: 'border-[#e3e0d5] bg-white text-neutral-400 hover:bg-[#faf9f5]'}"
-					>
-						<Icon name="zap" size={12} />
-					</button>
-
-					<input
-						type="text"
-						inputmode="numeric"
-						value={formatLimit(u.maxDailyTokens)}
-						placeholder="∞"
-						title={m.admin_limit_title()}
-						onchange={(e) => {
-							const el = e.currentTarget;
-							const parsed = parseTokenLimit(el.value);
-							if (parsed === 'invalid') {
-								el.classList.add('ring-2', 'ring-red-400');
-								setTimeout(() => el.classList.remove('ring-2', 'ring-red-400'), 1200);
-								el.value = formatLimit(u.maxDailyTokens);
-								return;
-							}
-							el.value = formatLimit(parsed);
-							runAdmin(() => patchUser(u.username, { maxDailyTokens: parsed }));
-						}}
-						class="w-28 shrink-0 rounded-lg border border-[#e3e0d5] bg-white px-2 py-1 text-right text-xs text-neutral-600 transition focus:border-[#d97757] focus:outline-none"
-					/>
-
-					<button
-						role="switch"
-						aria-checked={!u.blocked}
-						disabled={u.envAdmin}
-						onclick={() => runAdmin(() => patchUser(u.username, { blocked: !u.blocked }))}
-						title={u.blocked ? m.admin_unblock() : m.admin_block()}
-						class="relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40
-							{u.blocked ? 'bg-[#d9d6c8]' : 'bg-[#1baf7a]'}"
-					>
-						<span
-							class="absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow-sm transition-transform duration-200
-								{u.blocked ? 'translate-x-0' : 'translate-x-4'}"
-						></span>
-					</button>
-
-					<button
-						onclick={() => runAdmin(() => removeUser(u.username))}
-						disabled={u.envAdmin}
-						class="shrink-0 rounded p-1 text-neutral-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
-						title={m.admin_remove()}
-						aria-label={m.admin_remove()}
-					>
-						<Icon name="trash" size={14} />
-					</button>
-				</div>
+											<button
+												type="button"
+												onclick={(e) => {
+													if (openModelsFor === u.username) {
+														openModelsFor = null;
+													} else {
+														openModelsFor = u.username;
+														modelsAnchor = e.currentTarget;
+													}
+												}}
+												title={m.admin_models_title()}
+												aria-haspopup="true"
+												aria-expanded={openModelsFor === u.username}
+												class="flex items-center gap-1.5 rounded-lg border bg-white px-2 py-1 text-xs font-medium text-neutral-600 transition hover:bg-[#faf9f5] {openModelsFor ===
+												u.username
+													? 'border-[#d97757]/40'
+													: 'border-[#e3e0d5]'}"
+											>
+												<Icon name="sparkle" size={12} class="text-[#bd5d3a]" />
+												{allModels.filter((mo) => modelsGranted(u, mo.id)).length}
+												<Icon
+													name="chevron-down"
+													size={11}
+													class="text-neutral-400 transition-transform {openModelsFor === u.username
+														? 'rotate-180'
+														: ''}"
+												/>
+											</button>
+											{#if openModelsFor === u.username}
+												<div
+													bind:this={modelsMenuEl}
+													in:scale={{ duration: 130, start: 0.95, opacity: 0 }}
+													style="position:fixed; left:{modelsPos?.left ?? 0}px; top:{modelsPos?.top ??
+														0}px; min-width:{modelsPos?.minWidth ?? 240}px; transform-origin:top right; visibility:{modelsPos
+														? 'visible'
+														: 'hidden'}"
+													class="z-50 overflow-hidden rounded-2xl border border-[#e3e0d5] bg-white p-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.07)]"
+												>
+													{#each allModels as mo (mo.id)}
+														{@const locked = mo.id === defaultModel || u.role === 'admin' || u.envAdmin}
+														{@const on = modelsGranted(u, mo.id)}
+														<button
+															type="button"
+															disabled={locked}
+															onclick={() => toggleModel(u, mo.id)}
+															class="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition {locked
+																? 'cursor-default'
+																: 'hover:bg-[#faf9f5]'}"
+														>
+															<img
+																src={providerLogo(mo.provider)}
+																alt=""
+																class="size-4 shrink-0 {on ? '' : 'opacity-30 grayscale'}"
+															/>
+															<span class="flex-1 text-sm font-medium {on ? 'text-neutral-800' : 'text-neutral-400'}">
+																{mo.label}
+															</span>
+															{#if mo.id === defaultModel}
+																<span class="text-[10px] tracking-wide text-neutral-400 uppercase"
+																	>{m.admin_models_default()}</span
+																>
+															{/if}
+															<span
+																class="grid size-4 shrink-0 place-items-center rounded-md border transition {on
+																	? 'border-[#d97757] bg-[#d97757] text-white'
+																	: 'border-[#d9d6c8] bg-white'}"
+															>
+																{#if on}<Icon name="check" size={11} />{/if}
+															</span>
+														</button>
+													{/each}
+												</div>
+											{/if}
+										</div>
+									</td>
+									<td class="px-3 py-2.5">
+										<div class="flex items-center gap-1.5">
+											<button
+												type="button"
+												role="switch"
+												aria-checked={u.sqlWrite === true}
+												onclick={() => runAdmin(() => patchUser(u.username, { sqlWrite: !u.sqlWrite }))}
+												title={m.admin_sqlwrite_title()}
+												aria-label={m.admin_sqlwrite_badge()}
+												class="flex shrink-0 items-center rounded-lg border px-2 py-1 transition {u.sqlWrite
+													? 'border-[#d97757]/40 bg-[#fdf3ef] text-[#bd5d3a]'
+													: 'border-[#e3e0d5] bg-white text-neutral-400 hover:bg-[#faf9f5]'}"
+											>
+												<Icon name="square-pen" size={12} />
+											</button>
+											<button
+												type="button"
+												role="switch"
+												aria-checked={u.windmillWrite === true}
+												onclick={() =>
+													runAdmin(() => patchUser(u.username, { windmillWrite: !u.windmillWrite }))}
+												title={m.admin_wmwrite_title()}
+												aria-label={m.admin_wmwrite_badge()}
+												class="flex shrink-0 items-center rounded-lg border px-2 py-1 transition {u.windmillWrite
+													? 'border-[#d97757]/40 bg-[#fdf3ef] text-[#bd5d3a]'
+													: 'border-[#e3e0d5] bg-white text-neutral-400 hover:bg-[#faf9f5]'}"
+											>
+												<Icon name="zap" size={12} />
+											</button>
+										</div>
+									</td>
+									<td class="px-3 py-2.5">
+										<input
+											type="text"
+											inputmode="numeric"
+											value={formatLimit(u.maxDailyTokens)}
+											placeholder="∞"
+											title={m.admin_limit_title()}
+											onchange={(e) => {
+												const el = e.currentTarget;
+												const parsed = parseTokenLimit(el.value);
+												if (parsed === 'invalid') {
+													el.classList.add('ring-2', 'ring-red-400');
+													setTimeout(() => el.classList.remove('ring-2', 'ring-red-400'), 1200);
+													el.value = formatLimit(u.maxDailyTokens);
+													return;
+												}
+												el.value = formatLimit(parsed);
+												runAdmin(() => patchUser(u.username, { maxDailyTokens: parsed }));
+											}}
+											class="w-24 shrink-0 rounded-lg border border-[#e3e0d5] bg-white px-2 py-1 text-right text-xs text-neutral-600 transition focus:border-[#d97757] focus:outline-none"
+										/>
+									</td>
+								{/if}
+								<td
+									class="px-3 py-2.5 text-right text-[13px] whitespace-nowrap text-neutral-500 tabular-nums"
+									title={m.admin_usage({ today: formatTokens(u.usage.today), month: formatTokens(u.usage.month) })}
+								>
+									{formatTokens(u.usage.month)}
+								</td>
+								<td class="px-3 py-2.5">
+									{#if u.unlisted}
+										<span class="text-sm text-neutral-300" title={m.admin_policy_grants_hint()}>—</span>
+									{:else}
+										<button
+											role="switch"
+											aria-checked={!u.blocked}
+											disabled={u.envAdmin}
+											onclick={() => runAdmin(() => patchUser(u.username, { blocked: !u.blocked }))}
+											title={u.blocked ? m.admin_unblock() : m.admin_block()}
+											class="relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40
+												{u.blocked ? 'bg-[#d9d6c8]' : 'bg-[#1baf7a]'}"
+										>
+											<span
+												class="absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow-sm transition-transform duration-200
+													{u.blocked ? 'translate-x-0' : 'translate-x-4'}"
+											></span>
+										</button>
+									{/if}
+								</td>
+								<td class="py-2.5 pr-4 text-right">
+									{#if u.unlisted}
+										<button
+											onclick={() => runAdmin(() => addUser(u.username))}
+											class="rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-1 text-xs font-medium whitespace-nowrap text-neutral-600 transition hover:border-[#d97757]/40 hover:bg-[#faf9f5] hover:text-[#bd5d3a]"
+										>
+											{m.admin_add_exception()}
+										</button>
+									{:else}
+										<button
+											onclick={() => runAdmin(() => removeUser(u.username))}
+											disabled={u.envAdmin}
+											class="rounded p-1 text-neutral-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
+											title={m.admin_remove()}
+											aria-label={m.admin_remove()}
+										>
+											<Icon name="trash" size={14} />
+										</button>
+									{/if}
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
 			</div>
-		{/each}
-	</div>
+		{/if}
 	</div>
 {/if}

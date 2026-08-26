@@ -10,6 +10,7 @@ import {
 	setOrgKnowledge,
 	setOrgSystemPrompt
 } from '$lib/server/access';
+import { logAudit, requestMeta } from '$lib/server/audit';
 import type { RequestHandler } from './$types';
 
 /**
@@ -44,6 +45,14 @@ export const PUT: RequestHandler = async ({ request }) => {
 	if (typeof body.orgSystemPrompt === 'string') await setOrgSystemPrompt(body.orgSystemPrompt);
 	if (body.orgKnowledge !== undefined) await setOrgKnowledge(body.orgKnowledge);
 	if (body.departments !== undefined) await setDepartments(body.departments);
+	logAudit({
+		actor: user.username,
+		via: 'session',
+		...requestMeta(request),
+		category: 'admin',
+		action: 'org.save',
+		status: 'ok'
+	});
 	return json({
 		orgSystemPrompt: await getOrgSystemPrompt(),
 		orgKnowledge: await getOrgKnowledge(),

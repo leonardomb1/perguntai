@@ -2,6 +2,7 @@ import { redirect, type RequestHandler } from '@sveltejs/kit';
 import { exchange } from '$lib/server/oidc';
 import { FLOW_COOKIE, callbackUri, flowCookieOptions, unpackFlow } from '$lib/server/oidcFlow';
 import { isUserAllowed, sessionFromClaims } from '$lib/server/auth';
+import { logAudit, requestMeta } from '$lib/server/audit';
 import { saveTokens } from '$lib/server/oidcStore';
 
 /**
@@ -37,7 +38,7 @@ location.replace(${literal(redirectTo)});
 	);
 }
 
-export const GET: RequestHandler = async ({ url, cookies }) => {
+export const GET: RequestHandler = async ({ url, cookies, request }) => {
 	const flow = unpackFlow(cookies.get(FLOW_COOKIE));
 	// One shot per flow: the code is spent either way, so the cookie goes now.
 	cookies.delete(FLOW_COOKIE, flowCookieOptions(url));
@@ -70,8 +71,26 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 
 	// Allowlist gate on the canonical username from the IdP, never on anything
 	// the user typed.
-	if (!(await isUserAllowed(session.username, session.profile)))
+	if (!(await isUserAllowed(session.username, session.profile))) {
+		logAudit({
+			actor: session.username,
+			via: 'session',
+			...requestMeta(request),
+			category: 'auth',
+			action: 'login.sso',
+			status: 'denied',
+			detail: { reason: 'not_in_allowlist' }
+		});
 		redirect(303, '/login?error=not_allowed');
+	}
+	logAudit({
+		actor: session.username,
+		via: 'session',
+		...requestMeta(request),
+		category: 'auth',
+		action: 'login.sso',
+		status: 'ok'
+	});
 
 	// The refresh token is what lets warehouse queries mint a fresh id_token
 	// long after this login; without it StarRocks access dies in ~5 minutes.

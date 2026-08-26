@@ -53,6 +53,8 @@ export interface AuthUser {
 	credentials: { username: string; password?: string };
 	/** AD directory attributes captured at login (absent on legacy tokens). */
 	profile?: UserProfile;
+	/** Set when the request authenticated with a personal API key. */
+	apiKey?: { id: string; label: string };
 	/**
 	 * App admin (access.json role === 'admin', which env admins also are).
 	 * Resolved LIVE by authenticateRequest on every request — deliberately NOT a
@@ -205,8 +207,13 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
  * traffic — deliberate: departments are matched from IdP claims captured at
  * sign-in, and a key never went through one.
  */
-function userFromApiKey(username: string): AuthUser {
-	return { username, displayName: username, credentials: { username } };
+function userFromApiKey(owner: { username: string; keyId: string; keyLabel: string }): AuthUser {
+	return {
+		username: owner.username,
+		displayName: owner.username,
+		credentials: { username: owner.username },
+		apiKey: { id: owner.keyId, label: owner.keyLabel }
+	};
 }
 
 /**

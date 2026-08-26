@@ -26,6 +26,9 @@ export interface AdminUser {
 		month: number;
 		todayRaw?: TokenBreakdown;
 		monthRaw?: TokenBreakdown;
+		days?: Record<string, number>;
+		monthApi?: number;
+		todayApi?: number;
 	};
 }
 
@@ -119,6 +122,7 @@ export async function listUsers(): Promise<{
 	policies: AccessPolicy[];
 	deptUsage: TagUsage[];
 	policyUsage: TagUsage[];
+	daily: { day: string; weighted: number }[];
 	openMode: boolean;
 	you: CallerProfile;
 } | null> {
@@ -131,6 +135,7 @@ export async function listUsers(): Promise<{
 			policies: data.policies ?? [],
 			deptUsage: data.deptUsage ?? [],
 			policyUsage: data.policyUsage ?? [],
+			daily: data.daily ?? [],
 			openMode: data.openMode === true,
 			you: data.you ?? { claims: {} }
 		};
@@ -191,6 +196,88 @@ export async function removeUser(username: string): Promise<string | null> {
 	});
 	if (res.ok) return null;
 	return (await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`;
+}
+
+// --- security / audit (admin console) ---
+
+export interface AuditEvent {
+	ts: string;
+	actor: string;
+	via: 'session' | 'apikey';
+	keyId?: string;
+	keyLabel?: string;
+	ip?: string;
+	ua?: string;
+	category: 'auth' | 'admin' | 'keys' | 'connectors' | 'chat';
+	action: string;
+	target?: string;
+	status: 'ok' | 'denied' | 'error';
+	detail?: Record<string, unknown>;
+}
+
+export async function fetchAudit(opts: {
+	category?: string;
+	actor?: string;
+	limit?: number;
+} = {}): Promise<AuditEvent[]> {
+	const params = new URLSearchParams();
+	if (opts.category) params.set('category', opts.category);
+	if (opts.actor) params.set('actor', opts.actor);
+	if (opts.limit) params.set('limit', String(opts.limit));
+	try {
+		const res = await fetch(`/api/admin/audit?${params}`, { headers: headers() });
+		if (!res.ok) return [];
+		return (await res.json()).events ?? [];
+	} catch {
+		return [];
+	}
+}
+
+export interface AdminKeyOwner {
+	username: string;
+	keys: {
+		id: string;
+		label: string;
+		createdAt: string;
+		lastUsedAt: string | null;
+		expiresAt: string | null;
+		revokedAt: string | null;
+	}[];
+}
+
+export async function fetchAllKeys(): Promise<AdminKeyOwner[]> {
+	try {
+		const res = await fetch('/api/admin/keys', { headers: headers() });
+		if (!res.ok) return [];
+		return (await res.json()).owners ?? [];
+	} catch {
+		return [];
+	}
+}
+
+export async function adminRevokeKey(username: string, id: string): Promise<boolean> {
+	const res = await fetch(
+		`/api/admin/keys?username=${encodeURIComponent(username)}&id=${encodeURIComponent(id)}`,
+		{ method: 'DELETE', headers: headers() }
+	);
+	return res.ok;
+}
+
+export interface ConnectorUser {
+	username: string;
+	windmillTokenSet: boolean;
+	tabulaTokenSet: boolean;
+	mcpServers: { name: string; url: string; enabled: boolean; tokenSet: boolean }[];
+}
+
+export async function fetchConnectors(): Promise<ConnectorUser[]> {
+	try {
+		const res = await fetch('/api/admin/connectors', { headers: headers() });
+		if (!res.ok) return [];
+		return (await res.json()).users ?? [];
+	} catch {
+		return [];
+	}
 }
 
 /** One titled block of the organization knowledge base (human-curated). */
