@@ -173,6 +173,7 @@
 	"settings_language": "Language",
 	"settings_mcp_title": "MCP servers",
 	"settings_mcp_desc": "Talking to the warehouse needs no connector — it is built in. Add your own MCP servers, each with its URL and token, to plug extra tools into your assistant.",
+	"settings_active_addons": "Active add-ons:",
 	"chat_windmill_notice_title": "Code execution unavailable",
 	"chat_windmill_notice": "Advanced Python analysis and automations need your Windmill token. Add it in Settings → Connectors to enable them — everything runs with your own permissions.",
 	"chat_windmill_notice_cta": "Set up",

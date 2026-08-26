@@ -208,6 +208,28 @@
 		if (updated) onSaved(updated);
 	}
 
+	// Built-in add-on tokens have no add UI here (Windmill is configured via
+	// the chat notice) — but a STORED token must stay visible and removable,
+	// or the admin connector view shows state its owner can't see or clear.
+	// svelte-ignore state_referenced_locally
+	let wmSet = $state(settings.windmillTokenSet);
+	// svelte-ignore state_referenced_locally
+	let tabSet = $state(settings.tabulaTokenSet);
+	let addonBusy = $state(false);
+	async function removeAddon(kind: 'windmill' | 'tabula') {
+		if (addonBusy) return;
+		addonBusy = true;
+		const updated = await saveSettings(
+			kind === 'windmill' ? { windmillToken: null } : { tabulaToken: null }
+		);
+		addonBusy = false;
+		if (updated) {
+			wmSet = updated.windmillTokenSet;
+			tabSet = updated.tabulaTokenSet;
+			onSaved(updated);
+		}
+	}
+
 	let saving = $state(false);
 	/** Bumped on save so every TokenField resets its local editing state. */
 	let saveGen = $state(0);
@@ -467,6 +489,26 @@
 				{:else if section === 'connectors'}
 					<h2 class="font-serif text-xl font-semibold text-neutral-900">{m.settings_mcp_title()}</h2>
 					<p class="mt-1.5 text-sm leading-relaxed text-neutral-500">{m.settings_mcp_desc()}</p>
+
+					{#if wmSet || tabSet}
+						<div class="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-neutral-200 p-3">
+							<span class="text-sm font-medium text-neutral-700">{m.settings_active_addons()}</span>
+							{#each [...(wmSet ? [{ kind: 'windmill' as const, name: 'Windmill' }] : []), ...(tabSet ? [{ kind: 'tabula' as const, name: 'Tabula' }] : [])] as addon (addon.kind)}
+								<span class="flex items-center gap-1 rounded-lg border border-[#e3e0d5] bg-[#faf9f5] py-1 pr-1 pl-2.5 text-xs font-medium text-neutral-700">
+									{addon.name}
+									<button
+										onclick={() => removeAddon(addon.kind)}
+										disabled={addonBusy}
+										class="grid size-5 place-items-center rounded text-neutral-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+										title={m.settings_mcp_remove()}
+										aria-label={m.settings_mcp_remove()}
+									>
+										<Icon name="x" size={11} />
+									</button>
+								</span>
+							{/each}
+						</div>
+					{/if}
 
 					<div class="mt-5 space-y-3">
 						{#each mcpRows as row, i (row.id ?? i)}

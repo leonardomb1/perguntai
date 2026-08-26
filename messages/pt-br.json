@@ -173,6 +173,7 @@
 	"settings_language": "Idioma",
 	"settings_mcp_title": "Servidores MCP",
 	"settings_mcp_desc": "Conversar com o warehouse não precisa de conector — já vem pronto. Adicione seus próprios servidores MCP, cada um com URL e token, para dar ferramentas extras ao assistente.",
+	"settings_active_addons": "Complementos ativos:",
 	"chat_windmill_notice_title": "Execução de código indisponível",
 	"chat_windmill_notice": "Análises avançadas em Python e automações exigem seu token do Windmill. Adicione em Configurações → Conectores para ativar — tudo roda com as suas próprias permissões.",
 	"chat_windmill_notice_cta": "Configurar",
