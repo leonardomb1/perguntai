@@ -306,6 +306,8 @@ export interface CallerProfile {
 
 export interface OrgConfig {
 	orgSystemPrompt: string;
+	/** Character cap for the org prompt (deployment env MAX_ORG_PROMPT). */
+	orgPromptMax: number;
 	orgKnowledge: OrgKnowledgeEntry[];
 	departments: Department[];
 	you: CallerProfile;
@@ -318,6 +320,7 @@ export async function getOrg(): Promise<OrgConfig | null> {
 		const data = await res.json();
 		return {
 			orgSystemPrompt: data.orgSystemPrompt ?? '',
+			orgPromptMax: typeof data.orgPromptMax === 'number' ? data.orgPromptMax : 8000,
 			orgKnowledge: Array.isArray(data.orgKnowledge) ? data.orgKnowledge : [],
 			departments: Array.isArray(data.departments) ? data.departments : [],
 			you: { claims: sanitizeClaims(data.you?.claims) }

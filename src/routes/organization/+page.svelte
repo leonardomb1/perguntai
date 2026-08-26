@@ -48,6 +48,7 @@
 
 	let loaded = $state(false);
 	let orgPrompt = $state('');
+	let orgPromptMax = $state(8000);
 	let entries = $state<OrgKnowledgeEntry[]>([]);
 	let departments = $state<EditDept[]>([]);
 	/** Department ids that exist server-side (docs can only attach to saved depts). */
@@ -76,6 +77,7 @@
 		getOrg().then((cfg) => {
 			if (cfg) {
 				orgPrompt = cfg.orgSystemPrompt;
+				orgPromptMax = cfg.orgPromptMax;
 				entries = cfg.orgKnowledge;
 				departments = normalizeDepts(cfg.departments);
 				persistedDeptIds = new Set(cfg.departments.map((d) => d.id));
@@ -319,7 +321,7 @@
 								</h3>
 								<textarea
 									bind:value={orgPrompt}
-									maxlength="4000"
+									maxlength={orgPromptMax}
 									rows="4"
 									placeholder={m.org_general_placeholder()}
 									class="w-full resize-y rounded-lg border border-[#e3e0d5] bg-[#faf9f5]/60 px-3.5 py-3 text-sm leading-relaxed transition focus:border-[#d97757] focus:bg-white focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"

@@ -8,7 +8,8 @@ import {
 	resolveRole,
 	setDepartments,
 	setOrgKnowledge,
-	setOrgSystemPrompt
+	setOrgSystemPrompt,
+	maxOrgPrompt
 } from '$lib/server/access';
 import { logAudit, requestMeta } from '$lib/server/audit';
 import type { RequestHandler } from './$types';
@@ -31,6 +32,7 @@ export const GET: RequestHandler = async ({ request }) => {
 		return json({ error: 'Forbidden' }, { status: 403 });
 	return json({
 		orgSystemPrompt: await getOrgSystemPrompt(),
+		orgPromptMax: maxOrgPrompt(),
 		orgKnowledge: await getOrgKnowledge(),
 		departments: await getDepartments(),
 		you: { claims: profileClaims(user.profile) }

@@ -123,7 +123,11 @@ interface AccessFile {
 	departments: Department[];
 }
 
-const MAX_ORG_PROMPT = 4000;
+/** Deployment-tunable: MAX_ORG_PROMPT env var overrides the 8000 default. */
+export function maxOrgPrompt(): number {
+	const n = Number(env.MAX_ORG_PROMPT);
+	return Number.isFinite(n) && n >= 1000 ? Math.round(n) : 8000;
+}
 const MAX_ENTRY_BODY = 4000;
 const MAX_ENTRY_TITLE = 120;
 const MAX_ENTRIES = 40;
@@ -464,7 +468,7 @@ export async function getOrgSystemPrompt(): Promise<string> {
 
 export async function setOrgSystemPrompt(text: string): Promise<void> {
 	const data = await load();
-	data.orgSystemPrompt = text.trim().slice(0, MAX_ORG_PROMPT);
+	data.orgSystemPrompt = text.trim().slice(0, maxOrgPrompt());
 	await save(data);
 }
 
