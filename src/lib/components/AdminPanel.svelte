@@ -17,7 +17,8 @@
 		savePolicies,
 		type AccessPolicy,
 		type AdminUser,
-		type CallerProfile
+		type CallerProfile,
+		type TagUsage
 	} from '$lib/admin';
 	import { newId } from '$lib/id';
 	import { EMPTY_MATCH } from '$lib/dept-rules';
@@ -38,6 +39,8 @@
 	let openMode = $state(false);
 	let adminError = $state<string | null>(null);
 	let newUsername = $state('');
+	let deptUsage = $state<TagUsage[]>([]);
+	let policyUsage = $state<TagUsage[]>([]);
 
 	// --- access policies (rule-based grants; edited locally, saved as one doc) ---
 	let policies = $state<AccessPolicy[]>([]);
@@ -132,6 +135,8 @@
 			adminUsers = list.users;
 			openMode = list.openMode;
 			you = list.you;
+			deptUsage = list.deptUsage;
+			policyUsage = list.policyUsage;
 			// Never clobber unsaved local policy edits with a background refresh.
 			if (!policiesDirty) {
 				policies = normalizePolicies(list.policies);
@@ -229,10 +234,10 @@
 				<div class="font-serif text-2xl font-semibold text-neutral-900">
 					{formatTokens(card.s.total)}
 				</div>
-				<!-- cached vs uncached split of the raw tokens -->
-				<div class="mt-2 flex h-1.5 w-full overflow-hidden rounded-full bg-[#f0eee6]">
+				<!-- cached vs uncached split of the raw tokens (2px gap between segments) -->
+				<div class="mt-2 flex h-1.5 w-full gap-0.5 overflow-hidden rounded-full bg-[#f0eee6]">
 					<div
-						class="h-full bg-[#1baf7a]"
+						class="h-full rounded-full bg-[#1baf7a]"
 						style="width:{Math.round((card.s.cached / Math.max(1, card.s.total)) * 100)}%"
 					></div>
 				</div>
@@ -252,6 +257,58 @@
 			</div>
 		{/each}
 	</div>
+	{#if deptUsage.length > 0 || policyUsage.length > 0}
+		<div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+			{#if deptUsage.length > 0}
+				{@const deptMax = Math.max(1, ...deptUsage.map((d) => d.month))}
+				<div class="rounded-xl border border-[#e9e6dd] bg-white px-4 py-3">
+					<div class="mb-2 text-xs text-neutral-400">{m.admin_stats_by_dept()}</div>
+					<div class="space-y-2">
+						{#each deptUsage as d (d.id)}
+							<div>
+								<div class="flex items-baseline justify-between gap-2">
+									<span class="truncate text-sm font-medium text-neutral-800">{d.name}</span>
+									<span class="shrink-0 text-xs text-neutral-500">
+										{m.admin_usage({ today: formatTokens(d.today ?? 0), month: formatTokens(d.month) })}
+									</span>
+								</div>
+								<div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[#f0eee6]">
+									<div
+										class="h-full rounded-full bg-[#d97757]"
+										style="width:{Math.round((d.month / deptMax) * 100)}%"
+									></div>
+								</div>
+							</div>
+						{/each}
+					</div>
+					<p class="mt-2.5 text-[11px] leading-snug text-neutral-400">{m.admin_stats_multi_note()}</p>
+				</div>
+			{/if}
+			{#if policyUsage.length > 0}
+				{@const polMax = Math.max(1, ...policyUsage.map((p) => p.month))}
+				<div class="rounded-xl border border-[#e9e6dd] bg-white px-4 py-3">
+					<div class="mb-2 text-xs text-neutral-400">{m.admin_stats_by_policy()}</div>
+					<div class="space-y-2">
+						{#each policyUsage as p (p.id)}
+							<div>
+								<div class="flex items-baseline justify-between gap-2">
+									<span class="truncate text-sm font-medium text-neutral-800">{p.name}</span>
+									<span class="shrink-0 text-xs text-neutral-500">{formatTokens(p.month)}</span>
+								</div>
+								<div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[#f0eee6]">
+									<div
+										class="h-full rounded-full bg-[#d97757]"
+										style="width:{Math.round((p.month / polMax) * 100)}%"
+									></div>
+								</div>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
+		</div>
+	{/if}
+
 	{#if usageStats.rows.length === 0}
 		<p class="text-sm text-neutral-400">{m.admin_stats_empty()}</p>
 	{:else}
@@ -260,8 +317,22 @@
 				<div class="flex items-center gap-3">
 					<Avatar username={u.username} size={26} />
 					<div class="min-w-0 flex-1">
-						<div class="flex items-baseline justify-between gap-2">
+						<div class="flex items-baseline gap-2">
 							<span class="truncate text-sm font-medium text-neutral-800">{u.username}</span>
+							{#if u.unlisted}
+								<span
+									class="shrink-0 rounded bg-[#f0eee6] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 uppercase"
+									title={u.policyNames?.join(', ')}
+								>
+									{m.admin_via_policy()}
+								</span>
+							{/if}
+							{#each u.policyNames ?? [] as pn (pn)}
+								<span class="hidden shrink-0 rounded bg-[#d97757]/8 px-1.5 py-0.5 text-[10px] font-medium text-[#bd5d3a] sm:inline">
+									{pn}
+								</span>
+							{/each}
+							<span class="min-w-0 flex-1"></span>
 							<span class="shrink-0 text-xs text-neutral-500">
 								{m.admin_usage({
 									today: formatTokens(u.usage.today),
@@ -466,6 +537,14 @@
 							title={m.admin_env_badge_hint()}
 						>
 							{m.admin_env_badge()}
+						</span>
+					{/if}
+					{#if u.unlisted}
+						<span
+							class="shrink-0 rounded bg-[#f0eee6] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 uppercase"
+							title={u.policyNames?.join(', ')}
+						>
+							{m.admin_via_policy()}
 						</span>
 					{/if}
 					{#if u.blocked}

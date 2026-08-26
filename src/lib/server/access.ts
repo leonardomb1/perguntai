@@ -490,6 +490,13 @@ export async function setDepartments(departments: unknown): Promise<Department[]
 	return data.departments;
 }
 
+/** Enabled policies whose rule matches the given session profile. */
+export async function policiesForUser(
+	profile: UserProfile | null | undefined
+): Promise<AccessPolicy[]> {
+	return matchedPolicies(await load(), profile);
+}
+
 /** Enabled departments whose rule matches the given session profile. */
 export async function departmentsForUser(
 	profile: UserProfile | null | undefined

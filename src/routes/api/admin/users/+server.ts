@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { authenticateRequest } from '$lib/server/auth';
 import {
+	getDepartments,
 	isEnvAdmin,
 	isOpenMode,
 	listAccessUsers,
@@ -11,7 +12,7 @@ import {
 	setPolicies,
 	upsertAccessUser
 } from '$lib/server/access';
-import { usageSummary } from '$lib/server/usage';
+import { listUsageUsers, usageSummary } from '$lib/server/usage';
 import type { RequestHandler } from './$types';
 import type { AuthUser } from '$lib/server/auth';
 
@@ -29,18 +30,64 @@ export const GET: RequestHandler = async ({ request }) => {
 	if (admin instanceof Response) return admin;
 
 	const users = await listAccessUsers();
+	const policies = await listPolicies();
+	const departments = await getDepartments();
+
+	// Everyone: listed users PLUS anyone with recorded usage — policy-admitted
+	// users have no access.json record but are just as real.
+	const names = new Set([...Object.keys(users), ...(await listUsageUsers())]);
 	const list = await Promise.all(
-		Object.entries(users).map(async ([username, entry]) => ({
-			username,
-			...entry,
-			envAdmin: isEnvAdmin(username),
-			usage: await usageSummary(username)
-		}))
+		[...names].map(async (username) => {
+			const entry = users[username];
+			const usage = await usageSummary(username);
+			return {
+				username,
+				role: entry?.role ?? 'user',
+				blocked: entry?.blocked ?? false,
+				maxDailyTokens: entry?.maxDailyTokens ?? null,
+				...(entry?.allowedModels ? { allowedModels: entry.allowedModels } : {}),
+				sqlWrite: entry?.sqlWrite ?? false,
+				windmillWrite: entry?.windmillWrite ?? false,
+				addedBy: entry?.addedBy ?? '',
+				addedAt: entry?.addedAt ?? '',
+				/** No access record — seen via usage only (admitted by a policy). */
+				unlisted: !entry,
+				envAdmin: isEnvAdmin(username),
+				usage,
+				// Which policies this user's requests matched this month (names).
+				policyNames: Object.keys(usage.monthByPolicy)
+					.map((id) => policies.find((p) => p.id === id)?.name)
+					.filter((n): n is string => Boolean(n))
+			};
+		})
 	);
 	list.sort((a, b) => a.username.localeCompare(b.username));
+
+	// Aggregate per-tag usage across users. Names resolve against the CURRENT
+	// department/policy lists; usage of deleted ones is dropped from the cards.
+	const sumTag = (pick: (u: (typeof list)[number]) => Record<string, number>) => {
+		const acc: Record<string, number> = {};
+		for (const u of list)
+			for (const [id, w] of Object.entries(pick(u))) acc[id] = (acc[id] ?? 0) + w;
+		return acc;
+	};
+	const deptMonth = sumTag((u) => u.usage.monthByDept);
+	const deptToday = sumTag((u) => u.usage.todayByDept);
+	const policyMonth = sumTag((u) => u.usage.monthByPolicy);
+	const deptUsage = departments
+		.map((d) => ({ id: d.id, name: d.name, today: deptToday[d.id] ?? 0, month: deptMonth[d.id] ?? 0 }))
+		.filter((d) => d.month > 0)
+		.sort((a, b) => b.month - a.month);
+	const policyUsage = policies
+		.map((p) => ({ id: p.id, name: p.name, month: policyMonth[p.id] ?? 0 }))
+		.filter((p) => p.month > 0)
+		.sort((a, b) => b.month - a.month);
+
 	return json({
 		users: list,
-		policies: await listPolicies(),
+		policies,
+		deptUsage,
+		policyUsage,
 		openMode: await isOpenMode(),
 		// The caller's own claims, so the console can preview "matches you".
 		you: { claims: profileClaims(admin.profile) }

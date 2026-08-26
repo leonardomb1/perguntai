@@ -17,12 +17,24 @@ export interface AdminUser {
 	addedBy: string;
 	addedAt: string;
 	envAdmin: boolean;
+	/** No access record — seen via usage only (admitted by a policy). */
+	unlisted?: boolean;
+	/** Names of the policies this user's requests matched this month. */
+	policyNames?: string[];
 	usage: {
 		today: number;
 		month: number;
 		todayRaw?: TokenBreakdown;
 		monthRaw?: TokenBreakdown;
 	};
+}
+
+/** Aggregated month/today usage for one department or policy. */
+export interface TagUsage {
+	id: string;
+	name: string;
+	today?: number;
+	month: number;
 }
 
 /** Raw token split; `input` is total input (cached + uncached). */
@@ -105,6 +117,8 @@ export interface AccessPolicy {
 export async function listUsers(): Promise<{
 	users: AdminUser[];
 	policies: AccessPolicy[];
+	deptUsage: TagUsage[];
+	policyUsage: TagUsage[];
 	openMode: boolean;
 	you: CallerProfile;
 } | null> {
@@ -115,6 +129,8 @@ export async function listUsers(): Promise<{
 		return {
 			users: data.users ?? [],
 			policies: data.policies ?? [],
+			deptUsage: data.deptUsage ?? [],
+			policyUsage: data.policyUsage ?? [],
 			openMode: data.openMode === true,
 			you: data.you ?? { claims: {} }
 		};

@@ -46,6 +46,14 @@ export interface TokenBreakdown {
 }
 interface DayUsage extends TokenBreakdown {
 	weighted: number;
+	/**
+	 * Weighted tokens attributed to each department / policy that MATCHED the
+	 * user at request time. Recorded where the usage happens (no membership
+	 * store exists to reconstruct it later); a user matching several
+	 * departments counts in each, so per-tag sums can exceed the total.
+	 */
+	byDept?: Record<string, number>;
+	byPolicy?: Record<string, number>;
 }
 interface UsageFile {
 	// Legacy days are a bare number (weighted only); new days carry the breakdown.
@@ -59,7 +67,9 @@ function normDay(v: DayUsage | number | undefined): DayUsage {
 		input: v?.input ?? 0,
 		cacheRead: v?.cacheRead ?? 0,
 		cacheWrite: v?.cacheWrite ?? 0,
-		output: v?.output ?? 0
+		output: v?.output ?? 0,
+		...(v?.byDept ? { byDept: v.byDept } : {}),
+		...(v?.byPolicy ? { byPolicy: v.byPolicy } : {})
 	};
 }
 
@@ -88,19 +98,29 @@ const queues = new Map<string, Promise<void>>();
 export function addUsage(
 	username: string,
 	tokens: number,
-	breakdown?: Partial<TokenBreakdown>
+	breakdown?: Partial<TokenBreakdown>,
+	tags?: { depts?: string[]; policies?: string[] }
 ): Promise<void> {
 	if (!Number.isFinite(tokens) || tokens <= 0) return Promise.resolve();
 	const next = (queues.get(username) ?? Promise.resolve()).then(async () => {
 		const data = await read(username);
 		const key = today();
 		const day = normDay(data.days[key]);
-		day.weighted += Math.round(tokens);
+		const w = Math.round(tokens);
+		day.weighted += w;
 		if (breakdown) {
 			day.input += Math.round(breakdown.input ?? 0);
 			day.cacheRead += Math.round(breakdown.cacheRead ?? 0);
 			day.cacheWrite += Math.round(breakdown.cacheWrite ?? 0);
 			day.output += Math.round(breakdown.output ?? 0);
+		}
+		for (const id of tags?.depts ?? []) {
+			day.byDept = day.byDept ?? {};
+			day.byDept[id] = (day.byDept[id] ?? 0) + w;
+		}
+		for (const id of tags?.policies ?? []) {
+			day.byPolicy = day.byPolicy ?? {};
+			day.byPolicy[id] = (day.byPolicy[id] ?? 0) + w;
 		}
 		data.days[key] = day;
 
@@ -128,6 +148,10 @@ export interface UsageSummary {
 	month: number; // weighted
 	todayRaw: TokenBreakdown;
 	monthRaw: TokenBreakdown;
+	/** This month's weighted tokens per matched department / policy id. */
+	monthByDept: Record<string, number>;
+	monthByPolicy: Record<string, number>;
+	todayByDept: Record<string, number>;
 }
 
 const emptyBreakdown = (): TokenBreakdown => ({ input: 0, cacheRead: 0, cacheWrite: 0, output: 0 });
@@ -140,23 +164,46 @@ export async function usageSummary(username: string): Promise<UsageSummary> {
 	let monthW = 0;
 	const todayRaw = emptyBreakdown();
 	const monthRaw = emptyBreakdown();
+	const monthByDept: Record<string, number> = {};
+	const monthByPolicy: Record<string, number> = {};
+	const todayByDept: Record<string, number> = {};
+	const addInto = (acc: Record<string, number>, m?: Record<string, number>) => {
+		for (const [id, w] of Object.entries(m ?? {})) acc[id] = (acc[id] ?? 0) + w;
+	};
 	for (const [day, raw] of Object.entries(days)) {
 		const d = normDay(raw);
-		const into = day === t ? todayRaw : null;
 		if (day.startsWith(month)) {
 			monthW += d.weighted;
 			monthRaw.input += d.input;
 			monthRaw.cacheRead += d.cacheRead;
 			monthRaw.cacheWrite += d.cacheWrite;
 			monthRaw.output += d.output;
+			addInto(monthByDept, d.byDept);
+			addInto(monthByPolicy, d.byPolicy);
 		}
 		if (day === t) {
 			todayW += d.weighted;
-			into!.input += d.input;
-			into!.cacheRead += d.cacheRead;
-			into!.cacheWrite += d.cacheWrite;
-			into!.output += d.output;
+			todayRaw.input += d.input;
+			todayRaw.cacheRead += d.cacheRead;
+			todayRaw.cacheWrite += d.cacheWrite;
+			todayRaw.output += d.output;
+			addInto(todayByDept, d.byDept);
 		}
 	}
-	return { today: todayW, month: monthW, todayRaw, monthRaw };
+	return { today: todayW, month: monthW, todayRaw, monthRaw, monthByDept, monthByPolicy, todayByDept };
+}
+
+/**
+ * Every username with a usage file — the ground truth for "who has actually
+ * used the app". Policy-admitted users have no access.json record, so the
+ * stats panel enumerates THIS, not the user list.
+ */
+export async function listUsageUsers(): Promise<string[]> {
+	try {
+		const { readdir } = await import('node:fs/promises');
+		const files = await readdir(join(env.DATA_DIR ?? 'data', 'usage'));
+		return files.filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5));
+	} catch {
+		return [];
+	}
 }

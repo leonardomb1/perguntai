@@ -8,7 +8,9 @@ import { withHeartbeat } from '$lib/server/heartbeat';
 import { beginRun, liveStreamKey, recordStream } from '$lib/server/live-streams';
 import { getUserSettings } from '$lib/server/settings';
 import {
+	departmentsForUser,
 	getEffectiveOrgPrompt,
+	policiesForUser,
 	resolveDailyLimit,
 	resolveModel,
 	resolveWindmillWrite
@@ -126,12 +128,23 @@ export const POST: RequestHandler = async ({ request }) => {
 						`cacheWrite=${raw.cacheWrite} output=${raw.output} → weighted=${Math.round(totalTokens)}`
 				);
 			}
-			await addUsage(user.username, totalTokens, {
-				input: raw.input,
-				cacheRead: raw.cacheRead,
-				cacheWrite: raw.cacheWrite,
-				output: raw.output
-			}).catch((e) => console.warn('usage tracking failed:', e));
+			// Tag the usage with the departments/policies that matched THIS
+			// request — there is no membership store to reconstruct it later.
+			const [depts, policies] = await Promise.all([
+				departmentsForUser(user.profile),
+				policiesForUser(user.profile)
+			]);
+			await addUsage(
+				user.username,
+				totalTokens,
+				{
+					input: raw.input,
+					cacheRead: raw.cacheRead,
+					cacheWrite: raw.cacheWrite,
+					output: raw.output
+				},
+				{ depts: depts.map((d) => d.id), policies: policies.map((p) => p.id) }
+			).catch((e) => console.warn('usage tracking failed:', e));
 		},
 		// Surface the real failure to the UI instead of the SDK's masked
 		// "An error occurred." (full details stay in the server log).
