@@ -11,7 +11,7 @@ const TOKEN_TTL = '24h';
 /**
  * The bearer token is an ENCRYPTED JWT (JWE, A256GCM), not a plain signed one.
  *
- * Downstream tool calls (StarRocks queries, Windmill) run as the logged-in
+ * Downstream tool calls (StarRocks queries, MCP servers) run as the logged-in
  * user, so the token carries the user's credentials. A signed-only JWT is
  * base64-readable by anyone who holds it; encrypting means only this server
  * can read the claims. Tampering is also impossible — AES-GCM authenticates

@@ -1,8 +1,8 @@
 import { getToken } from '$lib/session';
 
 /**
- * Client for /api/settings. The Windmill token is write-only from the
- * browser's point of view: PUT sends it, GET only reports `windmillTokenSet`.
+ * Client for /api/settings. MCP tokens are write-only from the browser's
+ * point of view: PUT sends them, GET only reports whether one is set.
  */
 
 export interface PublicMcpServer {
@@ -17,8 +17,6 @@ export interface PublicSettings {
 	fullName: string;
 	displayName: string;
 	systemPrompt: string;
-	windmillTokenSet: boolean;
-	tabulaTokenSet: boolean;
 	mcpServers: PublicMcpServer[];
 	webSearch: boolean;
 	/** Whether the deployment's provider workspace supports server-side web search. */
@@ -36,8 +34,6 @@ export interface SettingsPatch {
 	fullName?: string;
 	displayName?: string;
 	systemPrompt?: string;
-	windmillToken?: string | null;
-	tabulaToken?: string | null;
 	/** Full replacement list; per-entry token: string sets, null clears, undefined keeps. */
 	mcpServers?: Array<{ id?: string; name: string; url: string; token?: string | null; enabled: boolean }>;
 	webSearch?: boolean;

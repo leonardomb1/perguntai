@@ -1,10 +1,10 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import { connectAsUser } from './db';
+import { runSandboxedPython } from './sandbox';
 import { searchAllDocuments, getSheet, listTables } from './rag';
 import { tableSchemas, schemaContext } from './schema';
 import { visibleDatabases } from './warehouse-access';
-import { runEphemeralPython } from './windmill';
 import { createExcelExport, createTextExport, type ExportSheet } from './exports';
 import { checkStatement, readOnlyStatement } from './sql-guard';
 import { saveMemory, removeMemory } from './memory';
@@ -184,7 +184,7 @@ export const diagramTool = tool({
 
 /**
  * Preview an uploaded spreadsheet (CSV/Excel): columns + sample rows, so the
- * model understands the structure before analyzing it with runPython.
+ * model understands the structure before reasoning about it.
  */
 export function tablePreviewTool(
 	username: string,
@@ -194,7 +194,7 @@ export function tablePreviewTool(
 	return tool({
 		description:
 			'Inspect a spreadsheet (CSV/Excel) attached to this conversation: returns its columns, row count, ' +
-			'and the first rows. ALWAYS call this before analyzing an uploaded table with runPython.',
+			'and the first rows. ALWAYS call this before reasoning about an uploaded table.',
 		inputSchema: z.object({
 			document: z.string().describe('Uploaded document name (fuzzy match, e.g. "sales.xlsx")'),
 			sheet: z.string().optional().describe('Sheet name for Excel files (defaults to the first)')
@@ -372,115 +372,6 @@ export function documentExportTool(username: string) {
 			const clean = filename.replace(/[^\w.\- ()]/g, '_').replace(/\.(md|txt|csv)$/i, '');
 			const { id, bytes } = await createTextExport(username, content, format);
 			return { fileId: id, filename: `${clean || 'documento'}.${format}`, bytes, format };
-		}
-	});
-}
-
-const MAX_PYTHON_INPUT_ROWS = 20_000;
-const MAX_PYTHON_RESULT_CHARS = 24_000;
-
-/**
- * Ephemeral Python on Windmill workers (code-interpreter style): the agent
- * writes a one-off script per question — statistics, forecasting, anything
- * beyond SQL. Built per-request because `dataQuery` runs against StarRocks AS
- * THE LOGGED-IN USER and feeds the full result (up to 20k rows) straight into
- * the script server-side, so large datasets never pass through the model.
- */
-export function pythonTool(
-	credentials: { username: string; password?: string },
-	conversationId: string,
-	windmillToken: string | null,
-	depts: { id: string; name: string }[]
-) {
-	return tool({
-		description:
-			'Run an ephemeral Python script on Windmill workers for advanced analysis: statistics, ' +
-			'forecasting, regressions, clustering, complex transformations — anything beyond SQL. ' +
-			'The script MUST define `def main(data=None, **kwargs):` and return a JSON-serializable ' +
-			'value. Imports (pandas, numpy, statsmodels, scikit-learn, …) are auto-installed — a ' +
-			'first run with new imports can take a minute. Two ways to feed data into main() as ' +
-			'`data` (a list of dicts) WITHOUT pasting rows into the code: dataQuery (read-only SQL ' +
-			'against the warehouse, full result up to 20k rows, user’s own permissions) or ' +
-			'document (an uploaded CSV/Excel — preview it with previewTable first). Return small ' +
-			'summaries, never large arrays; if the user then needs a chart, return the aggregated ' +
-			'series and feed it to renderChart.',
-		inputSchema: z.object({
-			code: z
-				.string()
-				.describe('Python source defining main(data=None, **kwargs) -> JSON-serializable'),
-			dataQuery: z
-				.string()
-				.optional()
-				.describe(
-					'Read-only SQL; full result becomes the `data` argument of main(). Fully qualify tables with their database (e.g. gold.table_name)'
-				),
-			document: z
-				.string()
-				.optional()
-				.describe('Uploaded CSV/Excel document name; its rows become the `data` argument'),
-			sheet: z.string().optional().describe('Sheet name when document is an Excel file'),
-			args: z
-				.record(z.string(), z.unknown())
-				.optional()
-				.describe('Extra keyword arguments passed to main()')
-		}),
-		execute: async ({ code, dataQuery, document, sheet, args }) => {
-			const jobArgs: Record<string, unknown> = { ...(args ?? {}) };
-
-			if (dataQuery && document) {
-				return { error: 'Pass either dataQuery or document, not both' };
-			}
-
-			if (document) {
-				const hit = await getSheet(credentials.username, conversationId, depts, document, sheet);
-				if (!hit) {
-					return {
-						error: `No uploaded table matches "${document}"`,
-						availableTables: await listTables(credentials.username, conversationId, depts)
-					};
-				}
-				jobArgs.data = hit.sheet.rows;
-			}
-
-			if (dataQuery) {
-				const statement = readOnlyStatement(dataQuery);
-				if (!statement) {
-					return { error: 'dataQuery must be a single read-only statement (SELECT/SHOW/…)' };
-				}
-				let conn;
-				try {
-					conn = await connectAsUser(credentials, { selectDatabase: false });
-					const [rows] = await conn.query(statement);
-					const list = jsonSafe(Array.isArray(rows) ? rows : [rows]) as Record<string, unknown>[];
-					if (list.length > MAX_PYTHON_INPUT_ROWS) {
-						return {
-							error: `dataQuery returned ${list.length} rows (max ${MAX_PYTHON_INPUT_ROWS}) — aggregate or filter in SQL first`
-						};
-					}
-					jobArgs.data = list;
-				} catch (error) {
-					return { error: error instanceof Error ? error.message : 'dataQuery failed' };
-				} finally {
-					await conn?.end().catch(() => {});
-				}
-			}
-
-			const outcome = await runEphemeralPython(code, jobArgs, windmillToken);
-			if (outcome.error) return outcome;
-
-			const serialized = JSON.stringify(outcome.result);
-			if (serialized && serialized.length > MAX_PYTHON_RESULT_CHARS) {
-				return {
-					error:
-						`Result too large (${serialized.length} chars) — return a summary ` +
-						'(aggregates, top-N, model coefficients), not raw data',
-					preview: serialized.slice(0, 2000)
-				};
-			}
-			return {
-				result: outcome.result,
-				...(jobArgs.data ? { inputRows: (jobArgs.data as unknown[]).length } : {})
-			};
 		}
 	});
 }
@@ -674,6 +565,76 @@ function jsonSafe(value: unknown): unknown {
 	return value;
 }
 
+const MAX_SANDBOX_INPUT_ROWS = 20_000;
+const MAX_SANDBOX_INPUT_BYTES = 8 * 1024 * 1024;
+
+/**
+ * BETA — sandboxed Python on microsandbox microVMs (hardware isolation via
+ * libkrun/KVM). Registered only when the admin enabled the codeExecution
+ * capability. `dataQuery` runs read-only AS THE USER and feeds the full result
+ * into the sandbox server-side, so datasets never pass through the model.
+ */
+export function sandboxPythonTool(credentials: { username: string; password?: string }) {
+	return tool({
+		description:
+			'Run a Python script in an isolated sandbox for advanced analysis: statistics, forecasting, ' +
+			'regressions, clustering, transformations beyond SQL. The script runs top-level (no main() ' +
+			'needed) and MUST print its findings (print(...) — prefer compact JSON or small tables); ' +
+			'stdout is the result. pandas/numpy are available; other imports may be missing. To feed ' +
+			'warehouse data WITHOUT pasting rows, pass dataQuery (a single read-only SQL statement, ' +
+			'database-qualified names, executed with the user\u2019s own permissions, up to ' +
+			`${MAX_SANDBOX_INPUT_ROWS} rows) — its rows arrive as the preloaded variable \`data\` ` +
+			'(a list of dicts). Return small summaries, never large arrays; if the user then needs a ' +
+			'chart, print the aggregated series and feed it to renderChart.',
+		inputSchema: z.object({
+			code: z.string().describe('Python source; runs top-level with `data` preloaded; print results'),
+			dataQuery: z
+				.string()
+				.optional()
+				.describe('Read-only SQL whose full result becomes the `data` variable')
+		}),
+		execute: async ({ code, dataQuery }) => {
+			let data: unknown[] | undefined;
+			if (dataQuery?.trim()) {
+				const statement = checkStatement(dataQuery, { allowWrites: false });
+				if (!statement) {
+					return { error: 'dataQuery must be a single read-only statement (SELECT/SHOW/DESCRIBE/EXPLAIN)' };
+				}
+				let conn;
+				try {
+					conn = await connectAsUser(credentials, { selectDatabase: false });
+					const [result] = await conn.query(statement);
+					if (!Array.isArray(result)) return { error: 'dataQuery returned no row set' };
+					const rows = (jsonSafe(result) as Record<string, unknown>[]).slice(
+						0,
+						MAX_SANDBOX_INPUT_ROWS
+					);
+					if (JSON.stringify(rows).length > MAX_SANDBOX_INPUT_BYTES) {
+						return {
+							error: `dataQuery result exceeds ${MAX_SANDBOX_INPUT_BYTES / 1024 / 1024} MiB — aggregate or select fewer columns`
+						};
+					}
+					data = rows;
+				} catch (error) {
+					return { error: error instanceof Error ? error.message : 'dataQuery failed' };
+				} finally {
+					await conn?.end().catch(() => {});
+				}
+			}
+			try {
+				const run = await runSandboxedPython(code, data);
+				return run.ok
+					? { output: run.stdout, durationMs: run.durationMs, rows: data?.length }
+					: { error: run.stderr || run.stdout || `exit ${run.exitCode}`, durationMs: run.durationMs };
+			} catch (error) {
+				return {
+					error: `sandbox unavailable: ${error instanceof Error ? error.message : String(error)}`
+				};
+			}
+		}
+	});
+}
+
 /**
  * SQL tool against StarRocks, built per-request because it connects AS THE
  * LOGGED-IN USER (credentials from the encrypted bearer token), so the database
@@ -682,7 +643,7 @@ function jsonSafe(value: unknown): unknown {
  * Read-only unless an admin granted this user sqlWrite, which widens the guard
  * to ordinary DML (see sql-guard). The caller resolves the flag and passes it in
  * — the guard itself is never widened globally, so the other SQL entry points
- * (flow sqlCheck, generateExcel, runPython) stay read-only for everyone.
+ * (flow sqlCheck, generateExcel) stay read-only for everyone.
  */
 export function starrocksQueryTool(
 	credentials: { username: string; password?: string },

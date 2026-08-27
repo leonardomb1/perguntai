@@ -42,15 +42,6 @@ export interface AccessUser {
 	 * Chat only — flow runs are always read-only. Admin-set; never self-granted.
 	 */
 	sqlWrite?: boolean;
-	/**
-	 * Lets the MODEL mutate the Windmill workspace — create/update/delete flows,
-	 * scripts, schedules, variables, resources, apps — on top of the read-only
-	 * default. Like sqlWrite, not a permission: the user's own Windmill token
-	 * already scopes what they could do by hand; this decides whether the model
-	 * may do it for them. Running scripts/flows is NOT gated by this (it's in the
-	 * read-only set). Chat only — flow runs are always read-only. Admin-set.
-	 */
-	windmillWrite?: boolean;
 	addedBy: string;
 	addedAt: string;
 }
@@ -106,13 +97,19 @@ export interface AccessPolicy {
 	/** Extra model IDs, on top of DEFAULT_MODEL (same semantics as AccessUser). */
 	allowedModels?: string[];
 	sqlWrite?: boolean;
-	windmillWrite?: boolean;
 	/** Daily token cap granted by this policy; null = uncapped. */
 	maxDailyTokens: number | null;
 }
 
+/** Deployment-wide feature switches, admin-managed in the console. */
+export interface Capabilities {
+	/** BETA — sandboxed Python execution on microsandbox microVMs. */
+	codeExecution: boolean;
+}
+
 interface AccessFile {
 	users: Record<string, AccessUser>;
+	capabilities: Capabilities;
 	/** Rule-based grants over sign-in claims, additive with per-user records. */
 	policies: AccessPolicy[];
 	/** Free-text standing instructions applied to every user (behavioral). */
@@ -156,7 +153,6 @@ function sanitizePolicies(raw: unknown): AccessPolicy[] {
 					}
 				: {}),
 			sqlWrite: p.sqlWrite === true,
-			windmillWrite: p.windmillWrite === true,
 			maxDailyTokens:
 				typeof p.maxDailyTokens === 'number' && p.maxDailyTokens > 0
 					? Math.round(p.maxDailyTokens)
@@ -232,6 +228,7 @@ async function load(): Promise<AccessFile> {
 		const parsed = JSON.parse(await readFile(path, 'utf8'));
 		const data: AccessFile = {
 			users: typeof parsed.users === 'object' && parsed.users ? parsed.users : {},
+			capabilities: { codeExecution: parsed.capabilities?.codeExecution === true },
 			policies: sanitizePolicies(parsed.policies),
 			orgSystemPrompt: typeof parsed.orgSystemPrompt === 'string' ? parsed.orgSystemPrompt : '',
 			orgKnowledge: sanitizeKnowledge(parsed.orgKnowledge),
@@ -243,6 +240,7 @@ async function load(): Promise<AccessFile> {
 		// First run — seed from the legacy env allowlist, then persist.
 		const seeded: AccessFile = {
 			users: {},
+			capabilities: { codeExecution: false },
 			policies: [],
 			orgSystemPrompt: '',
 			orgKnowledge: [],
@@ -329,20 +327,6 @@ export async function resolveSqlWrite(
 }
 
 /**
- * Whether the model may mutate the Windmill workspace under this user's own
- * token. Same reasoning as resolveSqlWrite: not implied by the admin role, and
- * re-read per request so revoking it lands on the next message.
- */
-export async function resolveWindmillWrite(
-	username: string,
-	profile?: UserProfile | null
-): Promise<boolean> {
-	const data = await load();
-	if (data.users[username.toLowerCase()]?.windmillWrite === true) return true;
-	return matchedPolicies(data, profile).some((p) => p.windmillWrite);
-}
-
-/**
  * Effective daily token cap. A personal limit on the user's record is an
  * explicit exception and wins outright; otherwise the loosest matching policy
  * applies (uncapped beats any number); with no record and no policy, uncapped.
@@ -372,7 +356,7 @@ export async function listAccessUsers(): Promise<Record<string, AccessUser>> {
 export async function upsertAccessUser(
 	username: string,
 	patch: Partial<
-		Pick<AccessUser, 'role' | 'blocked' | 'maxDailyTokens' | 'allowedModels' | 'sqlWrite' | 'windmillWrite'>
+		Pick<AccessUser, 'role' | 'blocked' | 'maxDailyTokens' | 'allowedModels' | 'sqlWrite'>
 	>,
 	actor: string
 ): Promise<void> {
@@ -398,7 +382,6 @@ export async function upsertAccessUser(
 			patch.maxDailyTokens !== undefined ? patch.maxDailyTokens : (current?.maxDailyTokens ?? null),
 		...(allowedModels && allowedModels.length ? { allowedModels } : {}),
 		sqlWrite: patch.sqlWrite ?? current?.sqlWrite ?? false,
-		windmillWrite: patch.windmillWrite ?? current?.windmillWrite ?? false,
 		addedBy: current?.addedBy ?? actor,
 		addedAt: current?.addedAt ?? new Date().toISOString()
 	};
@@ -454,6 +437,19 @@ export async function setPolicies(policies: unknown): Promise<AccessPolicy[]> {
 	data.policies = sanitizePolicies(policies);
 	await save(data);
 	return data.policies;
+}
+
+export async function getCapabilities(): Promise<Capabilities> {
+	return (await load()).capabilities;
+}
+
+export async function setCapabilities(patch: Partial<Capabilities>): Promise<Capabilities> {
+	const data = await load();
+	data.capabilities = {
+		codeExecution: patch.codeExecution ?? data.capabilities.codeExecution
+	};
+	await save(data);
+	return data.capabilities;
 }
 
 /** Open mode = nothing gates sign-in yet (no user records AND no policies). */

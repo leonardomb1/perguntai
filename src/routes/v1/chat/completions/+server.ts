@@ -9,8 +9,7 @@ import {
 	getEffectiveOrgPrompt,
 	policiesForUser,
 	resolveDailyLimit,
-	resolveModel,
-	resolveWindmillWrite
+	resolveModel
 } from '$lib/server/access';
 import { addUsage, usageToday, weightedTokens } from '$lib/server/usage';
 import { logAudit, requestMeta } from '$lib/server/audit';
@@ -74,13 +73,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		user.profile
 	);
 	const settings = await getUserSettings(user.username);
-	const mcp = await connectMcpTools(
-		{ windmill: settings.windmillToken, tabula: settings.tabulaToken },
-		{
-			allowWrites: await resolveWindmillWrite(user.username, user.profile),
-			custom: settings.mcpServers.filter((sv) => sv.enabled)
-		}
-	);
+	const mcp = await connectMcpTools(settings.mcpServers.filter((sv) => sv.enabled));
 
 	const agent = await buildAgent(
 		user,

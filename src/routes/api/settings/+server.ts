@@ -2,15 +2,13 @@ import { json } from '@sveltejs/kit';
 import { authenticateRequest } from '$lib/server/auth';
 import { getPublicSettings, saveUserSettings, type SettingsPatch } from '$lib/server/settings';
 import { logAudit, requestMeta } from '$lib/server/audit';
-import { provisionUserTokens } from '$lib/server/windmill';
 import { resolveRole } from '$lib/server/access';
 import { webSearchAvailable } from '$lib/server/agent';
 import type { RequestHandler } from './$types';
 
 /**
- * Per-user settings. GET never returns the Windmill token — only whether one
- * is set. PUT is a partial update: omitted fields are untouched;
- * windmillToken null clears it, a non-empty string replaces it.
+ * Per-user settings. GET never returns MCP tokens — only whether one is set.
+ * PUT is a partial update: omitted fields are untouched.
  */
 
 export const GET: RequestHandler = async ({ request }) => {
@@ -42,22 +40,6 @@ export const PUT: RequestHandler = async ({ request }) => {
 	if (typeof body.fullName === 'string') patch.fullName = body.fullName;
 	if (typeof body.displayName === 'string') patch.displayName = body.displayName;
 	if (typeof body.systemPrompt === 'string') patch.systemPrompt = body.systemPrompt;
-	if (body.windmillToken === null) {
-		patch.windmillToken = null;
-		patch.windmillDeployToken = null;
-	} else if (typeof body.windmillToken === 'string' && body.windmillToken.trim()) {
-		// Exchange whatever the user pasted for TWO minted tokens: a scoped one
-		// (mcp + jobs:run) for chat tools, and a full-access one for deploying
-		// flows/schedules/variables (scoped tokens can't create those).
-		const minted = await provisionUserTokens(body.windmillToken.trim());
-		patch.windmillToken = minted.mcp;
-		patch.windmillDeployToken = minted.deploy;
-	}
-	// Stored as pasted: Tabula personal tokens are already scoped server-side.
-	if (body.tabulaToken === null) patch.tabulaToken = null;
-	else if (typeof body.tabulaToken === 'string' && body.tabulaToken.trim()) {
-		patch.tabulaToken = body.tabulaToken.trim();
-	}
 	if (Array.isArray(body.mcpServers)) {
 		// Server-side sanitation lives in saveUserSettings; this only shapes.
 		patch.mcpServers = body.mcpServers
@@ -75,13 +57,9 @@ export const PUT: RequestHandler = async ({ request }) => {
 	if (body.onboarded === true) patch.onboarded = true;
 
 	const saved = await saveUserSettings(user.username, patch);
-	// Connector governance: any change to MCP servers or connector tokens is
-	// an auditable event — who is wiring what into their agent.
-	if (
-		patch.mcpServers !== undefined ||
-		patch.windmillToken !== undefined ||
-		patch.tabulaToken !== undefined
-	) {
+	// Connector governance: any change to the user's MCP servers is an
+	// auditable event — who is wiring what into their agent.
+	if (patch.mcpServers !== undefined) {
 		logAudit({
 			actor: user.username,
 			via: 'session',
@@ -90,15 +68,7 @@ export const PUT: RequestHandler = async ({ request }) => {
 			action: 'connectors.update',
 			status: 'ok',
 			detail: {
-				...(patch.mcpServers !== undefined
-					? { mcp: saved.mcpServers.map((sv) => ({ name: sv.name, url: sv.url, enabled: sv.enabled })) }
-					: {}),
-				...(patch.windmillToken !== undefined
-					? { windmillToken: patch.windmillToken === null ? 'removed' : 'set' }
-					: {}),
-				...(patch.tabulaToken !== undefined
-					? { tabulaToken: patch.tabulaToken === null ? 'removed' : 'set' }
-					: {})
+				mcp: saved.mcpServers.map((sv) => ({ name: sv.name, url: sv.url, enabled: sv.enabled }))
 			}
 		});
 	}

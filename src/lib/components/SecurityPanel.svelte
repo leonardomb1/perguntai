@@ -176,12 +176,6 @@
 						<Avatar username={c.username} size={24} />
 						<span class="max-w-44 truncate text-[15px] font-medium text-neutral-800">{c.username}</span>
 						<span class="min-w-4 flex-1"></span>
-						{#if c.windmillTokenSet}
-							<span class="rounded bg-[#f0eee6] px-1.5 py-0.5 text-[11px] font-medium text-neutral-600">Windmill</span>
-						{/if}
-						{#if c.tabulaTokenSet}
-							<span class="rounded bg-[#f0eee6] px-1.5 py-0.5 text-[11px] font-medium text-neutral-600">Tabula</span>
-						{/if}
 						{#each c.mcpServers as sv (sv.name + sv.url)}
 							<span
 								class="rounded px-1.5 py-0.5 text-[11px] font-medium {sv.enabled

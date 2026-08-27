@@ -12,8 +12,7 @@ import {
 	getEffectiveOrgPrompt,
 	policiesForUser,
 	resolveDailyLimit,
-	resolveModel,
-	resolveWindmillWrite
+	resolveModel
 } from '$lib/server/access';
 import { addUsage, usageToday, weightedTokens } from '$lib/server/usage';
 import { logAudit, requestMeta } from '$lib/server/audit';
@@ -71,17 +70,9 @@ export const POST: RequestHandler = async ({ request }) => {
 	);
 
 	// Settings drive personalization (names, custom instructions) and carry the
-	// user's own Windmill token — MCP and runPython act with THEIR permissions.
+	// user's own MCP servers — their tools act with THE USER'S credentials.
 	const settings = await getUserSettings(user.username);
-	// Admin-granted: may the model mutate the Windmill workspace, or only read
-	// and run? Resolved from the user's record plus matching policies.
-	const mcp = await connectMcpTools(
-		{ windmill: settings.windmillToken, tabula: settings.tabulaToken },
-		{
-			allowWrites: await resolveWindmillWrite(user.username, user.profile),
-			custom: settings.mcpServers.filter((sv) => sv.enabled)
-		}
-	);
+	const mcp = await connectMcpTools(settings.mcpServers.filter((sv) => sv.enabled));
 
 	// Token accounting: accumulate each step's usage, persist once at the end.
 	let totalTokens = 0;

@@ -9,9 +9,9 @@ import type { RequestHandler } from './$types';
 
 /**
  * Connector governance: which MCP servers each user has wired into their
- * agent, plus whether the built-in connector tokens are set. Read-only —
- * connectors are personal settings; the audit log records their changes.
- * Only public shapes cross this boundary (names/URLs/enabled, never tokens).
+ * agent. Read-only — connectors are personal settings; the audit log records
+ * their changes. Only public shapes cross this boundary (names/URLs/enabled,
+ * never tokens).
  */
 async function requireAdmin(request: Request): Promise<AuthUser | Response> {
 	const user = await authenticateRequest(request);
@@ -38,11 +38,9 @@ export const GET: RequestHandler = async ({ request }) => {
 	for (const file of files) {
 		const username = file.replace(/\.json$/, '');
 		const s = await getPublicSettings(username);
-		if (!s.windmillTokenSet && !s.tabulaTokenSet && s.mcpServers.length === 0) continue;
+		if (s.mcpServers.length === 0) continue;
 		users.push({
 			username,
-			windmillTokenSet: s.windmillTokenSet,
-			tabulaTokenSet: s.tabulaTokenSet,
 			mcpServers: s.mcpServers.map((sv) => ({
 				name: sv.name,
 				url: sv.url,

@@ -48,7 +48,6 @@ export const GET: RequestHandler = async ({ request }) => {
 				maxDailyTokens: entry?.maxDailyTokens ?? null,
 				...(entry?.allowedModels ? { allowedModels: entry.allowedModels } : {}),
 				sqlWrite: entry?.sqlWrite ?? false,
-				windmillWrite: entry?.windmillWrite ?? false,
 				addedBy: entry?.addedBy ?? '',
 				addedAt: entry?.addedAt ?? '',
 				/** No access record — seen via usage only (admitted by a policy). */
@@ -169,13 +168,11 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		maxDailyTokens?: number | null;
 		allowedModels?: string[];
 		sqlWrite?: boolean;
-		windmillWrite?: boolean;
 	} = {};
 	if (body.role === 'admin' || body.role === 'builder' || body.role === 'user')
 		patch.role = body.role;
 	if (typeof body.blocked === 'boolean') patch.blocked = body.blocked;
 	if (typeof body.sqlWrite === 'boolean') patch.sqlWrite = body.sqlWrite;
-	if (typeof body.windmillWrite === 'boolean') patch.windmillWrite = body.windmillWrite;
 	if (body.maxDailyTokens === null) patch.maxDailyTokens = null;
 	else if (typeof body.maxDailyTokens === 'number' && body.maxDailyTokens > 0)
 		patch.maxDailyTokens = Math.round(body.maxDailyTokens);

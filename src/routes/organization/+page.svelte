@@ -16,6 +16,10 @@
 		getOrg,
 		saveOrg,
 		matchesProfile,
+		fetchCapabilities,
+		saveCapabilities,
+		testCodeExecution,
+		type Capabilities,
 		type OrgKnowledgeEntry,
 		type Department,
 		type CallerProfile
@@ -34,10 +38,38 @@
 		});
 	});
 
-	type Section = 'knowledge' | 'users' | 'stats' | 'audit';
+	type Section = 'knowledge' | 'users' | 'stats' | 'audit' | 'capabilities';
 	let section = $state<Section>('knowledge');
 	/** Users/stats apply immediately — no batch save, so no Save button there. */
-	const adminSection = $derived(section === 'users' || section === 'stats' || section === 'audit');
+	const adminSection = $derived(
+		section === 'users' || section === 'stats' || section === 'audit' || section === 'capabilities'
+	);
+
+	// --- deployment capabilities (Capacidades) — applied immediately ---
+	let capabilities = $state<Capabilities | null>(null);
+	let capBusy = $state(false);
+	let capTest = $state<
+		{ ok: true; latencyMs: number; backend: string } | { ok: false; error: string } | null
+	>(null);
+	let capTesting = $state(false);
+	$effect(() => {
+		if (!browser || !hasSession() || section !== 'capabilities' || capabilities) return;
+		fetchCapabilities().then((c) => (capabilities = c));
+	});
+	async function toggleCodeExecution() {
+		if (!capabilities || capBusy) return;
+		capBusy = true;
+		const updated = await saveCapabilities({ codeExecution: !capabilities.codeExecution });
+		if (updated) capabilities = updated;
+		capBusy = false;
+	}
+	async function runCapTest() {
+		if (capTesting) return;
+		capTesting = true;
+		capTest = null;
+		capTest = await testCodeExecution();
+		capTesting = false;
+	}
 
 	/** Mobile only: the console rail is a drawer, closed by default. */
 	let railOpen = $state(false);
@@ -135,7 +167,8 @@
 		{ id: 'knowledge' as const, icon: 'book' as const, label: m.org_nav_knowledge() },
 		{ id: 'users' as const, icon: 'users' as const, label: m.admin_users_title() },
 		{ id: 'stats' as const, icon: 'activity' as const, label: m.admin_stats_tab() },
-		{ id: 'audit' as const, icon: 'eye' as const, label: m.org_nav_audit() }
+		{ id: 'audit' as const, icon: 'eye' as const, label: m.org_nav_audit() },
+		{ id: 'capabilities' as const, icon: 'sparkle' as const, label: m.org_nav_capabilities() }
 	];
 
 	const sectionMeta = $derived(
@@ -143,7 +176,8 @@
 			knowledge: { title: m.org_nav_knowledge(), subtitle: m.org_subtitle() },
 			users: { title: m.admin_users_title(), subtitle: m.org_users_subtitle() },
 			stats: { title: m.admin_stats_tab(), subtitle: m.org_stats_subtitle() },
-			audit: { title: m.org_nav_audit(), subtitle: m.org_audit_subtitle() }
+			audit: { title: m.org_nav_audit(), subtitle: m.org_audit_subtitle() },
+			capabilities: { title: m.org_nav_capabilities(), subtitle: m.org_capabilities_subtitle() }
 		})[section]
 	);
 </script>
@@ -244,6 +278,54 @@
 				<div class="mx-auto max-w-5xl px-4 py-5 sm:px-6">
 					{#if section === 'audit'}
 						<SecurityPanel />
+					{:else if section === 'capabilities'}
+						<div class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+							<div class="flex flex-wrap items-start gap-3">
+								<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-[#d97757]/12 text-[#bd5d3a]">
+									<Icon name="sparkle" size={18} />
+								</span>
+								<div class="min-w-0 flex-1">
+									<h3 class="flex items-center gap-2 text-base font-semibold text-neutral-900">
+										{m.cap_code_title()}
+										<span class="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-amber-700 uppercase">beta</span>
+										<HelpTip text={m.cap_code_help()} />
+									</h3>
+									<p class="mt-0.5 text-[13px] leading-relaxed text-neutral-500">{m.cap_code_desc()}</p>
+								</div>
+								<button
+									role="switch"
+									aria-checked={capabilities?.codeExecution === true}
+									disabled={!capabilities || capBusy}
+									onclick={toggleCodeExecution}
+									aria-label={m.cap_code_title()}
+									class="relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40
+										{capabilities?.codeExecution ? 'bg-[#d97757]' : 'bg-[#d9d6c8]'}"
+								>
+									<span
+										class="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200
+											{capabilities?.codeExecution ? 'translate-x-5' : 'translate-x-0'}"
+									></span>
+								</button>
+							</div>
+							<div class="mt-4 flex flex-wrap items-center gap-2 border-t border-[#efede3] pt-4">
+								<button
+									onclick={runCapTest}
+									disabled={capTesting}
+									class="shrink-0 rounded-lg border border-[#e3e0d5] px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-[#d97757]/50 hover:text-[#bd5d3a] disabled:opacity-50"
+								>
+									{capTesting ? m.settings_mcp_testing() : m.cap_code_test()}
+								</button>
+								{#if capTest}
+									{#if capTest.ok}
+										<p class="min-w-0 text-xs text-emerald-700">
+											✓ {m.cap_code_test_ok({ ms: capTest.latencyMs, backend: capTest.backend })}
+										</p>
+									{:else}
+										<p class="min-w-0 text-xs break-words text-red-600">✗ {capTest.error}</p>
+									{/if}
+								{/if}
+							</div>
+						</div>
 					{:else}
 						<AdminPanel view={section === 'users' ? 'users' : 'stats'} />
 					{/if}

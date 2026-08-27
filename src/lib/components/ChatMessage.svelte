@@ -9,7 +9,7 @@
 	import Mermaid from './Mermaid.svelte';
 	import Avatar from './Avatar.svelte';
 	import Icon from './Icon.svelte';
-	import { downloadArtifact, downloadExport, fetchArtifactBlob, fetchExportBlob } from '$lib/download';
+	import { downloadExport, fetchExportBlob } from '$lib/download';
 	import { autoOpenArtifact, openArtifact, type ArtifactSpec } from '$lib/artifact-panel.svelte';
 	import { copyText } from '$lib/clipboard';
 
@@ -52,7 +52,6 @@
 	};
 	type ReasoningPart = Extract<Part, { type: 'reasoning' }>;
 	type StepPart = AnyToolPart | ReasoningPart;
-	type TabulaPdfSpec = { url: string; filename: string; bytes?: number };
 	type AskSpec = {
 		toolCallId: string;
 		question: string;
@@ -66,7 +65,6 @@
 		| { kind: 'chart'; spec: ChartSpec }
 		| { kind: 'diagram'; spec: DiagramSpec }
 		| { kind: 'export'; spec: ExportSpec }
-		| { kind: 'artifact'; spec: TabulaPdfSpec }
 		| { kind: 'ask'; spec: AskSpec }
 		| { kind: 'tools'; parts: StepPart[] };
 
@@ -78,8 +76,6 @@
 			if (item.kind === 'export') {
 				const spec = exportArtifact(item.spec);
 				if (spec) autoOpenArtifact(spec);
-			} else if (item.kind === 'artifact') {
-				autoOpenArtifact(tabulaArtifact(item.spec));
 			}
 		}
 	});
@@ -88,33 +84,6 @@
 		const p = part as { state?: string; output?: T };
 		if (p.state !== 'output-available' || !p.output || p.output.error) return null;
 		return p.output;
-	}
-
-	// Tabula MCP results arrive as MCP content blocks whose text is JSON.
-	function tabulaPdfSpec(part: AnyToolPart): TabulaPdfSpec | null {
-		const p = part as { state?: string; output?: unknown };
-		if (p.state !== 'output-available' || !p.output) return null;
-		const out = p.output as string | { content?: { type?: string; text?: string }[] };
-		const text =
-			typeof out === 'string'
-				? out
-				: Array.isArray(out?.content)
-					? out.content.find((c) => c?.type === 'text')?.text
-					: undefined;
-		if (!text) return null;
-		try {
-			const j = JSON.parse(text) as {
-				url?: string;
-				filename?: string;
-				mimeType?: string;
-				bytes?: number;
-			};
-			return j.url && j.mimeType === 'application/pdf'
-				? { url: j.url, filename: j.filename ?? 'documento.pdf', bytes: j.bytes }
-				: null;
-		} catch {
-			return null;
-		}
 	}
 
 	const VIEWABLE_TEXT = new Set(['md', 'markdown', 'txt', 'csv', 'json', 'html']);
@@ -135,21 +104,6 @@
 				return kind === 'pdf' ? { objectUrl: URL.createObjectURL(blob) } : { text: await blob.text() };
 			},
 			download: () => downloadExport(spec.fileId, spec.filename)
-		};
-	}
-
-	function tabulaArtifact(spec: TabulaPdfSpec): ArtifactSpec {
-		return {
-			key: `tabula:${spec.url}`,
-			title: spec.filename.replace(/\.pdf$/i, ''),
-			badge: 'PDF',
-			kind: 'pdf',
-			load: async () => {
-				const { blob, error } = await fetchArtifactBlob(spec.url);
-				if (!blob) return { error: error ?? undefined };
-				return { objectUrl: URL.createObjectURL(blob) };
-			},
-			download: () => downloadArtifact(spec.url, spec.filename)
 		};
 	}
 
@@ -226,13 +180,6 @@
 					if (spec?.fileId) {
 						flush();
 						out.push({ kind: 'export', spec });
-						continue;
-					}
-				} else if (name === 'tabula_render_pdf' || name === 'tabula_render_pdf_custom') {
-					const spec = tabulaPdfSpec(part);
-					if (spec) {
-						flush();
-						out.push({ kind: 'artifact', spec });
 						continue;
 					}
 				}
@@ -424,37 +371,6 @@
 						onclick={() => handleDownload(item.spec as ExportSpec)}
 						class="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#d97757] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#bd5d3a]"
 						class:ml-2={!viewer}
-					>
-						<Icon name="download" size={13} />
-						{m.download()}
-					</button>
-				</div>
-			{:else if item.kind === 'artifact'}
-				{@const viewer = tabulaArtifact(item.spec)}
-				<div
-					class="flex w-fit max-w-full items-center gap-3 rounded-xl border border-[#e3e0d5] bg-white px-4 py-3"
-				>
-					<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-[#d97757]/10 text-[#bd5d3a]">
-						<Icon name="file" size={20} />
-					</span>
-					<span class="min-w-0">
-						<span class="block truncate text-sm font-medium text-neutral-800">
-							{item.spec.filename}
-						</span>
-						<span class="block text-xs text-neutral-500">
-							PDF{#if item.spec.bytes}&nbsp;· {(item.spec.bytes / 1024).toFixed(item.spec.bytes < 10240 ? 1 : 0)} KB{/if}
-						</span>
-					</span>
-					<button
-						onclick={() => openArtifact(viewer)}
-						class="ml-2 flex shrink-0 items-center gap-1.5 rounded-lg border border-[#e3e0d5] px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-[#f0efea]"
-					>
-						<Icon name="eye" size={13} />
-						{m.artifact_view()}
-					</button>
-					<button
-						onclick={() => viewer.download()}
-						class="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#d97757] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#bd5d3a]"
 					>
 						<Icon name="download" size={13} />
 						{m.download()}

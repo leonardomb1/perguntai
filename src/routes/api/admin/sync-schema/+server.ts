@@ -7,7 +7,7 @@ import type { RequestHandler } from './$types';
 
 /**
  * Regenerate the warehouse catalog (schema.json). Intended to be triggered by a
- * Windmill cron: POST here with `Authorization: Bearer <SCHEMA_SYNC_TOKEN>`.
+ * external cron: POST here with `Authorization: Bearer <SCHEMA_SYNC_TOKEN>`.
  * Also allowed for a signed-in admin (so it can be run manually). The sync uses
  * the STARROCKS_SYNC_* service account server-side — no end-user credentials.
  */

@@ -27,11 +27,6 @@ export async function fetchExportBlob(
 	);
 }
 
-/** Tabula artifact links go through the same-origin proxy (CORS/frame limits). */
-export async function fetchArtifactBlob(url: string): Promise<{ blob?: Blob; error?: string }> {
-	return fetchAuthed(`/api/artifact-proxy?url=${encodeURIComponent(url)}`);
-}
-
 function saveBlob(blob: Blob, filename: string): void {
 	const url = URL.createObjectURL(blob);
 	const a = document.createElement('a');
@@ -48,9 +43,3 @@ export async function downloadExport(fileId: string, filename: string): Promise<
 	return null;
 }
 
-export async function downloadArtifact(url: string, filename: string): Promise<string | null> {
-	const { blob, error } = await fetchArtifactBlob(url);
-	if (!blob) return error ?? m.download_failed();
-	saveBlob(blob, filename);
-	return null;
-}

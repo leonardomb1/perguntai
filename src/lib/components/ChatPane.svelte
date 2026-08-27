@@ -18,7 +18,6 @@
 	import { getToken, getDisplayName, clearSession } from '$lib/session';
 	import { saveConversation, type ConversationMeta } from '$lib/history';
 	import { imageToDataUrl } from '$lib/image';
-	import { saveSettings, type PublicSettings } from '$lib/settings';
 	import { newId } from '$lib/id';
 	import logo from '$lib/assets/favicon.svg';
 
@@ -26,9 +25,7 @@
 		conversationId,
 		initialMessages,
 		displayName,
-		onSaved,
-		windmillConfigured = true,
-		onWindmillSaved
+		onSaved
 	}: {
 		conversationId: string;
 		initialMessages: UIMessage[];
@@ -36,57 +33,12 @@
 		displayName?: string;
 		/** Receives the saved index entry (null on no-op) to update the sidebar in place. */
 		onSaved: (meta: ConversationMeta | null) => void;
-		/** Advanced Python/automation features need a Windmill token (see notice). */
-		windmillConfigured?: boolean;
-		/** The notice bubble saved a Windmill token — refresh the page's settings. */
-		onWindmillSaved?: (updated: PublicSettings) => void;
 	} = $props();
 
 	// Login username seeds the identicon (must match the sidebar avatar);
 	// the settings display name is only for addressing the user in text.
 	const loginName = getDisplayName() ?? 'user';
 	const username = $derived(displayName || loginName);
-
-	// Claude-style inline notice: code execution needs the user's Windmill
-	// token. Dismissal is a per-browser convenience, not state worth syncing.
-	const WM_NOTICE_KEY = 'perguntai_wm_notice_dismissed';
-	let wmNoticeDismissed = $state(true);
-	onMount(() => {
-		try {
-			wmNoticeDismissed = localStorage.getItem(WM_NOTICE_KEY) === '1';
-		} catch {
-			wmNoticeDismissed = false;
-		}
-	});
-	// The bubble IS the configuration surface: expand, paste the token, save.
-	// The server mints the dual-scope tokens exactly as the old settings card did.
-	let wmFormOpen = $state(false);
-	let wmTokenDraft = $state('');
-	let wmSaving = $state(false);
-	let wmSaveError = $state(false);
-	async function saveWmToken() {
-		const token = wmTokenDraft.trim();
-		if (!token || wmSaving) return;
-		wmSaving = true;
-		wmSaveError = false;
-		const updated = await saveSettings({ windmillToken: token });
-		wmSaving = false;
-		if (updated?.windmillTokenSet) {
-			wmTokenDraft = '';
-			onWindmillSaved?.(updated);
-		} else {
-			wmSaveError = true;
-		}
-	}
-
-	function dismissWmNotice() {
-		wmNoticeDismissed = true;
-		try {
-			localStorage.setItem(WM_NOTICE_KEY, '1');
-		} catch {
-			/* per-browser convenience only */
-		}
-	}
 
 	// The keyboard hint in the composer placeholder only makes sense with a
 	// physical keyboard — on touch devices it wraps into a clipped second line.
@@ -624,59 +576,6 @@
 					{greeting({ username })}
 				</p>
 				<p class="mt-2 text-sm text-neutral-500">{greetingSub()}</p>
-			</div>
-		{/if}
-
-		{#if !windmillConfigured && !wmNoticeDismissed}
-			<div class="mx-auto w-full max-w-md rounded-xl border border-[#e3e0d5] bg-white p-4 text-left shadow-sm">
-				<div class="flex items-start gap-3">
-					<span class="grid size-8 shrink-0 place-items-center rounded-lg bg-[#d97757]/12 text-[#bd5d3a]">
-						<Icon name="zap" size={15} />
-					</span>
-					<div class="min-w-0 flex-1">
-						<p class="text-sm font-semibold text-neutral-900">{m.chat_windmill_notice_title()}</p>
-						<p class="mt-0.5 text-[13px] leading-relaxed text-neutral-500">{m.chat_windmill_notice()}</p>
-						{#if wmFormOpen}
-							<div class="mt-2.5 flex items-center gap-2">
-								<input
-									type="password"
-									bind:value={wmTokenDraft}
-									onkeydown={(e) => e.key === 'Enter' && saveWmToken()}
-									placeholder={m.settings_mcp_token_placeholder()}
-									autocapitalize="none"
-									spellcheck="false"
-									class="min-w-0 flex-1 rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition placeholder:font-sans placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
-								/>
-								<button
-									onclick={saveWmToken}
-									disabled={!wmTokenDraft.trim() || wmSaving}
-									class="shrink-0 rounded-lg bg-[#d97757] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#bd5d3a] disabled:opacity-40"
-								>
-									{wmSaving ? m.org_saving() : m.chat_windmill_save()}
-								</button>
-							</div>
-							<p class="mt-1 text-[11px] text-neutral-400">{m.chat_windmill_hint()}</p>
-							{#if wmSaveError}
-								<p class="mt-1 text-[12px] text-red-600">{m.chat_windmill_error()}</p>
-							{/if}
-						{:else}
-							<button
-								onclick={() => (wmFormOpen = true)}
-								class="mt-2.5 rounded-lg bg-[#d97757] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#bd5d3a]"
-							>
-								{m.chat_windmill_notice_cta()}
-							</button>
-						{/if}
-					</div>
-					<button
-						onclick={dismissWmNotice}
-						class="shrink-0 rounded p-1 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-600"
-						title={m.chat_notice_dismiss()}
-						aria-label={m.chat_notice_dismiss()}
-					>
-						<Icon name="x" size={14} />
-					</button>
-				</div>
 			</div>
 		{/if}
 

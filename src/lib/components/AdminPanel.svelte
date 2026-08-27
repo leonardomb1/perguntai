@@ -98,7 +98,6 @@
 				role: 'user',
 				allowedModels: [],
 				sqlWrite: false,
-				windmillWrite: false,
 				maxDailyTokens: null
 			}
 		];
@@ -534,19 +533,6 @@
 						>
 							<Icon name="square-pen" size={12} />
 						</button>
-						<button
-							type="button"
-							role="switch"
-							aria-checked={p.windmillWrite === true}
-							onclick={() => (policies[pi].windmillWrite = !policies[pi].windmillWrite)}
-							title={m.admin_wmwrite_title()}
-							aria-label={m.admin_wmwrite_badge()}
-							class="flex shrink-0 items-center rounded-lg border px-2 py-1 transition {p.windmillWrite
-								? 'border-[#d97757]/40 bg-[#fdf3ef] text-[#bd5d3a]'
-								: 'border-[#e3e0d5] bg-white text-neutral-400 hover:bg-[#faf9f5]'}"
-						>
-							<Icon name="zap" size={12} />
-						</button>
 						<input
 							type="text"
 							inputmode="numeric"
@@ -775,20 +761,6 @@
 													: 'border-[#e3e0d5] bg-white text-neutral-400 hover:bg-[#faf9f5]'}"
 											>
 												<Icon name="square-pen" size={12} />
-											</button>
-											<button
-												type="button"
-												role="switch"
-												aria-checked={u.windmillWrite === true}
-												onclick={() =>
-													runAdmin(() => patchUser(u.username, { windmillWrite: !u.windmillWrite }))}
-												title={m.admin_wmwrite_title()}
-												aria-label={m.admin_wmwrite_badge()}
-												class="flex shrink-0 items-center rounded-lg border px-2 py-1 transition {u.windmillWrite
-													? 'border-[#d97757]/40 bg-[#fdf3ef] text-[#bd5d3a]'
-													: 'border-[#e3e0d5] bg-white text-neutral-400 hover:bg-[#faf9f5]'}"
-											>
-												<Icon name="zap" size={12} />
 											</button>
 										</div>
 									</td>

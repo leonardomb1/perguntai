@@ -5,7 +5,7 @@ import { env } from '$env/dynamic/private';
 /**
  * Regenerates the warehouse catalog (schema.json) from StarRocks — the same job
  * as scripts/sync-schema.js, callable at runtime so it can be triggered by a
- * route (e.g. a Windmill cron) instead of the docker sleep-loop sidecar. Writes
+ * route (e.g. an external cron) instead of the docker sleep-loop sidecar. Writes
  * to SCHEMA_PATH in the shared volume; the app picks it up by mtime, no restart.
  *
  * Uses the STARROCKS_SYNC_USER/PASSWORD service account (NOT any end-user), and

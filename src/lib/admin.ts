@@ -12,8 +12,6 @@ export interface AdminUser {
 	allowedModels?: string[];
 	/** Lets the model write (INSERT/UPDATE/DELETE/CREATE) under this user's DB grants. */
 	sqlWrite?: boolean;
-	/** Lets the model mutate the Windmill workspace under this user's token. */
-	windmillWrite?: boolean;
 	addedBy: string;
 	addedAt: string;
 	envAdmin: boolean;
@@ -113,7 +111,6 @@ export interface AccessPolicy {
 	role: 'admin' | 'builder' | 'user';
 	allowedModels?: string[];
 	sqlWrite?: boolean;
-	windmillWrite?: boolean;
 	maxDailyTokens: number | null;
 }
 
@@ -177,7 +174,6 @@ export async function patchUser(
 		maxDailyTokens?: number | null;
 		allowedModels?: string[];
 		sqlWrite?: boolean;
-		windmillWrite?: boolean;
 	}
 ): Promise<string | null> {
 	const res = await fetch('/api/admin/users', {
@@ -196,6 +192,47 @@ export async function removeUser(username: string): Promise<string | null> {
 	});
 	if (res.ok) return null;
 	return (await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`;
+}
+
+// --- capabilities (deployment-wide feature switches) ---
+
+export interface Capabilities {
+	codeExecution: boolean;
+}
+
+export async function fetchCapabilities(): Promise<Capabilities | null> {
+	try {
+		const res = await fetch('/api/admin/capabilities', { headers: headers() });
+		if (!res.ok) return null;
+		return (await res.json()).capabilities ?? null;
+	} catch {
+		return null;
+	}
+}
+
+export async function saveCapabilities(patch: Partial<Capabilities>): Promise<Capabilities | null> {
+	try {
+		const res = await fetch('/api/admin/capabilities', {
+			method: 'PATCH',
+			headers: headers(),
+			body: JSON.stringify(patch)
+		});
+		if (!res.ok) return null;
+		return (await res.json()).capabilities ?? null;
+	} catch {
+		return null;
+	}
+}
+
+export async function testCodeExecution(): Promise<
+	{ ok: true; latencyMs: number; backend: string } | { ok: false; error: string }
+> {
+	try {
+		const res = await fetch('/api/admin/capabilities', { method: 'POST', headers: headers() });
+		return await res.json();
+	} catch {
+		return { ok: false, error: 'network' };
+	}
 }
 
 // --- security / audit (admin console) ---
@@ -267,8 +304,6 @@ export async function adminRevokeKey(username: string, id: string): Promise<bool
 
 export interface ConnectorUser {
 	username: string;
-	windmillTokenSet: boolean;
-	tabulaTokenSet: boolean;
 	mcpServers: { name: string; url: string; enabled: boolean; tokenSet: boolean }[];
 }
 
