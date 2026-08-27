@@ -15,6 +15,7 @@ import {
 } from './exports';
 import { checkStatement, readOnlyStatement } from './sql-guard';
 import { saveMemory, removeMemory } from './memory';
+import { proposeSkill, removeSkill, resolveSkill, saveSkill } from './skills';
 
 /**
  * Tools available to the agent. Each tool runs server-side; the agent loop
@@ -447,6 +448,109 @@ export const askUserTool = tool({
  * the system prompt, so the model can update or forget one by id. Only added to
  * the toolset when the user enabled memory (see buildAgent).
  */
+/**
+ * Learned-skill tools: the agent's procedural memory (see skills.ts). useSkill
+ * loads a playbook before a task; saveSkill captures one after a hard-won
+ * success; proposeSkill sends a personal skill to admin review for sharing.
+ * Flat scalar inputs only, like the memory tools.
+ */
+export function skillTools(
+	username: string,
+	conversationId: string,
+	depts: { id: string; name: string }[]
+) {
+	return {
+		useSkill: tool({
+			description:
+				'Load one of your learned skills (listed in <available_skills>) by name or id and get its ' +
+				'full playbook. ALWAYS call this BEFORE starting a task that matches a listed skill — the ' +
+				'playbook has the exact tables, filters, pitfalls and verification steps that worked before.',
+			inputSchema: z.object({
+				skill: z.string().describe('Skill name (fuzzy) or id from <available_skills>')
+			}),
+			execute: async ({ skill }) => {
+				const hit = await resolveSkill(username, depts, skill);
+				if (!hit) return { error: `no skill matches "${skill}"` };
+				return { id: hit.skill.id, name: hit.skill.name, scope: hit.scope, content: hit.skill.content };
+			}
+		}),
+		saveSkill: tool({
+			description:
+				'Capture a reusable PROCEDURE as a learned skill after completing a task that took several ' +
+				'steps, non-obvious fixes, or corrections from the user — so next time you follow the ' +
+				'playbook instead of rediscovering it. Pass an existing skill id to UPDATE it (better ' +
+				'approach found, new pitfall hit — resend the FULL merged content). Content is markdown: ' +
+				'the exact procedure (tables, columns, filters), pitfalls to avoid, and how to verify the ' +
+				'result. Never store data values or personal facts (memory covers those). After saving, ' +
+				'tell the user in one line.',
+			inputSchema: z.object({
+				id: z.string().optional().describe('Existing skill id to UPDATE; omit to create'),
+				name: z.string().describe('Short imperative name, e.g. "Calcular SLA de TI"'),
+				description: z.string().describe('One line: when this skill applies'),
+				content: z.string().describe('Markdown playbook: procedure, pitfalls, verification')
+			}),
+			execute: async ({ id, name, description, content }) => {
+				const result = await saveSkill(
+					username,
+					{ id, name, description, content },
+					'agent',
+					conversationId
+				);
+				if (result.ok) return { ok: true, id: result.skill.id, name: result.skill.name };
+				return {
+					ok: false,
+					reason: result.reason,
+					hint:
+						result.reason === 'full'
+							? 'Skill list is full — forgetSkill an outdated one or update an existing id.'
+							: result.reason === 'not_found'
+								? 'No skill with that id — omit id to create a new one.'
+								: 'name and content are required.'
+				};
+			}
+		}),
+		forgetSkill: tool({
+			description: 'Delete one of the user\u2019s learned skills by id (outdated or wrong procedure).',
+			inputSchema: z.object({ id: z.string().describe('Skill id to delete') }),
+			execute: async ({ id }) => {
+				const ok = await removeSkill(username, id);
+				return ok ? { ok: true } : { ok: false, error: `no skill with id "${id}"` };
+			}
+		}),
+		proposeSkill: tool({
+			description:
+				'Propose one of this user\u2019s skills for SHARED use (whole organization or one of their ' +
+				'departments). It does NOT activate immediately — an admin reviews and approves it in the ' +
+				'console first. Use when the user agrees a skill would help colleagues; tell them it went ' +
+				'to review.',
+			inputSchema: z.object({
+				id: z.string().describe('The user skill id to propose'),
+				scope: z
+					.string()
+					.describe('"org" for the whole organization, or a department id from your context')
+			}),
+			execute: async ({ id, scope }) => {
+				const target =
+					scope === 'org' ? 'org' : depts.some((d) => d.id === scope) ? `dept-${scope}` : null;
+				if (!target) {
+					return {
+						error: `scope must be "org" or one of the user's department ids: ${depts.map((d) => d.id).join(', ') || '(none)'}`
+					};
+				}
+				const result = await proposeSkill(username, id, target);
+				if (result.ok) return { ok: true, status: 'pending admin review' };
+				return {
+					ok: false,
+					error:
+						result.reason === 'duplicate'
+							? 'a shared skill with this name already exists in that scope'
+							: `no personal skill with id "${id}"`
+				};
+			}
+		})
+	};
+}
+
 export function memoryTools(username: string, conversationId: string) {
 	return {
 		saveMemory: tool({

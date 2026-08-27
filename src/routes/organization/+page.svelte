@@ -9,6 +9,7 @@
 	import HelpTip from '$lib/components/HelpTip.svelte';
 	import AdminPanel from '$lib/components/AdminPanel.svelte';
 	import SecurityPanel from '$lib/components/SecurityPanel.svelte';
+	import SkillsPanel from '$lib/components/SkillsPanel.svelte';
 	import { hasSession } from '$lib/session';
 	import { fetchSettings } from '$lib/settings';
 	import { newId } from '$lib/id';
@@ -38,11 +39,15 @@
 		});
 	});
 
-	type Section = 'knowledge' | 'users' | 'stats' | 'audit' | 'capabilities';
+	type Section = 'knowledge' | 'skills' | 'users' | 'stats' | 'audit' | 'capabilities';
 	let section = $state<Section>('knowledge');
 	/** Users/stats apply immediately — no batch save, so no Save button there. */
 	const adminSection = $derived(
-		section === 'users' || section === 'stats' || section === 'audit' || section === 'capabilities'
+		section === 'users' ||
+		section === 'stats' ||
+		section === 'audit' ||
+		section === 'capabilities' ||
+		section === 'skills'
 	);
 
 	// --- deployment capabilities (Capacidades) — applied immediately ---
@@ -165,6 +170,7 @@
 
 	const nav = [
 		{ id: 'knowledge' as const, icon: 'book' as const, label: m.org_nav_knowledge() },
+		{ id: 'skills' as const, icon: 'graduation-cap' as const, label: m.org_nav_skills() },
 		{ id: 'users' as const, icon: 'users' as const, label: m.admin_users_title() },
 		{ id: 'stats' as const, icon: 'activity' as const, label: m.admin_stats_tab() },
 		{ id: 'audit' as const, icon: 'eye' as const, label: m.org_nav_audit() },
@@ -174,6 +180,7 @@
 	const sectionMeta = $derived(
 		({
 			knowledge: { title: m.org_nav_knowledge(), subtitle: m.org_subtitle() },
+			skills: { title: m.org_nav_skills(), subtitle: m.org_skills_subtitle() },
 			users: { title: m.admin_users_title(), subtitle: m.org_users_subtitle() },
 			stats: { title: m.admin_stats_tab(), subtitle: m.org_stats_subtitle() },
 			audit: { title: m.org_nav_audit(), subtitle: m.org_audit_subtitle() },
@@ -276,7 +283,9 @@
 		{#if adminSection}
 			<div class="min-h-0 flex-1 overflow-y-auto">
 				<div class="mx-auto max-w-5xl px-4 py-5 sm:px-6">
-					{#if section === 'audit'}
+					{#if section === 'skills'}
+						<SkillsPanel />
+					{:else if section === 'audit'}
 						<SecurityPanel />
 					{:else if section === 'capabilities'}
 						<div class="rounded-xl border border-[#e3e0d5] bg-white p-5">

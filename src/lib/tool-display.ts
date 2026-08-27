@@ -37,7 +37,11 @@ const ICONS: Record<string, string> = {
 	sandboxReadFile: 'eye',
 	sandboxEditFile: 'square-pen',
 	sandboxPresentFile: 'upload',
-	sandboxImportDoc: 'paperclip'
+	sandboxImportDoc: 'paperclip',
+	useSkill: 'graduation-cap',
+	saveSkill: 'graduation-cap',
+	forgetSkill: 'graduation-cap',
+	proposeSkill: 'graduation-cap'
 };
 
 /** Localized action labels (Claude-style verbs) for tools that have one. */
@@ -49,6 +53,10 @@ const LABELS: Record<string, () => string> = {
 	sandboxLoadData: () => m.tool_load_data(),
 	sandboxPresentFile: () => m.tool_present_file(),
 	sandboxImportDoc: () => m.tool_import_doc(),
+	useSkill: () => m.tool_use_skill(),
+	saveSkill: () => m.tool_save_skill(),
+	forgetSkill: () => m.tool_forget_skill(),
+	proposeSkill: () => m.tool_propose_skill(),
 	queryDatabase: () => m.tool_query_db()
 };
 
@@ -67,13 +75,21 @@ function toolDetail(raw: string, input: unknown): { detail?: string; mono?: bool
 			return { detail: str(i.filename) ?? str(i.path) };
 		case 'sandboxImportDoc':
 			return { detail: str(i.name) };
+		case 'useSkill':
+			return { detail: str(i.skill) };
+		case 'saveSkill':
+		case 'proposeSkill':
+			return { detail: str(i.name) };
 		case 'sandboxExec':
 			return { detail: str(i.command), mono: true };
 		case 'sandboxLoadData':
 			return { detail: str(i.path) ?? 'data.json' };
 		case 'queryDatabase': {
 			const sql = str(i.sql)?.replace(/\s+/g, ' ').trim();
-			return { detail: sql && (sql.length > 80 ? `${sql.slice(0, 80)}…` : sql), mono: true };
+			return {
+				detail: sql && (sql.length > 80 ? `${sql.slice(0, 80)}…` : sql),
+				mono: true
+			};
 		}
 		case 'getTableSchema':
 			return { detail: str(i.table) };

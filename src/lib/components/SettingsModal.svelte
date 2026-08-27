@@ -10,6 +10,7 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import MemoryManager from './MemoryManager.svelte';
+	import SkillManager from './SkillManager.svelte';
 	import { getToken } from '$lib/session';
 	import { copyText } from '$lib/clipboard';
 	import {
@@ -35,7 +36,7 @@
 		initial?: 'general' | 'memory' | 'connectors' | 'apikeys';
 	} = $props();
 
-	type Section = 'general' | 'memory' | 'connectors' | 'apikeys';
+	type Section = 'general' | 'memory' | 'skills' | 'connectors' | 'apikeys';
 	// svelte-ignore state_referenced_locally
 	let section = $state<Section>(initial);
 
@@ -289,7 +290,7 @@
 				>
 					{m.settings_title()}
 				</span>
-				{#each [{ id: 'general', icon: 'settings', label: m.settings_general() }, { id: 'memory', icon: 'sparkle', label: m.settings_memory() }, { id: 'connectors', icon: 'zap', label: m.settings_connectors() }, { id: 'apikeys', icon: 'key', label: m.apikeys_title() }] as item (item.id)}
+				{#each [{ id: 'general', icon: 'settings', label: m.settings_general() }, { id: 'memory', icon: 'sparkle', label: m.settings_memory() }, { id: 'skills', icon: 'graduation-cap', label: m.settings_skills() }, { id: 'connectors', icon: 'zap', label: m.settings_connectors() }, { id: 'apikeys', icon: 'key', label: m.apikeys_title() }] as item (item.id)}
 					<button
 						onclick={() => (section = item.id as Section)}
 						class="flex shrink-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm whitespace-nowrap transition
@@ -463,6 +464,14 @@
 
 					<div class="mt-5">
 						<MemoryManager />
+					</div>
+				{:else if section === 'skills'}
+					<h2 class="font-serif text-xl font-semibold text-neutral-900">{m.settings_skills()}</h2>
+					<p class="mt-1.5 max-w-xl text-sm leading-relaxed text-neutral-500">
+						{m.settings_skills_hint()}
+					</p>
+					<div class="mt-5">
+						<SkillManager />
 					</div>
 				{:else if section === 'connectors'}
 					<h2 class="font-serif text-xl font-semibold text-neutral-900">{m.settings_mcp_title()}</h2>

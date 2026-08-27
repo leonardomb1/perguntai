@@ -7,6 +7,7 @@ Talk to your organization's data. An agentic data-analytics assistant built on *
 - **Chat over the warehouse**: the agent writes and runs SQL against StarRocks as the logged-in user and returns markdown tables, Chart.js charts, Mermaid diagrams, and downloadable Excel or text reports.
 - **Documents**: attach files to a conversation, or curate shared organization and department document libraries (text, PDF, spreadsheets) the assistant searches and analyzes.
 - **Knowledge and memory**: admin-curated organization and department knowledge injected into every relevant user's assistant, plus opt-in per-user memory the assistant maintains about you.
+- **Learned skills**: after succeeding at a non-trivial task, the assistant captures the procedure as a reusable playbook (tables, filters, pitfalls, verification) and follows it next time. Skills are per-user; the assistant can propose one for department or organization use, activating only after an admin approves it in the console.
 - **Code execution (beta)**: sandboxed Python (pandas, numpy, statsmodels, scikit-learn) plus the `basalt` CLI, each run inside a disposable hardware-isolated microVM. Enabled per deployment in the admin console.
 - **Connectors**: users plug their own MCP servers (URL plus token) into the assistant; every call runs with the user's own credentials.
 - **Programmatic access**: an OpenAI-compatible `/v1` endpoint and personal API keys with scopes, so any client that speaks the OpenAI protocol (openai SDKs, LangChain, Open WebUI, LiteLLM) can use the full agent.
@@ -45,6 +46,7 @@ External clients                  | /v1/chat/completions (OpenAI-  |
 The whole admin surface lives on one page, admin-only, with immediate-apply sections:
 
 - **Conhecimento**: organization and department knowledge blocks, standing instructions (`MAX_ORG_PROMPT` chars, default 8000), and shared document libraries, edited per scope in a master-detail layout.
+- **Habilidades**: review queue for skills proposed for shared use (approve, suspend, remove), plus the active shared-skill list per scope.
 - **Usuarios**: access policies (claim-rule editor with a "matches you" preview), plus one table of everyone the platform has seen: explicit records with full controls, policy-admitted users read-only with a "create exception" action.
 - **Estatisticas**: token usage tiles (today, month, active users, cache rate, via-API split), a 30-day daily chart, per-department share (donut) and per-policy usage. Usage is tagged at request time with the departments and policies that matched, so attribution stays correct over time.
 - **Auditoria**: every user's API keys (with admin revocation), the MCP connector fleet, and a filterable activity log (sign-ins, chat and API requests with the credential used, admin changes, key lifecycle, connector changes). Append-only JSONL under `DATA_DIR/audit/`, 6-month retention.

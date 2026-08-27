@@ -13,10 +13,12 @@ import {
 	tableSchemaTool,
 	warehouseCatalogTool,
 	askUserTool,
-	memoryTools
+	memoryTools,
+	skillTools
 } from './tools';
 import { listMemories } from './memory';
 import { listDocs, sharedManifest } from './rag';
+import { skillsManifest } from './skills';
 import { agentTelemetry } from './telemetry';
 import { departmentsForUser, getCapabilities, resolveRole, resolveSqlWrite } from './access';
 import { weightedTokens } from './usage';
@@ -133,6 +135,19 @@ export async function buildAgent(
 		? `You have documents on file — entries marked "attached to this conversation" are files THIS user uploaded HERE (never claim no file was received when one is listed). Use them whenever a question might touch them, and cite the document you use. For text/PDF docs call searchDocuments; for a quick look at a spreadsheet call previewTable. <available_documents>${manifestLines.join('\n')}</available_documents> `
 		: '';
 
+	// Learned skills (procedural memory) — the manifest advertises name +
+	// one-liner; the playbook itself loads on demand via useSkill, keeping the
+	// cached prompt prefix stable until a skill actually changes.
+	const skillEntries = await skillsManifest(user.username, docDepts);
+	const skillBlock = skillEntries.length
+		? `<available_skills>${skillEntries
+				.map((sk) => `- [${sk.id}] "${sk.name}"${sk.description ? ` — ${sk.description}` : ''} (${sk.source})`)
+				.join('\n')}</available_skills> `
+		: '';
+
+	const skillGuidance =
+		'SKILLS are your procedural memory for this deployment. BEFORE starting a multi-step task, check <available_skills>: if one matches, call useSkill FIRST and follow its playbook. AFTER completing a task that took several steps, non-obvious fixes, or corrections from the user, capture the procedure with saveSkill (name, one-line description, markdown playbook: exact tables/filters, pitfalls, verification) — update the existing skill by id when you find a better approach. Skills hold procedures, never data values or personal facts. When a skill would clearly help the user\u2019s colleagues, offer to share it and use proposeSkill only if they agree (an admin reviews it before activation). ';
+
 	const memoryGuidance = memoryEnabled
 		? 'Memory is ON for this user. When they share durable, self-scoped knowledge about themselves — role, team, preferences, vocabulary, recurring context — record it with saveMemory, organized by topic: add to the matching existing topic by passing its id (resend the full merged content), or create a new topic. Keep titles short, summaries one line, specifics in markdown details; then briefly tell them you will remember. Save only lasting facts about THIS user: never one-off task details, never data values, never facts about other people. If the user asks you to forget something, use forgetMemory with the topic id. '
 		: '';
@@ -232,18 +247,40 @@ export async function buildAgent(
 			if (!promptCache) return {};
 			const last = messages[messages.length - 1];
 			if (!last || (last.role !== 'user' && last.role !== 'tool')) return {};
+			// Anthropic allows 4 breakpoints total and the system block takes one.
+			// Keep the new tail breakpoint plus the TWO most recent ones from
+			// earlier steps and strip the rest — without the strip a long tool
+			// loop accumulates one per step and everything past 4 is ignored
+			// with a warning (and the intended tail breakpoint is the one lost).
+			const hasBp = (msg: (typeof messages)[number]) =>
+				Boolean(
+					(msg.providerOptions as { anthropic?: { cacheControl?: unknown } } | undefined)
+						?.anthropic?.cacheControl
+				);
+			const keep = new Set(
+				messages
+					.map((msg, i) => ({ i, has: hasBp(msg) }))
+					.filter((x) => x.has && x.i < messages.length - 1)
+					.map((x) => x.i)
+					.slice(-2)
+			);
 			return {
-				messages: messages.map((message, i) =>
-					i === messages.length - 1
-						? {
-								...message,
-								providerOptions: {
-									...message.providerOptions,
-									anthropic: { cacheControl: { type: 'ephemeral' } }
-								}
+				messages: messages.map((message, i) => {
+					if (i === messages.length - 1) {
+						return {
+							...message,
+							providerOptions: {
+								...message.providerOptions,
+								anthropic: { cacheControl: { type: 'ephemeral' } }
 							}
-						: message
-				) as typeof messages
+						};
+					}
+					if (hasBp(message) && !keep.has(i)) {
+						const { anthropic: _dropped, ...rest } = message.providerOptions ?? {};
+						return { ...message, providerOptions: rest };
+					}
+					return message;
+				}) as typeof messages
 			};
 		},
 		instructions: {
@@ -255,7 +292,7 @@ export async function buildAgent(
 				? { providerOptions: { anthropic: { cacheControl: { type: 'ephemeral', ttl: '1h' } } } }
 				: {}),
 			content:
-				`You are PerguntAI, a helpful assistant with access to tools. ${identity}${accessBlock}${memoryBlock}${docBlock}` +
+				`You are PerguntAI, a helpful assistant with access to tools. ${identity}${accessBlock}${memoryBlock}${docBlock}${skillBlock}` +
 			'Use tools whenever they would make your answer more accurate — exact arithmetic, current time, ' +
 			'SQL queries against the StarRocks data warehouse (queryDatabase, running with the user’s own permissions). ' +
 			'For any warehouse question, FIRST call listTables to see the available tables/views, THEN getTableSchema for the columns of the ones you’ll query; ' +
@@ -273,6 +310,7 @@ export async function buildAgent(
 			codeExecutionGuidance +
 			webSearchGuidance +
 			memoryGuidance +
+			skillGuidance +
 			(mode === 'api'
 				? 'You are being called through an API with no interactive UI: never ask the caller to click options; when a request is ambiguous, state your assumption and answer. Prefer text and markdown tables over charts. '
 				: '') +
@@ -306,6 +344,7 @@ export async function buildAgent(
 			renderDiagram: diagramTool,
 			...(mode === 'ui' ? { askUser: askUserTool } : {}),
 			...(memoryEnabled ? memoryTools(user.username, conversationId) : {}),
+			...skillTools(user.username, conversationId, docDepts),
 			...webSearchTools,
 			...mcpTools
 		}),
