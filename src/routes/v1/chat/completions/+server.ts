@@ -53,9 +53,21 @@ export const POST: RequestHandler = async ({ request }) => {
 	if (!body || !Array.isArray(body.messages) || body.messages.length === 0) {
 		return oaiError(400, "'messages' is required and must be a non-empty array");
 	}
+	// Caller system messages ride as bracketed user turns: the agent forbids
+	// system-role entries in `messages` (its own instructions occupy the system
+	// block), and appending per-request text to the real system prompt would
+	// bust the cached prefix on every call.
+	const instructionTurn = (content: string) => ({
+		role: 'user' as const,
+		content: `[System instruction from the API caller]\n${content}`
+	});
 	const messages = (body.messages as OaiMessage[])
 		.filter((mm) => mm && ['system', 'user', 'assistant'].includes(mm.role))
-		.map((mm) => ({ role: mm.role, content: contentText(mm.content) }));
+		.map((mm) =>
+			mm.role === 'system'
+				? instructionTurn(contentText(mm.content))
+				: { role: mm.role as 'user' | 'assistant', content: contentText(mm.content) }
+		);
 	if (messages.length === 0) return oaiError(400, 'no usable messages');
 
 	// OpenAI `response_format`: json_object and json_schema. Claude has no
@@ -69,21 +81,21 @@ export const POST: RequestHandler = async ({ request }) => {
 	if (rf && typeof rf === 'object' && rf.type && rf.type !== 'text') {
 		if (rf.type === 'json_object') {
 			jsonMode = true;
-			messages.push({
-				role: 'system',
-				content:
+			messages.push(
+				instructionTurn(
 					'Your entire final message MUST be a single valid JSON value — no markdown fences, no prose before or after it.'
-			});
+				)
+			);
 		} else if (rf.type === 'json_schema') {
 			const schema = rf.json_schema?.schema;
 			if (!schema) return oaiError(400, "'response_format.json_schema.schema' is required");
 			jsonMode = true;
-			messages.push({
-				role: 'system',
-				content:
+			messages.push(
+				instructionTurn(
 					'Your entire final message MUST be a single JSON document that validates against this ' +
-					`JSON Schema — no markdown fences, no prose before or after it:\n${JSON.stringify(schema)}`
-			});
+						`JSON Schema — no markdown fences, no prose before or after it:\n${JSON.stringify(schema)}`
+				)
+			);
 		} else {
 			return oaiError(400, `unsupported response_format.type '${rf.type}'`);
 		}
