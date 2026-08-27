@@ -30,6 +30,11 @@ export interface SandboxRunResult {
 }
 
 const image = () => env.MSB_IMAGE || 'microsandbox/python';
+/** Disk-backed home for run files (never /tmp: guest /tmp is a small tmpfs). */
+const workdir = () => {
+	const w = env.MSB_WORKDIR || '/home/perguntai';
+	return /^\/[\w./-]+$/.test(w) ? w : '/home/perguntai';
+};
 const memoryMib = () => Number(env.MSB_MEMORY_MIB) || 512;
 const cpus = () => Number(env.MSB_CPUS) || 1;
 const timeoutMs = () => Number(env.MSB_TIMEOUT_MS) || 60_000;
@@ -45,8 +50,10 @@ async function sdk() {
 
 /**
  * Run a Python script in a fresh ephemeral microVM. `data` (when present) is
- * written to /work/data.json and preloaded into a `data` variable (list of
- * dicts) before the user code runs — the model never pastes rows into code.
+ * written to <workdir>/data.json and preloaded into a `data` variable (list
+ * of dicts) before the user code runs — the model never pastes rows into
+ * code. The workdir (default /home/perguntai) is created root-side and
+ * chowned to the guest user, so any OCI image works.
  */
 export async function runSandboxedPython(
 	code: string,
@@ -63,19 +70,26 @@ export async function runSandboxedPython(
 		.ephemeral(true)
 		.create();
 	try {
-		// Image-agnostic: the stock python image has no /work, and microsandbox
-		// rejects a builder-level workdir that is missing from the guest.
-		await sandbox.exec('mkdir', ['-p', '/work']);
+		// The guest agent runs as the image's (non-root) user, which may not own
+		// our workdir — create it as root and hand it to that user. Disk-backed
+		// (rootfs overlay), unlike the guest's small tmpfs /tmp.
+		const w = workdir();
+		const uidOut = await sandbox.exec('id', ['-u']);
+		const guestUid = uidOut.stdout().trim() || '1000';
+		await sandbox.execWith('sh', (b) =>
+			b.arg('-c').arg(`mkdir -p ${w} && chown ${guestUid} ${w}`).user('root')
+		);
+
 		const fs = sandbox.fs();
-		if (data) await fs.write('/work/data.json', JSON.stringify(data));
+		if (data) await fs.write(`${w}/data.json`, JSON.stringify(data));
 		// The prelude keeps the old runPython contract feel: `data` is ready.
 		const prelude = data
-			? 'import json\nwith open("/work/data.json") as _f:\n    data = json.load(_f)\n'
+			? `import json\nwith open("${w}/data.json") as _f:\n    data = json.load(_f)\n`
 			: 'data = None\n';
-		await fs.write('/work/main.py', prelude + code);
+		await fs.write(`${w}/main.py`, prelude + code);
 
 		const out = await sandbox.execWith('python', (b) =>
-			b.arg('/work/main.py').cwd('/work').timeout(timeoutMs())
+			b.arg(`${w}/main.py`).cwd(w).timeout(timeoutMs())
 		);
 		return {
 			ok: out.success,

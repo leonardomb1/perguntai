@@ -25,6 +25,9 @@ RUN cd /usr/local/bin \
 	&& chmod +x basalt \
 	&& rm /tmp/basalt.sha256
 
-# Scripts run from /work: the app writes main.py and data.json there per run.
-WORKDIR /work
+# Dedicated non-root user with a real (disk-backed) home — the app runs
+# scripts from /home/perguntai (guest /tmp is a small tmpfs, never use it).
+RUN useradd -m -u 1000 -s /bin/bash perguntai
+USER perguntai
+WORKDIR /home/perguntai
 CMD ["sleep", "infinity"]
