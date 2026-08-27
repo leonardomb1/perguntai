@@ -12,7 +12,7 @@
 	 * warehouse, meant to live inside an iframe. Stateless by design — history
 	 * exists only in this component; "reset" recreates the Chat instance.
 	 */
-	let { data }: { data: { enabled: boolean; maxMessages: number } } = $props();
+	let { data }: { data: { enabled: boolean; maxMessages: number; key: string | null } } = $props();
 
 	let generation = $state(0); // bump to reset the conversation
 	let input = $state('');
@@ -21,7 +21,12 @@
 
 	const makeChat = () =>
 		new Chat({
-			transport: new DefaultChatTransport({ api: '/api/embed/chat' }),
+			transport: new DefaultChatTransport({
+				api: '/api/embed/chat',
+				// Per-portal embed key (emb_…) from ?key= — server-resolved to its
+				// own service account and limits; absent = the env service account.
+				body: () => (data.key ? { embedKey: data.key } : {})
+			}),
 			sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls
 		});
 	let chat = $state(makeChat());

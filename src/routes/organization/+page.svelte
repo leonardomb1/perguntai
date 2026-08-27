@@ -20,6 +20,10 @@
 		matchesProfile,
 		fetchCapabilities,
 		saveCapabilities,
+		listEmbedKeys,
+		createEmbedKey,
+		revokeEmbedKey,
+		type PublicEmbedKey,
 		testCodeExecution,
 		type Capabilities,
 		type EmbedInfo,
@@ -80,6 +84,43 @@
 	async function copyEmbedUrl() {
 		embedUrlCopied = await copyText(`${location.origin}/embed`);
 		setTimeout(() => (embedUrlCopied = false), 1500);
+	}
+
+	// --- embed keys (per-portal access) ---
+	let embedKeys = $state<PublicEmbedKey[] | null>(null);
+	let ekLabel = $state('');
+	let ekUser = $state('');
+	let ekPass = $state('');
+	let ekOrigins = $state('');
+	let ekBusy = $state(false);
+	let ekFresh = $state<string | null>(null);
+	let ekFreshCopied = $state(false);
+	$effect(() => {
+		if (!browser || !hasSession() || section !== 'capabilities' || embedKeys) return;
+		listEmbedKeys().then((k) => (embedKeys = k ?? []));
+	});
+	async function mintEmbedKey() {
+		if (ekBusy || !ekLabel.trim() || !ekUser.trim() || !ekPass) return;
+		ekBusy = true;
+		const result = await createEmbedKey({
+			label: ekLabel,
+			starrocksUser: ekUser,
+			starrocksPassword: ekPass,
+			...(ekOrigins.trim() ? { allowedOrigins: ekOrigins.trim() } : {})
+		});
+		ekBusy = false;
+		if (result) {
+			ekFresh = result.key;
+			ekFreshCopied = false;
+			ekLabel = ekUser = ekPass = ekOrigins = '';
+			embedKeys = null; // refetch
+		}
+	}
+	async function dropEmbedKey(id: string) {
+		if (await revokeEmbedKey(id)) embedKeys = null;
+	}
+	async function copyFreshEmbed() {
+		if (ekFresh) ekFreshCopied = await copyText(`${location.origin}/embed?key=${ekFresh}`);
 	}
 	async function runCapTest() {
 		if (capTesting) return;
@@ -401,6 +442,99 @@
 										{m.cap_embed_copy()}
 									</button>
 								</span>
+							</div>
+
+							<div class="mt-4 border-t border-[#efede3] pt-4">
+								<h4 class="flex items-center gap-2 text-sm font-semibold text-neutral-800">
+									{m.embedkey_title()}
+									<HelpTip text={m.embedkey_help()} />
+								</h4>
+
+								{#if ekFresh}
+									<div class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2.5">
+										<p class="text-xs text-emerald-800">{m.embedkey_created()}</p>
+										<div class="mt-1.5 flex items-center gap-2">
+											<code class="min-w-0 flex-1 truncate rounded bg-white px-2 py-1 text-xs">{location.origin}/embed?key={ekFresh}</code>
+											<button
+												onclick={copyFreshEmbed}
+												class="flex shrink-0 items-center gap-1 rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-1.5 text-xs font-medium text-neutral-600 transition hover:text-[#bd5d3a]"
+											>
+												<Icon name={ekFreshCopied ? 'check' : 'copy'} size={12} />
+												{m.cap_embed_copy()}
+											</button>
+											<button
+												onclick={() => (ekFresh = null)}
+												class="shrink-0 rounded-lg p-1.5 text-neutral-400 transition hover:text-neutral-700"
+												aria-label="OK"
+											>
+												<Icon name="x" size={14} />
+											</button>
+										</div>
+									</div>
+								{/if}
+
+								{#if embedKeys === null}
+									<div class="grid place-items-center py-4">
+										<span class="size-5 animate-spin rounded-full border-2 border-[#e3e0d5] border-t-[#d97757]"></span>
+									</div>
+								{:else if embedKeys.length === 0}
+									<p class="mt-2 text-xs text-neutral-400">{m.embedkey_none()}</p>
+								{:else}
+									<div class="mt-2 divide-y divide-[#efede3] rounded-lg border border-[#e9e6dd]">
+										{#each embedKeys as ek (ek.id)}
+											<div class="flex items-center gap-3 px-3 py-2.5 {ek.revoked ? 'opacity-50' : ''}">
+												<span class="min-w-0 flex-1">
+													<span class="block truncate text-sm font-medium text-neutral-800">{ek.label}</span>
+													<span class="block truncate font-mono text-[11px] text-neutral-400">{ek.hint} · {ek.starrocksUser}</span>
+												</span>
+												<span class="hidden shrink-0 text-[11px] text-neutral-400 sm:block">{m.embedkey_by({ user: ek.createdBy })}</span>
+												{#if ek.revoked}
+													<span class="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[11px] text-red-500">{m.embedkey_revoked()}</span>
+												{:else}
+													<button
+														onclick={() => dropEmbedKey(ek.id)}
+														class="shrink-0 rounded-lg border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
+													>
+														{m.embedkey_revoke()}
+													</button>
+												{/if}
+											</div>
+										{/each}
+									</div>
+								{/if}
+
+								<div class="mt-3 flex flex-wrap items-center gap-2">
+									<input
+										bind:value={ekLabel}
+										placeholder={m.embedkey_label_ph()}
+										class="w-36 rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-1.5 text-xs transition focus:border-[#d97757] focus:outline-none"
+									/>
+									<input
+										bind:value={ekUser}
+										placeholder={m.embedkey_sruser_ph()}
+										autocomplete="off"
+										class="w-40 rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-1.5 text-xs transition focus:border-[#d97757] focus:outline-none"
+									/>
+									<input
+										bind:value={ekPass}
+										type="password"
+										placeholder={m.embedkey_srpass_ph()}
+										autocomplete="new-password"
+										class="w-40 rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-1.5 text-xs transition focus:border-[#d97757] focus:outline-none"
+									/>
+									<input
+										bind:value={ekOrigins}
+										placeholder={m.embedkey_origins_ph()}
+										class="w-56 min-w-0 flex-1 rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-1.5 text-xs transition focus:border-[#d97757] focus:outline-none"
+									/>
+									<button
+										onclick={mintEmbedKey}
+										disabled={ekBusy || !ekLabel.trim() || !ekUser.trim() || !ekPass}
+										class="shrink-0 rounded-lg bg-[#d97757] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#bd5d3a] disabled:opacity-50"
+									>
+										{m.embedkey_create()}
+									</button>
+								</div>
 							</div>
 						</div>
 						</div>

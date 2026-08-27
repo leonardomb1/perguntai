@@ -435,3 +435,59 @@ export function parseTokenLimit(raw: string): number | null | 'invalid' {
 	const result = Math.round(value * (suffix === 'k' ? 1_000 : suffix === 'm' ? 1_000_000 : 1));
 	return result === 0 ? null : result;
 }
+
+// --- embed keys (per-portal embedded-chat access) ---
+
+export interface PublicEmbedKey {
+	id: string;
+	label: string;
+	hint: string;
+	starrocksUser: string;
+	maxMessages?: number;
+	dailyTokens?: number;
+	allowedOrigins?: string;
+	createdAt: string;
+	createdBy: string;
+	revoked?: boolean;
+}
+
+export async function listEmbedKeys(): Promise<PublicEmbedKey[] | null> {
+	try {
+		const res = await fetch('/api/admin/embed-keys', { headers: headers() });
+		if (!res.ok) return null;
+		return (await res.json()).keys ?? [];
+	} catch {
+		return null;
+	}
+}
+
+export async function createEmbedKey(input: {
+	label: string;
+	starrocksUser: string;
+	starrocksPassword: string;
+	allowedOrigins?: string;
+}): Promise<{ key: string; record: PublicEmbedKey } | null> {
+	try {
+		const res = await fetch('/api/admin/embed-keys', {
+			method: 'POST',
+			headers: headers(),
+			body: JSON.stringify(input)
+		});
+		if (!res.ok) return null;
+		return await res.json();
+	} catch {
+		return null;
+	}
+}
+
+export async function revokeEmbedKey(id: string): Promise<boolean> {
+	try {
+		const res = await fetch(`/api/admin/embed-keys?id=${encodeURIComponent(id)}`, {
+			method: 'DELETE',
+			headers: headers()
+		});
+		return res.ok;
+	} catch {
+		return false;
+	}
+}

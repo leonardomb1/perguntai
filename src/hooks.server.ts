@@ -7,6 +7,7 @@ import { getTextDirection } from '$lib/paraglide/runtime';
 import { getCapabilities } from '$lib/server/access';
 import { warmSandbox } from '$lib/server/sandbox';
 import { embedConfig } from '$lib/server/embed';
+import { verifyEmbedKey } from '$lib/server/embedKeys';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 
 // DSN-gated: with no SENTRY_DSN, Sentry.init is inert (SDK disabled), so this
@@ -63,7 +64,13 @@ const handleParaglide: Handle = ({ event, resolve }) =>
 const handleEmbedFraming: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event);
 	if (event.url.pathname === '/embed' || event.url.pathname.startsWith('/embed/')) {
-		response.headers.set('content-security-policy', `frame-ancestors ${embedConfig().frameAncestors}`);
+		// A per-key origin list (set at mint time) wins over the deployment default.
+		const rawKey = event.url.searchParams.get('key');
+		const keyOrigins = rawKey ? (await verifyEmbedKey(rawKey).catch(() => null))?.allowedOrigins : undefined;
+		response.headers.set(
+			'content-security-policy',
+			`frame-ancestors ${keyOrigins || embedConfig().frameAncestors}`
+		);
 	}
 	return response;
 };

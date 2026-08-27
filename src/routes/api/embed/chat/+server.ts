@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { createAgentUIStreamResponse } from 'ai';
 import { sanitizeToolInputs } from '$lib/server/agent';
-import { buildEmbedAgent, embedConfig, EMBED_USAGE_USER } from '$lib/server/embed';
+import { buildEmbedAgent, resolveEmbedAccess } from '$lib/server/embed';
 import { getCapabilities, getEffectiveOrgPrompt } from '$lib/server/access';
 import { withHeartbeat } from '$lib/server/heartbeat';
 import { addUsage, usageToday, weightedTokens } from '$lib/server/usage';
@@ -36,15 +36,18 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	if (!(await getCapabilities()).embedChat) {
 		return json({ error: 'Embedded chat is not enabled' }, { status: 404 });
 	}
-	const config = embedConfig();
-	if (!config.configured) {
-		return json({ error: 'Embedded chat is not configured' }, { status: 503 });
-	}
 	if (throttled(getClientAddress())) {
 		return json({ error: 'Muitas mensagens — aguarde um minuto.', code: 'throttled' }, { status: 429 });
 	}
 
 	const body = await request.json().catch(() => null);
+	// Per-portal embed key (emb_…) or the keyless env service account.
+	const access = await resolveEmbedAccess(
+		typeof body?.embedKey === 'string' ? body.embedKey : null
+	);
+	if (!access) {
+		return json({ error: 'Invalid or missing embed access', code: 'key' }, { status: 401 });
+	}
 	const messages = body?.messages;
 	if (!Array.isArray(messages) || messages.length === 0) {
 		return json({ error: 'messages is required' }, { status: 400 });
@@ -53,7 +56,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	// counts too (for UX), but only this check actually bounds a hand-rolled
 	// caller.
 	const userTurns = messages.filter((mm) => (mm as { role?: string })?.role === 'user').length;
-	if (userTurns > config.maxMessages) {
+	if (userTurns > access.maxMessages) {
 		return json(
 			{ error: 'Limite de mensagens desta conversa atingido — reinicie a conversa.', code: 'limit' },
 			{ status: 429 }
@@ -61,11 +64,11 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	}
 	sanitizeToolInputs(messages);
 
-	// One shared daily budget for the whole anonymous surface.
-	const used = await usageToday(EMBED_USAGE_USER);
-	if (used >= config.dailyTokens) {
+	// Daily budget — per key when a key is used, else the shared env surface.
+	const used = await usageToday(access.usageUser);
+	if (used >= access.dailyTokens) {
 		logAudit({
-			actor: EMBED_USAGE_USER,
+			actor: access.usageUser,
 			via: 'session',
 			...requestMeta(request),
 			category: 'chat',
@@ -84,7 +87,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 
 	return withHeartbeat(
 		await createAgentUIStreamResponse({
-			agent: buildEmbedAgent(await getEffectiveOrgPrompt(), config.dailyTokens - used),
+			agent: buildEmbedAgent(access, await getEffectiveOrgPrompt(), access.dailyTokens - used),
 			uiMessages: messages,
 			abortSignal: request.signal,
 			onStepEnd: (event) => {
@@ -97,21 +100,25 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 				raw.output += u?.outputTokens ?? 0;
 			},
 			onFinish: async () => {
-				await addUsage(EMBED_USAGE_USER, totalTokens, {
+				await addUsage(access.usageUser, totalTokens, {
 					input: raw.input,
 					cacheRead: raw.cacheRead,
 					cacheWrite: raw.cacheWrite,
 					output: raw.output
 				}).catch((e) => console.warn('embed usage tracking failed:', e));
 				logAudit({
-					actor: EMBED_USAGE_USER,
+					actor: access.usageUser,
 					via: 'session',
 					...requestMeta(request),
 					category: 'chat',
 					action: 'embed.chat',
-					target: config.model,
+					target: access.model,
 					status: 'ok',
-					detail: { tokens: Math.round(totalTokens), steps: raw.steps }
+					detail: {
+						tokens: Math.round(totalTokens),
+						steps: raw.steps,
+						...(access.keyLabel ? { key: access.keyLabel } : {})
+					}
 				});
 			},
 			onError: (error) => {
@@ -124,11 +131,9 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 };
 
 /** Public config the embed page needs before the first message. */
-export const GET: RequestHandler = async () => {
-	const enabled = (await getCapabilities()).embedChat;
-	const config = embedConfig();
-	return json({
-		enabled: enabled && config.configured,
-		maxMessages: config.maxMessages
-	});
+export const GET: RequestHandler = async ({ url }) => {
+	if (!(await getCapabilities()).embedChat) return json({ enabled: false });
+	const access = await resolveEmbedAccess(url.searchParams.get('key'));
+	if (!access) return json({ enabled: false });
+	return json({ enabled: true, maxMessages: access.maxMessages });
 };

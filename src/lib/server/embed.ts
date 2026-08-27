@@ -10,6 +10,7 @@ import {
 	askUserTool
 } from './tools';
 import { cachedPrepareStep, sortTools } from './agent';
+import { verifyEmbedKey } from './embedKeys';
 import { agentTelemetry } from './telemetry';
 import { weightedTokens } from './usage';
 import {
@@ -67,14 +68,58 @@ export function embedConfig() {
 }
 
 /**
+ * Resolve what one embed request may do: an embed key (per-portal service
+ * account + limits, minted in the console) wins; the env service account is
+ * the keyless fallback. Null → no valid access path.
+ */
+export interface EmbedAccess {
+	credentials: { username: string; password: string };
+	model: string;
+	maxMessages: number;
+	dailyTokens: number;
+	/** Per-key usage/audit identity so Estatísticas attributes per portal. */
+	usageUser: string;
+	keyId?: string;
+	keyLabel?: string;
+}
+
+export async function resolveEmbedAccess(rawKey?: string | null): Promise<EmbedAccess | null> {
+	const config = embedConfig();
+	if (rawKey) {
+		const access = await verifyEmbedKey(rawKey);
+		if (!access) return null; // an invalid key never falls back to the env account
+		return {
+			credentials: access.credentials,
+			model: config.model,
+			maxMessages: access.maxMessages ?? config.maxMessages,
+			dailyTokens: access.dailyTokens ?? config.dailyTokens,
+			usageUser: `${EMBED_USAGE_USER}-${access.id.slice(0, 8)}`,
+			keyId: access.id,
+			keyLabel: access.label
+		};
+	}
+	if (!config.configured) return null;
+	return {
+		credentials: config.credentials,
+		model: config.model,
+		maxMessages: config.maxMessages,
+		dailyTokens: config.dailyTokens,
+		usageUser: EMBED_USAGE_USER
+	};
+}
+
+/**
  * The lean agent for one embed request. Same caching discipline as the main
  * agent (byte-stable sorted tools, 1h system breakpoint, rolling message
  * breakpoints) — embed traffic is exactly the bursty, repeated-prefix shape
  * prompt caching pays off on.
  */
-export function buildEmbedAgent(orgSystemPrompt: string, tokenBudget: number | null) {
-	const config = embedConfig();
-	const model = config.model;
+export function buildEmbedAgent(
+	access: EmbedAccess,
+	orgSystemPrompt: string,
+	tokenBudget: number | null
+) {
+	const model = access.model;
 	const promptCache = modelPromptCache(model);
 	const thinking = modelThinking(model);
 
@@ -83,9 +128,9 @@ export function buildEmbedAgent(orgSystemPrompt: string, tokenBudget: number | n
 		telemetry: agentTelemetry('embed-chat'),
 		tools: sortTools({
 			...localTools,
-			queryDatabase: starrocksQueryTool(config.credentials, { allowWrites: false }),
-			listTables: warehouseCatalogTool(config.credentials),
-			getTableSchema: tableSchemaTool(config.credentials),
+			queryDatabase: starrocksQueryTool(access.credentials, { allowWrites: false }),
+			listTables: warehouseCatalogTool(access.credentials),
+			getTableSchema: tableSchemaTool(access.credentials),
 			renderChart: chartTool,
 			renderDiagram: diagramTool,
 			askUser: askUserTool
