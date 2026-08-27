@@ -5,6 +5,7 @@
 	import { browser } from '$app/environment';
 	import ChatPane from '$lib/components/ChatPane.svelte';
 	import ArtifactPanel from '$lib/components/ArtifactPanel.svelte';
+	import { closeArtifact } from '$lib/artifact-panel.svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import ConversationDocs from '$lib/components/ConversationDocs.svelte';
@@ -81,9 +82,11 @@
 	function newChat() {
 		currentId = newId();
 		sidebarOpen = false;
+		closeArtifact();
 	}
 
 	function openConversation(id: string) {
+		if (id !== currentId) closeArtifact();
 		currentId = id;
 		sidebarOpen = false;
 	}

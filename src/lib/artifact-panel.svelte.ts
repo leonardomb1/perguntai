@@ -9,7 +9,7 @@ export interface ArtifactSpec {
 	key: string;
 	title: string;
 	badge: string;
-	kind: 'pdf' | 'markdown' | 'text';
+	kind: 'pdf' | 'markdown' | 'html' | 'text';
 	load: () => Promise<{ objectUrl?: string; text?: string; error?: string }>;
 	/** Returns an error message, or null on success (mirrors downloadExport). */
 	download: () => Promise<string | null>;

@@ -91,7 +91,15 @@
 	function exportArtifact(spec: ExportSpec): ArtifactSpec | null {
 		const ext = (spec.format ?? spec.filename.split('.').pop() ?? '').toLowerCase();
 		const kind: ArtifactSpec['kind'] | null =
-			ext === 'pdf' ? 'pdf' : ext === 'md' || ext === 'markdown' ? 'markdown' : VIEWABLE_TEXT.has(ext) ? 'text' : null;
+			ext === 'pdf'
+				? 'pdf'
+				: ext === 'html'
+					? 'html'
+					: ext === 'md' || ext === 'markdown'
+						? 'markdown'
+						: VIEWABLE_TEXT.has(ext)
+							? 'text'
+							: null;
 		if (!kind) return null;
 		return {
 			key: `export:${spec.fileId}`,

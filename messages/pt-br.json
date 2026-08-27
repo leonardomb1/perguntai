@@ -60,6 +60,8 @@
 	"download": "Baixar",
 	"artifact_view": "Visualizar",
 	"artifact_close": "Fechar",
+	"artifact_preview": "Visualizar",
+	"artifact_code": "Código",
 	"rows_count": "{count} linhas",
 	"download_failed": "Falha no download — o servidor está acessível?",
 	"tool_running": "executando…",

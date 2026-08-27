@@ -11,6 +11,9 @@
 	let error = $state<string | null>(null);
 	let loading = $state(false);
 	let downloadError = $state<string | null>(null);
+	// HTML artifacts render live by default (sandboxed iframe), with a toggle
+	// back to the source — Claude-style Preview/Code.
+	let htmlMode = $state<'preview' | 'code'>('preview');
 
 	// Reload whenever the shown artifact changes; revoke the previous blob URL.
 	$effect(() => {
@@ -19,6 +22,7 @@
 		text = null;
 		error = null;
 		downloadError = null;
+		htmlMode = 'preview';
 		if (!current) return;
 		loading = true;
 		let stale = false;
@@ -39,6 +43,8 @@
 		};
 	});
 
+	const htmlPreview = $derived(view?.kind === 'html' && htmlMode === 'preview');
+
 	async function download() {
 		if (!view) return;
 		downloadError = await view.download();
@@ -56,6 +62,30 @@
 				{#if downloadError}
 					<span class="dl-error">{downloadError}</span>
 				{/if}
+				{#if view.kind === 'html' && text !== null}
+					<span class="seg" role="tablist">
+						<button
+							type="button"
+							role="tab"
+							class="seg-btn"
+							class:on={htmlMode === 'preview'}
+							aria-selected={htmlMode === 'preview'}
+							onclick={() => (htmlMode = 'preview')}
+						>
+							{m.artifact_preview()}
+						</button>
+						<button
+							type="button"
+							role="tab"
+							class="seg-btn"
+							class:on={htmlMode === 'code'}
+							aria-selected={htmlMode === 'code'}
+							onclick={() => (htmlMode = 'code')}
+						>
+							{m.artifact_code()}
+						</button>
+					</span>
+				{/if}
 				<button type="button" class="act" onclick={download} title={m.download()} aria-label={m.download()}>
 					<Icon name="download" size={15} />
 				</button>
@@ -65,7 +95,7 @@
 			</span>
 		</header>
 
-		<div class="body" class:padded={view.kind !== 'pdf'}>
+		<div class="body" class:padded={view.kind !== 'pdf' && !htmlPreview}>
 			{#if loading}
 				<div class="center">
 					<span class="spinner"></span>
@@ -74,6 +104,10 @@
 				<p class="error">{error}</p>
 			{:else if view.kind === 'pdf' && objectUrl}
 				<iframe src={objectUrl} title={view.title}></iframe>
+			{:else if htmlPreview && text !== null}
+				<!-- allow-scripts WITHOUT allow-same-origin: generated pages run in a
+				     null origin and can never reach the app's session or APIs. -->
+				<iframe sandbox="allow-scripts" srcdoc={text} title={view.title}></iframe>
 			{:else if view.kind === 'markdown' && text !== null}
 				<Markdown content={text} />
 			{:else if text !== null}
@@ -91,6 +125,14 @@
 		min-width: 380px;
 		border-left: 1px solid #e3e0d5;
 		background: #fff;
+		animation: panel-in 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	@keyframes panel-in {
+		from {
+			width: 0;
+			min-width: 0;
+			opacity: 0.3;
+		}
 	}
 	@media (max-width: 900px) {
 		.panel {
@@ -99,6 +141,18 @@
 			z-index: 40;
 			width: auto;
 			min-width: 0;
+			animation: panel-in-overlay 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+		}
+		@keyframes panel-in-overlay {
+			from {
+				transform: translateY(16px);
+				opacity: 0;
+			}
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.panel {
+			animation: none;
 		}
 	}
 
@@ -139,6 +193,29 @@
 		align-items: center;
 		gap: 4px;
 	}
+	.seg {
+		display: flex;
+		margin-right: 4px;
+		padding: 2px;
+		border: 1px solid #e3e0d5;
+		border-radius: 8px;
+		background: #f5f4ee;
+	}
+	.seg-btn {
+		padding: 2px 10px;
+		border: 0;
+		border-radius: 6px;
+		background: none;
+		font-size: 12px;
+		font-weight: 500;
+		color: #73726c;
+		cursor: pointer;
+	}
+	.seg-btn.on {
+		background: #fff;
+		color: #262624;
+		box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+	}
 	.dl-error {
 		font-size: 11px;
 		color: #b3261e;
@@ -172,6 +249,7 @@
 		width: 100%;
 		height: 100%;
 		border: 0;
+		background: #fff;
 	}
 	pre {
 		margin: 0;

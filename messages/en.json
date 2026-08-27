@@ -60,6 +60,8 @@
 	"download": "Download",
 	"artifact_view": "View",
 	"artifact_close": "Close",
+	"artifact_preview": "Preview",
+	"artifact_code": "Code",
 	"rows_count": "{count} rows",
 	"download_failed": "Download failed — is the server reachable?",
 	"tool_running": "running…",
