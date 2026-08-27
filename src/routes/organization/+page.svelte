@@ -12,6 +12,7 @@
 	import SkillsPanel from '$lib/components/SkillsPanel.svelte';
 	import { hasSession } from '$lib/session';
 	import { fetchSettings } from '$lib/settings';
+	import { copyText } from '$lib/clipboard';
 	import { newId } from '$lib/id';
 	import {
 		getOrg,
@@ -21,6 +22,7 @@
 		saveCapabilities,
 		testCodeExecution,
 		type Capabilities,
+		type EmbedInfo,
 		type OrgKnowledgeEntry,
 		type Department,
 		type CallerProfile
@@ -52,21 +54,32 @@
 
 	// --- deployment capabilities (Capacidades) — applied immediately ---
 	let capabilities = $state<Capabilities | null>(null);
+	let embedInfo = $state<EmbedInfo | null>(null);
 	let capBusy = $state(false);
+	let embedUrlCopied = $state(false);
 	let capTest = $state<
 		{ ok: true; latencyMs: number; backend: string } | { ok: false; error: string } | null
 	>(null);
 	let capTesting = $state(false);
 	$effect(() => {
 		if (!browser || !hasSession() || section !== 'capabilities' || capabilities) return;
-		fetchCapabilities().then((c) => (capabilities = c));
+		fetchCapabilities().then((c) => {
+			if (c) {
+				capabilities = c.capabilities;
+				embedInfo = c.embed;
+			}
+		});
 	});
-	async function toggleCodeExecution() {
+	async function toggleCapability(key: 'codeExecution' | 'embedChat') {
 		if (!capabilities || capBusy) return;
 		capBusy = true;
-		const updated = await saveCapabilities({ codeExecution: !capabilities.codeExecution });
+		const updated = await saveCapabilities({ [key]: !capabilities[key] });
 		if (updated) capabilities = updated;
 		capBusy = false;
+	}
+	async function copyEmbedUrl() {
+		embedUrlCopied = await copyText(`${location.origin}/embed`);
+		setTimeout(() => (embedUrlCopied = false), 1500);
 	}
 	async function runCapTest() {
 		if (capTesting) return;
@@ -288,6 +301,7 @@
 					{:else if section === 'audit'}
 						<SecurityPanel />
 					{:else if section === 'capabilities'}
+						<div class="space-y-5">
 						<div class="rounded-xl border border-[#e3e0d5] bg-white p-5">
 							<div class="flex flex-wrap items-start gap-3">
 								<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-[#d97757]/12 text-[#bd5d3a]">
@@ -305,7 +319,7 @@
 									role="switch"
 									aria-checked={capabilities?.codeExecution === true}
 									disabled={!capabilities || capBusy}
-									onclick={toggleCodeExecution}
+									onclick={() => toggleCapability('codeExecution')}
 									aria-label={m.cap_code_title()}
 									class="relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40
 										{capabilities?.codeExecution ? 'bg-[#d97757]' : 'bg-[#d9d6c8]'}"
@@ -334,6 +348,61 @@
 									{/if}
 								{/if}
 							</div>
+						</div>
+
+						<div class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+							<div class="flex flex-wrap items-start gap-3">
+								<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-[#3a6ea8]/12 text-[#3a6ea8]">
+									<Icon name="globe" size={18} />
+								</span>
+								<div class="min-w-0 flex-1">
+									<h3 class="flex items-center gap-2 text-base font-semibold text-neutral-900">
+										{m.cap_embed_title()}
+										<span class="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-amber-700 uppercase">beta</span>
+										<HelpTip text={m.cap_embed_help()} />
+									</h3>
+									<p class="mt-0.5 text-[13px] leading-relaxed text-neutral-500">{m.cap_embed_desc()}</p>
+								</div>
+								<button
+									role="switch"
+									aria-checked={capabilities?.embedChat === true}
+									disabled={!capabilities || capBusy}
+									onclick={() => toggleCapability('embedChat')}
+									aria-label={m.cap_embed_title()}
+									class="relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40
+										{capabilities?.embedChat ? 'bg-[#d97757]' : 'bg-[#d9d6c8]'}"
+								>
+									<span
+										class="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200
+											{capabilities?.embedChat ? 'translate-x-5' : 'translate-x-0'}"
+									></span>
+								</button>
+							</div>
+							<div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[#efede3] pt-4">
+								{#if embedInfo && !embedInfo.configured}
+									<p class="text-xs text-red-600">{m.cap_embed_not_configured()}</p>
+								{:else if embedInfo}
+									<p class="text-xs text-neutral-500">
+										{m.cap_embed_status({
+											model: embedInfo.model,
+											n: embedInfo.maxMessages,
+											tokens: embedInfo.dailyTokens.toLocaleString('pt-BR')
+										})}
+									</p>
+								{/if}
+								<span class="min-w-0 flex-1"></span>
+								<span class="flex items-center gap-1.5">
+									<code class="rounded bg-[#faf9f5] px-2 py-1 text-xs text-neutral-600">/embed</code>
+									<button
+										onclick={copyEmbedUrl}
+										class="flex items-center gap-1 rounded-lg border border-[#e3e0d5] px-2.5 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-[#d97757]/50 hover:text-[#bd5d3a]"
+									>
+										<Icon name={embedUrlCopied ? 'check' : 'copy'} size={12} />
+										{m.cap_embed_copy()}
+									</button>
+								</span>
+							</div>
+						</div>
 						</div>
 					{:else}
 						<AdminPanel view={section === 'users' ? 'users' : 'stats'} />

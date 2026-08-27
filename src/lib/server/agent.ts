@@ -1,4 +1,4 @@
-import { ToolLoopAgent, stepCountIs, type ToolSet } from 'ai';
+import { ToolLoopAgent, stepCountIs, type ModelMessage, type ToolSet } from 'ai';
 import {
 	tools as localTools,
 	sandboxFileTools,
@@ -47,6 +47,56 @@ export { anthropic, webSearchAvailable } from './models';
  */
 export function sortTools(tools: ToolSet): ToolSet {
 	return Object.fromEntries(Object.entries(tools).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+}
+
+/**
+ * Rolling message-level cache breakpoints for a tool loop, shared by every
+ * agent builder. Anthropic allows 4 breakpoints total and the system block
+ * takes one; keep the new tail breakpoint plus the TWO most recent ones from
+ * earlier steps and strip the rest — without the strip a long tool loop
+ * accumulates one per step and everything past 4 is ignored with a warning
+ * (and the intended tail breakpoint is the one lost).
+ *
+ * CRITICAL: never place a breakpoint on an ASSISTANT message — web_search's
+ * internal code_execution resolves via pause_turn WITHIN the assistant turn,
+ * and a cache_control there splits the paired server-tool blocks (400s).
+ */
+export function cachedPrepareStep(promptCache: boolean) {
+	return ({ messages }: { messages: ModelMessage[] }) => {
+		if (!promptCache) return {};
+		const last = messages[messages.length - 1];
+		if (!last || (last.role !== 'user' && last.role !== 'tool')) return {};
+		const hasBp = (msg: ModelMessage) =>
+			Boolean(
+				(msg.providerOptions as { anthropic?: { cacheControl?: unknown } } | undefined)?.anthropic
+					?.cacheControl
+			);
+		const keep = new Set(
+			messages
+				.map((msg, i) => ({ i, has: hasBp(msg) }))
+				.filter((x) => x.has && x.i < messages.length - 1)
+				.map((x) => x.i)
+				.slice(-2)
+		);
+		return {
+			messages: messages.map((message, i) => {
+				if (i === messages.length - 1) {
+					return {
+						...message,
+						providerOptions: {
+							...message.providerOptions,
+							anthropic: { cacheControl: { type: 'ephemeral' } }
+						}
+					};
+				}
+				if (hasBp(message) && !keep.has(i)) {
+					const { anthropic: _dropped, ...rest } = message.providerOptions ?? {};
+					return { ...message, providerOptions: rest };
+				}
+				return message;
+			}) as typeof messages
+		};
+	};
 }
 
 /**
@@ -243,46 +293,7 @@ export async function buildAgent(
 		// ("code_execution tool use without a corresponding result"). Server-tool
 		// blocks live only in assistant messages, so caching user/tool messages
 		// is safe and still covers the large tool-result tail.
-		prepareStep: ({ messages }) => {
-			if (!promptCache) return {};
-			const last = messages[messages.length - 1];
-			if (!last || (last.role !== 'user' && last.role !== 'tool')) return {};
-			// Anthropic allows 4 breakpoints total and the system block takes one.
-			// Keep the new tail breakpoint plus the TWO most recent ones from
-			// earlier steps and strip the rest — without the strip a long tool
-			// loop accumulates one per step and everything past 4 is ignored
-			// with a warning (and the intended tail breakpoint is the one lost).
-			const hasBp = (msg: (typeof messages)[number]) =>
-				Boolean(
-					(msg.providerOptions as { anthropic?: { cacheControl?: unknown } } | undefined)
-						?.anthropic?.cacheControl
-				);
-			const keep = new Set(
-				messages
-					.map((msg, i) => ({ i, has: hasBp(msg) }))
-					.filter((x) => x.has && x.i < messages.length - 1)
-					.map((x) => x.i)
-					.slice(-2)
-			);
-			return {
-				messages: messages.map((message, i) => {
-					if (i === messages.length - 1) {
-						return {
-							...message,
-							providerOptions: {
-								...message.providerOptions,
-								anthropic: { cacheControl: { type: 'ephemeral' } }
-							}
-						};
-					}
-					if (hasBp(message) && !keep.has(i)) {
-						const { anthropic: _dropped, ...rest } = message.providerOptions ?? {};
-						return { ...message, providerOptions: rest };
-					}
-					return message;
-				}) as typeof messages
-			};
-		},
+		prepareStep: cachedPrepareStep(promptCache),
 		instructions: {
 			role: 'system',
 			// Breakpoint here caches everything rendered before it: the full tool
@@ -381,4 +392,52 @@ export async function buildAgent(
 				}
 			: {})
 	});
+}
+
+/**
+ * Ensure every tool part's `input` is a plain object so Anthropic doesn't reject
+ * the re-sent tool_use. Static tools whose input failed validation carry the raw
+ * value in `rawInput` with `input` undefined — recover it, else fall back to {}.
+ */
+export function sanitizeToolInputs(messages: unknown): void {
+	if (!Array.isArray(messages)) return;
+	for (const msg of messages) {
+		const parts = (msg as { parts?: unknown })?.parts;
+		if (!Array.isArray(parts)) continue;
+		for (const p of parts) {
+			const part = p as { type?: unknown; input?: unknown; rawInput?: unknown };
+			const type = part?.type;
+			if (typeof type !== 'string' || !(type.startsWith('tool-') || type === 'dynamic-tool')) continue;
+
+			const isObj = (v: unknown) => !!v && typeof v === 'object' && !Array.isArray(v);
+			if (isObj(part.input)) continue;
+
+			if (typeof part.input === 'string') {
+				try {
+					const parsed = JSON.parse(part.input);
+					if (isObj(parsed)) {
+						part.input = parsed;
+						continue;
+					}
+				} catch {
+					/* fall through */
+				}
+			}
+			if (typeof part.rawInput === 'string') {
+				try {
+					const parsed = JSON.parse(part.rawInput);
+					if (isObj(parsed)) {
+						part.input = parsed;
+						continue;
+					}
+				} catch {
+					/* fall through */
+				}
+			} else if (isObj(part.rawInput)) {
+				part.input = part.rawInput;
+				continue;
+			}
+			part.input = {};
+		}
+	}
 }

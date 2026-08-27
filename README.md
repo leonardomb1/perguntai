@@ -11,6 +11,7 @@ Talk to your organization's data. An agentic data-analytics assistant built on *
 - **Code execution (beta)**: sandboxed Python (pandas, numpy, statsmodels, scikit-learn) plus the `basalt` CLI, each run inside a disposable hardware-isolated microVM. Enabled per deployment in the admin console.
 - **Connectors**: users plug their own MCP servers (URL plus token) into the assistant; every call runs with the user's own credentials.
 - **Programmatic access**: an OpenAI-compatible `/v1` endpoint and personal API keys with scopes, so any client that speaks the OpenAI protocol (openai SDKs, LangChain, Open WebUI, LiteLLM) can use the full agent.
+- **Embedded chat**: an anonymous, read-only `/embed` page for intranet portals — visitors talk to the warehouse through a dedicated StarRocks service account scoped to curated views, with a message cap per conversation, a shared daily budget, and a restricted model tier. No accounts, no history, no advanced tools.
 - **Governance**: claim-based access policies, per-user exceptions, per-department usage attribution, and an audit log of sign-ins, requests, key and connector changes, and admin actions.
 
 ## Architecture
@@ -50,7 +51,7 @@ The whole admin surface lives on one page, admin-only, with immediate-apply sect
 - **Usuarios**: access policies (claim-rule editor with a "matches you" preview), plus one table of everyone the platform has seen: explicit records with full controls, policy-admitted users read-only with a "create exception" action.
 - **Estatisticas**: token usage tiles (today, month, active users, cache rate, via-API split), a 30-day daily chart, per-department share (donut) and per-policy usage. Usage is tagged at request time with the departments and policies that matched, so attribution stays correct over time.
 - **Auditoria**: every user's API keys (with admin revocation), the MCP connector fleet, and a filterable activity log (sign-ins, chat and API requests with the credential used, admin changes, key lifecycle, connector changes). Append-only JSONL under `DATA_DIR/audit/`, 6-month retention.
-- **Capacidades**: deployment-wide feature switches. Currently: code execution (beta), with a sandbox test button.
+- **Capacidades**: deployment-wide feature switches. Currently: code execution (beta) with a sandbox test button, and embedded chat (beta) with its service-account status and embed URL.
 
 ## Models
 

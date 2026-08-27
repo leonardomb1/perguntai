@@ -3,7 +3,7 @@ import { createAgentUIStreamResponse } from 'ai';
 import { env } from '$env/dynamic/private';
 import { authenticateRequest } from '$lib/server/auth';
 import { connectMcpTools } from '$lib/server/mcp';
-import { buildAgent } from '$lib/server/agent';
+import { buildAgent, sanitizeToolInputs } from '$lib/server/agent';
 import { withHeartbeat } from '$lib/server/heartbeat';
 import { beginRun, liveStreamKey, recordStream } from '$lib/server/live-streams';
 import { getUserSettings } from '$lib/server/settings';
@@ -172,51 +172,3 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 	})));
 };
-
-/**
- * Ensure every tool part's `input` is a plain object so Anthropic doesn't reject
- * the re-sent tool_use. Static tools whose input failed validation carry the raw
- * value in `rawInput` with `input` undefined — recover it, else fall back to {}.
- */
-function sanitizeToolInputs(messages: unknown): void {
-	if (!Array.isArray(messages)) return;
-	for (const msg of messages) {
-		const parts = (msg as { parts?: unknown })?.parts;
-		if (!Array.isArray(parts)) continue;
-		for (const p of parts) {
-			const part = p as { type?: unknown; input?: unknown; rawInput?: unknown };
-			const type = part?.type;
-			if (typeof type !== 'string' || !(type.startsWith('tool-') || type === 'dynamic-tool')) continue;
-
-			const isObj = (v: unknown) => !!v && typeof v === 'object' && !Array.isArray(v);
-			if (isObj(part.input)) continue;
-
-			if (typeof part.input === 'string') {
-				try {
-					const parsed = JSON.parse(part.input);
-					if (isObj(parsed)) {
-						part.input = parsed;
-						continue;
-					}
-				} catch {
-					/* fall through */
-				}
-			}
-			if (typeof part.rawInput === 'string') {
-				try {
-					const parsed = JSON.parse(part.rawInput);
-					if (isObj(parsed)) {
-						part.input = parsed;
-						continue;
-					}
-				} catch {
-					/* fall through */
-				}
-			} else if (isObj(part.rawInput)) {
-				part.input = part.rawInput;
-				continue;
-			}
-			part.input = {};
-		}
-	}
-}

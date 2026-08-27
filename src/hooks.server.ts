@@ -6,6 +6,7 @@ import type { Handle } from '@sveltejs/kit';
 import { getTextDirection } from '$lib/paraglide/runtime';
 import { getCapabilities } from '$lib/server/access';
 import { warmSandbox } from '$lib/server/sandbox';
+import { embedConfig } from '$lib/server/embed';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 
 // DSN-gated: with no SENTRY_DSN, Sentry.init is inert (SDK disabled), so this
@@ -56,5 +57,16 @@ const handleParaglide: Handle = ({ event, resolve }) =>
 		});
 	});
 
-export const handle: Handle = sequence(Sentry.sentryHandle(), handleParaglide);
+// The embed page is meant to be iframed — but only by hosts the deployment
+// names (EMBED_ALLOWED_ORIGINS, default 'self'). Everything else keeps the
+// browser default (the app itself is not designed to be framed).
+const handleEmbedFraming: Handle = async ({ event, resolve }) => {
+	const response = await resolve(event);
+	if (event.url.pathname === '/embed' || event.url.pathname.startsWith('/embed/')) {
+		response.headers.set('content-security-policy', `frame-ancestors ${embedConfig().frameAncestors}`);
+	}
+	return response;
+};
+
+export const handle: Handle = sequence(Sentry.sentryHandle(), handleParaglide, handleEmbedFraming);
 export const handleError = Sentry.handleErrorWithSentry();

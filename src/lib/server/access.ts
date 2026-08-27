@@ -105,6 +105,8 @@ export interface AccessPolicy {
 export interface Capabilities {
 	/** BETA — sandboxed Python execution on microsandbox microVMs. */
 	codeExecution: boolean;
+	/** Anonymous read-only embedded chat at /embed (see server/embed.ts). */
+	embedChat: boolean;
 }
 
 interface AccessFile {
@@ -228,7 +230,10 @@ async function load(): Promise<AccessFile> {
 		const parsed = JSON.parse(await readFile(path, 'utf8'));
 		const data: AccessFile = {
 			users: typeof parsed.users === 'object' && parsed.users ? parsed.users : {},
-			capabilities: { codeExecution: parsed.capabilities?.codeExecution === true },
+			capabilities: {
+				codeExecution: parsed.capabilities?.codeExecution === true,
+				embedChat: parsed.capabilities?.embedChat === true
+			},
 			policies: sanitizePolicies(parsed.policies),
 			orgSystemPrompt: typeof parsed.orgSystemPrompt === 'string' ? parsed.orgSystemPrompt : '',
 			orgKnowledge: sanitizeKnowledge(parsed.orgKnowledge),
@@ -240,7 +245,7 @@ async function load(): Promise<AccessFile> {
 		// First run — seed from the legacy env allowlist, then persist.
 		const seeded: AccessFile = {
 			users: {},
-			capabilities: { codeExecution: false },
+			capabilities: { codeExecution: false, embedChat: false },
 			policies: [],
 			orgSystemPrompt: '',
 			orgKnowledge: [],
@@ -446,7 +451,8 @@ export async function getCapabilities(): Promise<Capabilities> {
 export async function setCapabilities(patch: Partial<Capabilities>): Promise<Capabilities> {
 	const data = await load();
 	data.capabilities = {
-		codeExecution: patch.codeExecution ?? data.capabilities.codeExecution
+		codeExecution: patch.codeExecution ?? data.capabilities.codeExecution,
+		embedChat: patch.embedChat ?? data.capabilities.embedChat
 	};
 	await save(data);
 	return data.capabilities;

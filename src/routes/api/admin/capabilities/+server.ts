@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import { authenticateRequest, type AuthUser } from '$lib/server/auth';
 import { getCapabilities, resolveRole, setCapabilities } from '$lib/server/access';
 import { testSandbox, warmSandbox } from '$lib/server/sandbox';
+import { embedConfig } from '$lib/server/embed';
 import { logAudit, requestMeta } from '$lib/server/audit';
 import type { RequestHandler } from './$types';
 
@@ -17,7 +18,16 @@ async function requireAdmin(request: Request): Promise<AuthUser | Response> {
 export const GET: RequestHandler = async ({ request }) => {
 	const admin = await requireAdmin(request);
 	if (admin instanceof Response) return admin;
-	return json({ capabilities: await getCapabilities() });
+	const config = embedConfig();
+	return json({
+		capabilities: await getCapabilities(),
+		embed: {
+			configured: config.configured,
+			model: config.model,
+			maxMessages: config.maxMessages,
+			dailyTokens: config.dailyTokens
+		}
+	});
 };
 
 export const PATCH: RequestHandler = async ({ request }) => {
@@ -25,8 +35,9 @@ export const PATCH: RequestHandler = async ({ request }) => {
 	if (admin instanceof Response) return admin;
 
 	const body = await request.json().catch(() => ({}));
-	const patch: { codeExecution?: boolean } = {};
+	const patch: { codeExecution?: boolean; embedChat?: boolean } = {};
 	if (typeof body.codeExecution === 'boolean') patch.codeExecution = body.codeExecution;
+	if (typeof body.embedChat === 'boolean') patch.embedChat = body.embedChat;
 	const capabilities = await setCapabilities(patch);
 	// Enabling code execution kicks the warm-up immediately, so the image pull
 	// happens now (visible to the admin via Testar) — never on a user's turn.

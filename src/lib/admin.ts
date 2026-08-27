@@ -198,13 +198,25 @@ export async function removeUser(username: string): Promise<string | null> {
 
 export interface Capabilities {
 	codeExecution: boolean;
+	embedChat: boolean;
 }
 
-export async function fetchCapabilities(): Promise<Capabilities | null> {
+export interface EmbedInfo {
+	configured: boolean;
+	model: string;
+	maxMessages: number;
+	dailyTokens: number;
+}
+
+export async function fetchCapabilities(): Promise<{
+	capabilities: Capabilities;
+	embed: EmbedInfo;
+} | null> {
 	try {
 		const res = await fetch('/api/admin/capabilities', { headers: headers() });
 		if (!res.ok) return null;
-		return (await res.json()).capabilities ?? null;
+		const data = await res.json();
+		return data.capabilities ? { capabilities: data.capabilities, embed: data.embed } : null;
 	} catch {
 		return null;
 	}
