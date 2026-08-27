@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { authenticateRequest, type AuthUser } from '$lib/server/auth';
 import { getCapabilities, resolveRole, setCapabilities } from '$lib/server/access';
-import { testSandbox } from '$lib/server/sandbox';
+import { testSandbox, warmSandbox } from '$lib/server/sandbox';
 import { logAudit, requestMeta } from '$lib/server/audit';
 import type { RequestHandler } from './$types';
 
@@ -28,6 +28,9 @@ export const PATCH: RequestHandler = async ({ request }) => {
 	const patch: { codeExecution?: boolean } = {};
 	if (typeof body.codeExecution === 'boolean') patch.codeExecution = body.codeExecution;
 	const capabilities = await setCapabilities(patch);
+	// Enabling code execution kicks the warm-up immediately, so the image pull
+	// happens now (visible to the admin via Testar) — never on a user's turn.
+	if (patch.codeExecution === true) warmSandbox();
 	logAudit({
 		actor: admin.username,
 		via: 'session',

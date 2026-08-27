@@ -4,6 +4,8 @@ import { dev } from '$app/environment';
 import { env } from '$env/dynamic/private';
 import type { Handle } from '@sveltejs/kit';
 import { getTextDirection } from '$lib/paraglide/runtime';
+import { getCapabilities } from '$lib/server/access';
+import { warmSandbox } from '$lib/server/sandbox';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 
 // DSN-gated: with no SENTRY_DSN, Sentry.init is inert (SDK disabled), so this
@@ -32,6 +34,16 @@ if (sentryOn) {
 		integrations: [Sentry.vercelAIIntegration()]
 	});
 }
+
+// Sandbox warm-up at boot: when the code-execution capability is already on,
+// pull the OCI image and boot one VM in the background so the first user run
+// is a warm ~300ms boot instead of a cold multi-second pull. Fully non-blocking
+// and failure-tolerant — a host without KVM just logs the warm-up failure.
+getCapabilities()
+	.then((caps) => {
+		if (caps.codeExecution) warmSandbox();
+	})
+	.catch(() => {});
 
 const handleParaglide: Handle = ({ event, resolve }) =>
 	paraglideMiddleware(event.request, ({ request, locale }) => {

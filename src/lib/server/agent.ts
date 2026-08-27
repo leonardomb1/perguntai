@@ -163,7 +163,7 @@ export async function buildAgent(
 	// the cached prompt prefix stays stable for a given toggle state.
 	const codeExecution = (await getCapabilities()).codeExecution;
 	const codeExecutionGuidance = codeExecution
-		? 'For statistics, forecasting, or analysis beyond SQL, use runPython (sandboxed Python with pandas/numpy) — fetch data with its dataQuery option instead of pasting rows, print compact results, and return small summaries. '
+		? 'For statistics, forecasting, or analysis beyond SQL, use runPython (sandboxed Python with pandas/numpy/statsmodels/scikit-learn) — fetch data with its dataQuery option instead of pasting rows, print compact results, and return small summaries. Inside the sandbox the `basalt` CLI is also available (subprocess) for fast columnar SQL over files in /work, e.g. the piped /work/data.json. '
 		: '';
 
 	// The user's OWN access in the app — safe to tell them when they ask ("am I

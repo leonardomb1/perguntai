@@ -88,6 +88,32 @@ export async function runSandboxedPython(
 	}
 }
 
+/**
+ * Fire-and-forget warm-up: pulls the OCI image (the one slow step, ~70s on a
+ * fresh cache volume) and boots one throwaway VM so the FIRST user run is a
+ * ~300ms warm boot instead of a cold pull. Triggered on server start (when the
+ * capability is already on) and when an admin toggles it on; the console's
+ * Testar button doubles as a manual warm-up. Concurrent calls coalesce.
+ */
+let warming: Promise<void> | null = null;
+export function warmSandbox(): void {
+	if (warming) return;
+	warming = (async () => {
+		const started = Date.now();
+		try {
+			const result = await runSandboxedPython('print("warm")');
+			console.log(
+				`sandbox warm-up ${result.ok ? 'ok' : 'FAILED'} in ${Date.now() - started}ms` +
+					(result.ok ? '' : ` — ${(result.stderr || result.stdout).slice(0, 200)}`)
+			);
+		} catch (error) {
+			console.warn('sandbox warm-up failed:', error instanceof Error ? error.message : error);
+		} finally {
+			warming = null;
+		}
+	})();
+}
+
 /** Health probe for the console's Testar button: boot, compute, tear down. */
 export async function testSandbox(): Promise<
 	{ ok: true; latencyMs: number; backend: string } | { ok: false; error: string }
