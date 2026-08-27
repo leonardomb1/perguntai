@@ -2,6 +2,7 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { authenticateRequest } from '$lib/server/auth';
 import { endSessionUrl } from '$lib/server/oidc';
 import { currentIdToken, forgetTokens } from '$lib/server/oidcStore';
+import { forgetWarehousePassword } from '$lib/server/credentialStore';
 import { env } from '$env/dynamic/private';
 
 /**
@@ -25,6 +26,9 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		// our post-logout redirect.
 		idTokenHint = (await currentIdToken(user.username).catch(() => null)) ?? undefined;
 		await forgetTokens(user.username).catch(() => {});
+		// Same reasoning for the password-door credential: it is what API keys
+		// use to open warehouse connections, so it must not outlive the session.
+		await forgetWarehousePassword(user.username).catch(() => {});
 	}
 
 	const origin = env.ORIGIN || url.origin;

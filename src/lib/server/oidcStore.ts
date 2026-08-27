@@ -22,14 +22,14 @@ function key(): Buffer {
 	return createHash('sha256').update(value).digest();
 }
 
-function encrypt(plain: string): string {
+export function encrypt(plain: string): string {
 	const iv = randomBytes(12);
 	const cipher = createCipheriv('aes-256-gcm', key(), iv);
 	const body = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
 	return Buffer.concat([iv, cipher.getAuthTag(), body]).toString('base64');
 }
 
-function decrypt(blob: string): string | null {
+export function decrypt(blob: string): string | null {
 	try {
 		const raw = Buffer.from(blob, 'base64');
 		const decipher = createDecipheriv('aes-256-gcm', key(), raw.subarray(0, 12));

@@ -58,6 +58,37 @@ export const POST: RequestHandler = async ({ request }) => {
 		.map((mm) => ({ role: mm.role, content: contentText(mm.content) }));
 	if (messages.length === 0) return oaiError(400, 'no usable messages');
 
+	// OpenAI `response_format`: json_object and json_schema. Claude has no
+	// native JSON mode, so this rides as a hard trailing instruction — the
+	// full agent (tools included) still runs, only the final message is
+	// constrained. Fenced output is unwrapped server-side for non-streaming.
+	const rf = body.response_format as
+		| { type?: string; json_schema?: { name?: string; schema?: unknown } }
+		| undefined;
+	let jsonMode = false;
+	if (rf && typeof rf === 'object' && rf.type && rf.type !== 'text') {
+		if (rf.type === 'json_object') {
+			jsonMode = true;
+			messages.push({
+				role: 'system',
+				content:
+					'Your entire final message MUST be a single valid JSON value — no markdown fences, no prose before or after it.'
+			});
+		} else if (rf.type === 'json_schema') {
+			const schema = rf.json_schema?.schema;
+			if (!schema) return oaiError(400, "'response_format.json_schema.schema' is required");
+			jsonMode = true;
+			messages.push({
+				role: 'system',
+				content:
+					'Your entire final message MUST be a single JSON document that validates against this ' +
+					`JSON Schema — no markdown fences, no prose before or after it:\n${JSON.stringify(schema)}`
+			});
+		} else {
+			return oaiError(400, `unsupported response_format.type '${rf.type}'`);
+		}
+	}
+
 	// Daily limit — same policy-aware resolution as the app's chat endpoint.
 	const dailyLimit = await resolveDailyLimit(user.username, user.profile);
 	let tokenBudget: number | null = null;
@@ -180,6 +211,11 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	try {
 		const result = await agent.generate({ messages, onStepFinish });
+		let content = result.text;
+		if (jsonMode) {
+			const fenced = /^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/.exec(content);
+			if (fenced) content = fenced[1];
+		}
 		return json({
 			id,
 			object: 'chat.completion',
@@ -188,7 +224,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			choices: [
 				{
 					index: 0,
-					message: { role: 'assistant', content: result.text },
+					message: { role: 'assistant', content },
 					finish_reason: 'stop'
 				}
 			],

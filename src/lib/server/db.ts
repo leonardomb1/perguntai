@@ -1,6 +1,7 @@
 import mysql from 'mysql2/promise';
 import { env } from '$env/dynamic/private';
 import { currentIdToken } from './oidcStore';
+import { storedWarehousePassword } from './credentialStore';
 
 /**
  * StarRocks speaks the MySQL wire protocol — the standard mysql2 driver works,
@@ -79,9 +80,17 @@ export async function connectAsUser(
 	if (credentials.password) {
 		options = { ...base, password: credentials.password, enableCleartextPlugin: true };
 	} else {
+		// No password in the request (API keys): OIDC users get an id_token
+		// minted from their stored refresh token; password-door users fall back
+		// to the credential saved at their last sign-in (see credentialStore).
 		const idToken = await currentIdToken(credentials.username);
-		if (!idToken) throw new WarehouseAuthRequired(credentials.username);
-		options = { ...base, password: '', authPlugins: openIdConnectPlugin(idToken) };
+		if (idToken) {
+			options = { ...base, password: '', authPlugins: openIdConnectPlugin(idToken) };
+		} else {
+			const stored = await storedWarehousePassword(credentials.username);
+			if (!stored) throw new WarehouseAuthRequired(credentials.username);
+			options = { ...base, password: stored, enableCleartextPlugin: true };
+		}
 	}
 
 	try {

@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import { authMethods, isUserAllowed, sessionFromClaims } from '$lib/server/auth';
 import { logAudit, requestMeta } from '$lib/server/audit';
 import { ldapAuthenticate, type LdapRejection } from '$lib/server/ldap';
+import { saveWarehousePassword } from '$lib/server/credentialStore';
 import type { RequestHandler } from './$types';
 
 /** Small in-memory sliding window per user+address: 10 attempts a minute. */
@@ -84,6 +85,11 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		});
 		return json({ error: 'Not in the preview allowlist', code: 'not_in_allowlist' }, { status: 403 });
 	}
+	// Keep the warehouse credential fresh for API-key requests, which carry no
+	// password of their own (see credentialStore).
+	await saveWarehousePassword(session.username, password).catch((e) =>
+		console.warn('warehouse credential save failed:', e)
+	);
 	logAudit({
 		actor: session.username,
 		via: 'session',
