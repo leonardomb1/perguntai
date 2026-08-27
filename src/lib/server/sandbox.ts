@@ -61,9 +61,11 @@ export async function runSandboxedPython(
 		.cpus(cpus())
 		.memory(memoryMib())
 		.ephemeral(true)
-		.workdir('/work')
 		.create();
 	try {
+		// Image-agnostic: the stock python image has no /work, and microsandbox
+		// rejects a builder-level workdir that is missing from the guest.
+		await sandbox.exec('mkdir', ['-p', '/work']);
 		const fs = sandbox.fs();
 		if (data) await fs.write('/work/data.json', JSON.stringify(data));
 		// The prelude keeps the old runPython contract feel: `data` is ready.

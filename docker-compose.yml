@@ -19,12 +19,15 @@ services:
       # absorbed by the warm-up, never by a user).
       - msbcache:/home/node/.microsandbox
     # Code execution (BETA): microsandbox boots KVM microVMs, so the container
-    # needs the host's /dev/kvm. The container user is uid 1000 (node) — grant
-    # it on the host with an ACL (setfacl -m u:1000:rw /dev/kvm) or add the
-    # host's kvm gid via group_add. Remove this line on hosts without KVM; the
-    # capability toggle in /organization → Capacidades then stays off.
+    # needs the host's /dev/kvm (root:kvm). Join the container user to the
+    # host's kvm group via group_add (find the gid with: getent group kvm);
+    # never grant a host uid, that number may belong to an unrelated account.
+    # Remove device + group_add on hosts without KVM; the capability toggle in
+    # /organization -> Capacidades then stays off.
     devices:
       - /dev/kvm
+    group_add:
+      - "993" # host kvm gid, adjust per host (getent group kvm)
     restart: unless-stopped
 
   # Schema sync runs at runtime instead of a sidecar: an external cron POSTs
