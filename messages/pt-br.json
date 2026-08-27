@@ -105,7 +105,6 @@
 	"embed_disabled": "O chat incorporado não está habilitado.",
 	"embed_limit_notice": "Esta conversa atingiu o limite de mensagens.",
 	"embed_reset": "Reiniciar conversa",
-	"embed_readonly_note": "Acesso anônimo, somente leitura",
 	"embed_welcome": "Pergunte sobre os dados",
 	"embed_welcome_sub": "As consultas rodam somente leitura no data warehouse. As respostas vêm em texto, tabelas e gráficos.",
 	"org_nav_skills": "Habilidades",

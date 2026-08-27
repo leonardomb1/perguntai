@@ -73,7 +73,6 @@
 	<header class="flex h-12 shrink-0 items-center gap-2.5 border-b border-[#e3e0d5] bg-white/80 px-4">
 		<img src={logo} alt="" class="size-6" />
 		<span class="text-sm font-semibold text-neutral-900">PerguntAI</span>
-		<span class="text-[11px] text-neutral-400">· {m.embed_readonly_note()}</span>
 		<span class="min-w-0 flex-1"></span>
 		{#if chat.messages.length > 0}
 			<button

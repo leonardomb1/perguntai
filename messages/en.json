@@ -105,7 +105,6 @@
 	"embed_disabled": "Embedded chat is not enabled.",
 	"embed_limit_notice": "This conversation reached its message limit.",
 	"embed_reset": "Restart conversation",
-	"embed_readonly_note": "Anonymous, read-only access",
 	"embed_welcome": "Ask about the data",
 	"embed_welcome_sub": "Queries run read-only against the data warehouse. Answers come as text, tables and charts.",
 	"org_nav_skills": "Skills",
