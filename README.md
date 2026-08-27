@@ -1,83 +1,92 @@
 # PerguntAI
 
-Talk to your organization's data. An agentic data-analytics assistant + automation builder, built on **SvelteKit + Svelte 5 + Vercel AI SDK v7**, with **Claude** (Sonnet 5 / Opus 4.8 / Fable 5) served through **Microsoft Azure AI Foundry**, querying **StarRocks** under each user's own grants and running scripts/flows on self-hosted **Windmill**.
+Talk to your organization's data. An agentic data-analytics assistant built on **SvelteKit + Svelte 5 + Vercel AI SDK v7**, with **Claude** served through **Microsoft Azure AI Foundry**, querying **StarRocks** under each user's own grants. Ships with an admin console for knowledge, access policies, usage statistics and auditing, an OpenAI-compatible API, and an optional sandboxed code-execution capability.
 
 ## What it does
 
-- **Chat over the warehouse** — the agent writes and runs SQL against StarRocks (as the logged-in user), does statistics/forecasting in ephemeral Python, and returns markdown tables, Chart.js charts, Mermaid diagrams, and downloadable Excel/text reports.
-- **Documents** — attach files to a conversation, *or* curate shared **org / department document libraries** (text, PDF, spreadsheets) the assistant can search and analyze.
-- **Knowledge & memory** — admin-curated **organization / department knowledge** injected into every relevant user's assistant, plus opt-in per-user **memory** the assistant maintains about you.
-- **Automations (flows)** — describe an automation in a dedicated builder chat; the assistant composes a validated flow (schedule → SQL check → agent → notify), you review it as a Mermaid diagram and activate it to run on Windmill.
-- **Governance** — roles (user / builder / admin), a runtime admin panel, and **department-scoping** (from AD groups / cost centers) that gates knowledge, documents, and flows.
+- **Chat over the warehouse**: the agent writes and runs SQL against StarRocks as the logged-in user and returns markdown tables, Chart.js charts, Mermaid diagrams, and downloadable Excel or text reports.
+- **Documents**: attach files to a conversation, or curate shared organization and department document libraries (text, PDF, spreadsheets) the assistant searches and analyzes.
+- **Knowledge and memory**: admin-curated organization and department knowledge injected into every relevant user's assistant, plus opt-in per-user memory the assistant maintains about you.
+- **Code execution (beta)**: sandboxed Python (pandas, numpy, statsmodels, scikit-learn) plus the `basalt` CLI, each run inside a disposable hardware-isolated microVM. Enabled per deployment in the admin console.
+- **Connectors**: users plug their own MCP servers (URL plus token) into the assistant; every call runs with the user's own credentials.
+- **Programmatic access**: an OpenAI-compatible `/v1` endpoint and personal API keys with scopes, so any client that speaks the OpenAI protocol (openai SDKs, LangChain, Open WebUI, LiteLLM) can use the full agent.
+- **Governance**: claim-based access policies, per-user exceptions, per-department usage attribution, and an audit log of sign-ins, requests, key and connector changes, and admin actions.
 
 ## Architecture
 
 ```
-Browser (Svelte 5)                 SvelteKit server (adapter-node)                External
-┌───────────────────┐  Bearer JWE  ┌──────────────────────────────┐
-│ / (chat)          │ ───────────▶ │ /api/auth/login  ────────────┼─▶ Windmill /api/r/k-auth ─▶ AD (LDAPS)
-│ /flows (builder)  │              │ /api/chat  · ToolLoopAgent    ┼─▶ Claude (Azure AI Foundry)
-│ /organization     │ ◀ UI stream ─│   queryDatabase / runPython   ┼─▶ StarRocks (as the logged-in user)
-│  @ai-sdk/svelte   │              │   windmill_* (MCP facade)     ┼─▶ Windmill (per-user token)
-└───────────────────┘              │ /api/flows/* · Windmill deploy┼─▶ Windmill (flows, cron, callbacks)
-                                   └──────────────────────────────┘
-                                     state → DATA_DIR (JSON files)   ·   telemetry → Sentry
+Browser (Svelte 5)                SvelteKit server (adapter-node)             External
++------------------+  Bearer JWE  +--------------------------------+
+| / (chat)         | -----------> | /api/auth/login (LDAPS)        | --> AD / OIDC provider
+| /organization    |              | /auth/callback (OIDC + PKCE)   |
+|  admin console   | <- UI stream | /api/chat . ToolLoopAgent      | --> Claude (Azure AI Foundry)
+| @ai-sdk/svelte   |              |   queryDatabase                | --> StarRocks (as the user)
++------------------+              |   runPython (capability, beta) | --> microsandbox microVMs (KVM)
+                                  |   <user MCP servers>           | --> any MCP endpoint
+External clients                  | /v1/chat/completions (OpenAI-  |
+(openai SDK, LangChain, ...) ---> |   compatible, pai_ API keys)   |
+                                  +--------------------------------+
+                                    state: DATA_DIR (JSON files)      telemetry: Sentry (prod)
 ```
 
-- **Agent loop** — `ToolLoopAgent` (`src/lib/server/agent.ts`) runs multi-step tool calling server-side (≤10 steps, or until the user's daily token budget is spent), with Claude adaptive thinking.
-- **Prompt caching** — the tool schemas + system block sit behind a 1-hour cache breakpoint; tools are sorted deterministically (`sortTools`) so the prefix is byte-stable and cache-hits across a conversation. Token accounting is cost-weighted (cache reads 0.1×, writes 1.25×).
+- **Agent loop**: `ToolLoopAgent` (`src/lib/server/agent.ts`) runs multi-step tool calling server-side (up to 24 steps, or until the user's daily token budget is spent), with Claude adaptive thinking.
+- **Prompt caching**: the tool schemas and system block sit behind a 1-hour cache breakpoint; tools are sorted deterministically so the prefix is byte-stable across turns. Token accounting is cost-weighted (cache reads 0.1x, writes 1.25x).
 
-## Identity & access control
+## Identity and access control
 
-- **Login → AD via Windmill.** `POST /api/auth/login` calls the Windmill route `POST $WINDMILL_BASE_URL/api/r/k-auth` (wraps `f/auth/auth_ldap`, an LDAPS bind), authenticated by the server-level `WINDMILL_AUTH_TOKEN` — the one exception to per-user auth, since users have no token before logging in. On success the AD entry (sAMAccountName, displayName, mail, `memberOf`, title, cost center) is captured; the canonical username is the lowercased `sAMAccountName`.
-- **Token.** The server issues an **encrypted JWT (JWE, A256GCM)** carrying the user's credentials (for per-user tool auth) and their AD `profile`. Nothing in it is readable client-side.
-- **Per-user warehouse.** `queryDatabase` opens StarRocks connections with the logged-in user's credentials (mysql2, `enableCleartextPlugin` for `mysql_clear_password` — use TLS/trusted network), so StarRocks enforces each user's own grants. Read-only by default; admins can grant `sqlWrite` (DROP/TRUNCATE/ALTER always blocked).
-- **Roles & the admin panel.** Runtime access lives in `DATA_DIR/access.json` — per-user role (`user` / `builder` / `admin`), blocked flag, daily token limit, allowed models, `sqlWrite` / `windmillWrite`, plus the org knowledge base. Edited in **Settings → Administração**. `ADMIN_USERS` names bootstrap "platform" admins (the **SERVIDOR** badge) who can never be blocked or demoted. An empty user list = open mode (anyone with valid AD credentials). Access is **re-checked on every request**, so blocking/demoting takes effect immediately — no session store. The settings response exposes `isAdmin` / `isPlatformAdmin` (resolved live).
-- **Departments.** Defined in the org console with a match rule against the user's AD groups / cost center; membership is computed per-request from the token — there is **no user store**. Departments scope knowledge, documents, and flow visibility.
+- **Two sign-in doors, either or both**: OIDC (authorization code + PKCE, `OIDC_ISSUER`) and username/password over LDAPS (`LDAP_URL`). Both produce the same session and the same profile claims (groups, department, title, cost center); the canonical username is the lowercased `preferred_username`.
+- **Token**: the server issues an encrypted JWT (JWE, A256GCM) carrying the user's credentials for per-user tool auth and their directory profile. Nothing in it is readable client-side.
+- **Per-user warehouse**: `queryDatabase` opens StarRocks connections as the logged-in user, so StarRocks enforces each user's own grants. Read-only by default; admins can grant `sqlWrite` (DROP/TRUNCATE/ALTER always blocked by the SQL guard).
+- **Access policies**: rules over sign-in claims (AD groups, cost center, any attribute) that grant role, extra models, SQL write and daily token limits. Evaluated per request from the token, so moving someone between AD groups changes their access on the next request; there is no user-profile store. Grants compose most-permissively; a per-user record is the exception mechanism (an explicit block or personal limit always wins).
+- **Roles**: `user`, `builder`, `admin`, resolved live on every request from `DATA_DIR/access.json`. `ADMIN_USERS` names bootstrap platform admins (the SERVIDOR badge) who can never be blocked or demoted. Open mode (anyone with valid credentials may sign in) lasts only while no user records and no policies exist.
+
+## Admin console (`/organization`)
+
+The whole admin surface lives on one page, admin-only, with immediate-apply sections:
+
+- **Conhecimento**: organization and department knowledge blocks, standing instructions (`MAX_ORG_PROMPT` chars, default 8000), and shared document libraries, edited per scope in a master-detail layout.
+- **Usuarios**: access policies (claim-rule editor with a "matches you" preview), plus one table of everyone the platform has seen: explicit records with full controls, policy-admitted users read-only with a "create exception" action.
+- **Estatisticas**: token usage tiles (today, month, active users, cache rate, via-API split), a 30-day daily chart, per-department share (donut) and per-policy usage. Usage is tagged at request time with the departments and policies that matched, so attribution stays correct over time.
+- **Auditoria**: every user's API keys (with admin revocation), the MCP connector fleet, and a filterable activity log (sign-ins, chat and API requests with the credential used, admin changes, key lifecycle, connector changes). Append-only JSONL under `DATA_DIR/audit/`, 6-month retention.
+- **Capacidades**: deployment-wide feature switches. Currently: code execution (beta), with a sandbox test button.
 
 ## Models
 
-The catalog is **deployment-defined**, built server-side in `src/lib/server/models.ts` and served to the client via `GET /api/models`. Two execution paths cover every provider:
+The catalog is deployment-defined in `src/lib/server/models.ts`, served via `GET /api/models`. Two execution paths:
 
-- **`anthropic`** (native, direct API or Azure Foundry) — the built-in Claude entries (**`claude-sonnet-5` default**, Opus 4.8, Fable 5, Opus 5), present whenever Anthropic credentials are configured. This path keeps the Claude-only optimizations: prompt-cache breakpoints, adaptive thinking, and Anthropic **server tools** (`web_search`) — provisioned per-model on the Foundry workspace (**Opus/Fable yes, Sonnet no**), so web search is gated on both the user's opt-in and the chosen model.
-- **`openai-compatible`** (`MODELS_EXTRA` env, JSON) — any `/v1` chat-completions endpoint: Ollama, OpenAI, Groq, vLLM, OpenRouter, Gemini's compat endpoint… Each entry declares `id`, `label`, `baseUrl`, and optionally `provider` (picker logo), `apiKey`/`apiKeyEnv`, `model` (upstream name), and `reasoningTag` (e.g. `"think"` — extracts `<think>…</think>` from reasoning models like Qwen/DeepSeek so the UI renders it as thinking). See `.env.example` for a local-Ollama example. `DEFAULT_MODEL_ID` picks the deployment default.
+- **`anthropic`** (Azure AI Foundry or direct API): the built-in Claude entries (`claude-sonnet-5` default, Opus 4.8, Fable 5, Opus 5). This path keeps the Claude-only optimizations: prompt-cache breakpoints, adaptive thinking, and Anthropic server tools (`web_search`) where the Foundry workspace provisions them.
+- **`openai-compatible`** (`MODELS_EXTRA` env, JSON): any `/v1` chat-completions endpoint (Ollama, OpenAI, Groq, vLLM, OpenRouter). Each entry declares `id`, `label`, `baseUrl`, and optionally `provider` (picker logo), `apiKey`/`apiKeyEnv`, `model`, and `reasoningTag` for models that emit `<think>` blocks.
 
-Each user's `allowedModels` widens their choice beyond the default (admins get all); the model is picked per-conversation in the composer and kept stable for the pane (so the model-scoped cache survives).
+Each user's allowed models come from their record plus matching policies (admins get all). The model is picked per conversation and kept stable for the pane so the model-scoped cache survives.
 
 ## Tools
 
-Warehouse: `queryDatabase`, `listTables` (catalog served from the synced schema, kept out of the prompt for caching), `getTableSchema`, `runPython` (ephemeral Windmill workers; `dataQuery` pipes ≤20k rows server-side into pandas — never through the model). Output: `renderChart` (Chart.js, CVD-safe palette), `renderDiagram` (Mermaid), `generateExcel` (≤100k rows written server-side), `generateDocument`. Documents: `searchDocuments`, `previewTable`. UX: `askUser` (client-resolved option buttons). Memory (opt-in): `saveMemory` / `forgetMemory`. Windmill: a curated `windmill_*` facade (see below). Flow authoring lives on the Flows page, not the main chat.
+Warehouse: `queryDatabase`, `listTables` (catalog served from the synced schema, kept out of the prompt for caching), `getTableSchema`. Output: `renderChart` (Chart.js), `renderDiagram` (Mermaid), `generateExcel` (result sets written server-side), `generateDocument`. Documents: `searchDocuments`, `previewTable`. UX: `askUser` (client-resolved option buttons, chat only). Memory (opt-in): `saveMemory`, `forgetMemory`. Code execution (capability, beta): `runPython`. Plus whatever tools the user's own MCP servers expose, prefixed by server name.
 
-## Knowledge, memory & documents
+## API access
 
-Three tiers, all resolved per-request from the token; shared tiers are admin-curated in **`/organization`**:
+- **`POST /v1/chat/completions`** and **`GET /v1/models`**: OpenAI-compatible, streaming and non-streaming. Point any OpenAI-protocol client at the app's base URL with a `pai_` key and it gets the full agent (warehouse, documents, code execution) under the caller's own permissions, limits and audit trail. Stateless: callers keep their own history.
+- **API keys** (Settings, Chaves de API): shown once, SHA-256 stored, optional expiry (90-day default), a non-secret hint (`pai_ab...1234`) for matching keys to scripts, and a scope: `chat` (data plane only, the default) or `full` (acts fully as the owner). A key is its owner: blocking the user disables their keys on the next request.
 
-- **Organization / department knowledge** — titled, toggleable text blocks (definitions, conventions). Company blocks apply to everyone; department blocks only to matching users. Injected into the system prompt in a cache-stable order.
-- **Organization / department document libraries** — files (`.txt .md .json .sql .log`, **PDF** via `unpdf`, **spreadsheets** via SheetJS) reused across conversations. A small **manifest** (name + summary) is injected so the assistant proactively reaches for the right doc; the content itself is retrieved (BM25), never injected. Spreadsheets are analyzable with `previewTable` / `runPython`.
-- **User memory** — opt-in per user (Settings → Memória). Topic-based (title / summary / markdown details), agent-written via `saveMemory`, fully user-visible and deletable (LGPD). Injected only when enabled.
+## Code execution (beta)
 
-Per-conversation **uploads** (composer paperclip) still work and are searched alongside the shared libraries. The workbook parser (`src/lib/server/workbook.ts`) detects the header row, names unnamed columns, drops blank rows, and infers column types.
+`runPython` runs inside [microsandbox](https://github.com/microsandbox/microsandbox) microVMs: hardware isolation (libkrun/KVM), a fresh ephemeral VM per run, destroyed afterwards. The optional `dataQuery` input executes read-only SQL as the requesting user and pipes up to 20k rows server-side into the sandbox as a preloaded `data` variable, so datasets never pass through the model. The sandbox image (`deploy/sandbox/Dockerfile`) preinstalls the Python analysis stack and the [basalt](https://github.com/leonardomb1/basalt) binary for columnar SQL over files.
 
-## Flows (automation)
-
-Builder chat on **`/flows`**: the assistant composes a flow as a small tree — one trigger (5-field cron in America/Sao_Paulo, or manual) → optional SQL-check gates → agent steps → notify steps (allowlisted Windmill scripts). A server-side validator returns path-addressed errors so the model self-repairs. The flow renders as an auto-generated **Mermaid** diagram; activating a version compiles it to Windmill OpenFlow and deploys it (schedule + agent-step callbacks) under the owner's Windmill deploy token. Flows are **department-scoped**: admins see all, builders see their departments' + their own; activation is owner-only (it seals the activator's live credentials as run-as); legacy flows show up as *orphaned* for admin triage.
-
-## Windmill MCP
-
-`src/lib/server/mcp.ts` connects per-request to the Windmill MCP server with the calling user's own token. Windmill serves ~83 tools; PerguntAI keeps only a **curated facade** — the find-and-run generic API (list/get/run scripts & flows, jobs, variables, schedules, docs), plus any script using the `perguntai_token` convention (a short-lived JWE injected at call time so the script acts as the user). The ~46 per-user per-script tools are dropped from the prompt but stay reachable via `windmill_runScriptByPath`. Workspace mutations are gated behind the admin-granted `windmillWrite`.
+Requirements: the admin toggle in Capacidades, and `/dev/kvm` access for the app container (see `docker-compose.yml`), or the microsandbox cloud backend via `MSB_API_KEY`. The image is pulled and one VM is boot-tested in the background on server start and on toggle-on, so user runs get warm boots (about 300ms) instead of the one-time image pull. Configure with `MSB_IMAGE`, `MSB_MEMORY_MIB`, `MSB_CPUS`, `MSB_TIMEOUT_MS`.
 
 ## Observability
 
-`@sentry/sveltekit` (`src/hooks.server.ts`) with the Vercel AI SDK integration — per-agent traces (model, tokens, latency, tool calls), errors, and MCP monitoring. **DSN-gated**: unset `SENTRY_DSN` = fully inert. PII off (`dataCollection.genAI.inputs/outputs: false` and the AI SDK omits I/O from spans) — prompts carry warehouse rows and personal context that must not leave.
+- **Audit log**: first-party, in the console (Auditoria); see above.
+- **Sentry** (`@sentry/sveltekit` with the Vercel AI SDK integration): per-agent traces, errors, MCP monitoring. DSN-gated and disabled in dev unless `SENTRY_DEV=1`. PII capture is off; prompts carry warehouse rows and personal context that must not leave.
 
 ## State layout (`DATA_DIR`, default `./data`)
 
-`conversations/<user>/`, `settings/<user>.json` (Windmill token AES-encrypted at rest), `rag/<user>.json` + `rag/_shared/{org,dept-*}.json`, `memory/<user>.json`, `flows/<user>/` + `flows/_index.json`, `usage/<user>.json`, `access.json`, `exports/` (7-day, behind authenticated `/api/exports`). Plus `schema.json` (synced warehouse catalog).
+`conversations/<user>/`, `settings/<user>.json` (MCP tokens AES-encrypted at rest), `rag/<user>.json` plus `rag/_shared/{org,dept-*}.json`, `memory/<user>.json`, `usage/<user>.json`, `apikeys/<user>.json` (hashes only), `audit/<month>.jsonl`, `access.json` (users, policies, capabilities, knowledge), `exports/` (7-day, behind authenticated `/api/exports`), and `schema.json` (synced warehouse catalog).
 
 ## Setup
 
-1. **Env** — copy `.env.example` to `.env` and fill in the Foundry (or Anthropic) key, `JWT_SECRET`, `WINDMILL_AUTH_TOKEN`, the Windmill instance, and StarRocks. Set `ADMIN_USERS` to your bootstrap admin(s). Optional: `SENTRY_DSN`.
-2. **Users** — none to create. Anyone who authenticates against AD (via the Windmill k-auth route) can sign in; their StarRocks grants govern what they can read. Roles/limits are managed in the admin panel.
+1. **Env**: copy `.env.example` to `.env` and fill in the Foundry (or Anthropic) key, `JWT_SECRET`, StarRocks, and at least one sign-in door (`OIDC_*` or `LDAP_*`). Set `ADMIN_USERS` to your bootstrap admin(s).
+2. **Users**: none to create. Anyone who authenticates can sign in while in open mode; add policies or user records to gate access. StarRocks grants govern what each user can read.
 3. **Sync the schema** (gives the agent instant warehouse knowledge):
    ```bash
    STARROCKS_SYNC_USER=<user> STARROCKS_SYNC_PASSWORD=<pass> npm run sync-schema
@@ -91,9 +100,10 @@ Builder chat on **`/flows`**: the assistant composes a flow as a small tree — 
 
 ## Deployment
 
-- **Docker** — `adapter-node` + Docker; `docker-compose.yml` uses `env_file: .env`, listens on `0.0.0.0:3000`, and keeps state in the `perguntai-data` named volume (bind mounts break the non-root user's writes). CI pushes `ghcr.io/your-org/perguntai` on push to main; on the server `docker compose pull && docker compose up -d`. Schema sync in Docker: one-off `docker compose exec perguntai node scripts/sync-schema.js`, or the daily `schema-sync` sidecar via `docker compose --profile sync up -d`.
-  - Windmill workers must reach the app for flow agent-step callbacks — set `PERGUNTAI_BASE_URL` (falls back to `ORIGIN`). Raise `BODY_SIZE_LIMIT` (e.g. `15M`) for PDF uploads.
-- **Kubernetes (target)** — a starter Helm chart lives in `deploy/helm/perguntai/` (stateless Deployment + HPA + Ingress, optional in-cluster PgBouncer, Postgres/Blob as externals). It assumes the app has been migrated off the local-filesystem store to managed Postgres + Blob — see the chart's `NOTES.txt`.
+- **Docker**: `adapter-node`; `docker-compose.yml` uses `env_file: .env`, listens on `0.0.0.0:3000`, and keeps state in the `perguntai-data` named volume. CI builds `ghcr.io/<owner>/perguntai` on app-code pushes to main (`.github/workflows/docker.yml`); on the server `docker compose pull && docker compose up -d`.
+- **Sandbox image**: `.github/workflows/sandbox-image.yml` builds `ghcr.io/<owner>/perguntai-sandbox` when `deploy/sandbox/` changes, or on demand with a version tag. Pin that tag in `MSB_IMAGE`; make the package public so the microsandbox SDK pulls it without credentials. The compose file carries the `/dev/kvm` device and the `msbcache` volume the feature needs.
+- **Schema sync in production**: an external cron POSTs `/api/admin/sync-schema` with `Authorization: Bearer $SCHEMA_SYNC_TOKEN`, or run `docker compose exec perguntai node scripts/sync-schema.js`.
+- **Kubernetes (target)**: a starter Helm chart lives in `deploy/helm/perguntai/`; it assumes migration off the local-filesystem store. See the chart's `NOTES.txt`.
 
 ## Commands
 

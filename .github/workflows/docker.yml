@@ -4,6 +4,16 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    # Only app-code changes need an app image. Deploy tooling (the sandbox
+    # image, helm, compose), docs, and the sandbox's own workflow build
+    # nothing into THIS image — sandbox-image.yml covers its part.
+    # (paths-ignore applies to branch pushes; v* tag pushes always build.)
+    paths-ignore:
+      - 'deploy/**'
+      - 'docker-compose.yml'
+      - 'README.md'
+      - '.env.example'
+      - '.github/workflows/sandbox-image.yml'
   workflow_dispatch:
 
 permissions:
