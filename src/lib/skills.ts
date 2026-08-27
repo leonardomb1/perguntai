@@ -56,3 +56,32 @@ export async function removeSkill(id: string): Promise<boolean> {
 	});
 	return res.ok;
 }
+
+/** Departments the current user matches — valid share targets besides 'org'. */
+export async function listShareScopes(): Promise<{ id: string; name: string }[]> {
+	try {
+		const res = await fetch('/api/skills/propose', { headers: headers() });
+		if (!res.ok) return [];
+		return (await res.json()).departments ?? [];
+	} catch {
+		return [];
+	}
+}
+
+/** Propose a skill for shared use ('org' or a department id). */
+export async function proposeSkillTo(
+	id: string,
+	scope: string
+): Promise<'ok' | 'duplicate' | 'error'> {
+	try {
+		const res = await fetch('/api/skills/propose', {
+			method: 'POST',
+			headers: headers(),
+			body: JSON.stringify({ id, scope })
+		});
+		if (res.ok) return 'ok';
+		return res.status === 409 ? 'duplicate' : 'error';
+	} catch {
+		return 'error';
+	}
+}

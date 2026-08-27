@@ -2,7 +2,14 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import Icon from './Icon.svelte';
 	import Markdown from './Markdown.svelte';
-	import { listSkills, saveSkill, removeSkill, type UserSkill } from '$lib/skills';
+	import {
+		listSkills,
+		saveSkill,
+		removeSkill,
+		listShareScopes,
+		proposeSkillTo,
+		type UserSkill
+	} from '$lib/skills';
 
 	// Learned skills (procedural playbooks) — same list → detail/edit shell as
 	// the memory manager, with name / description / markdown content.
@@ -43,6 +50,27 @@
 	function back() {
 		openId = null;
 		editing = false;
+		sharing = false;
+		shareResult = null;
+	}
+
+	// --- sharing (propose for admin review) ---
+	let sharing = $state(false);
+	let shareResult = $state<'ok' | 'duplicate' | 'error' | null>(null);
+	let shareScopes = $state<{ id: string; name: string }[] | null>(null);
+
+	async function openShare() {
+		sharing = !sharing;
+		shareResult = null;
+		if (sharing && shareScopes === null) shareScopes = await listShareScopes();
+	}
+
+	async function shareTo(scope: string) {
+		if (!current || busy) return;
+		busy = true;
+		shareResult = await proposeSkillTo(current.id, scope);
+		busy = false;
+		if (shareResult === 'ok') sharing = false;
 	}
 
 	async function saveDraft() {
@@ -145,6 +173,12 @@
 		</h3>
 		{#if !editing && current}
 			<button
+				onclick={openShare}
+				class="shrink-0 rounded-lg border border-[#e3e0d5] px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-[#faf9f5]"
+			>
+				{m.settings_skills_share()}
+			</button>
+			<button
 				onclick={startEdit}
 				class="shrink-0 rounded-lg border border-[#e3e0d5] px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-[#faf9f5]"
 			>
@@ -159,6 +193,42 @@
 			</button>
 		{/if}
 	</div>
+
+	{#if !editing && current && (sharing || shareResult)}
+		<div class="mb-4 rounded-xl border border-[#e9e6dd] bg-[#faf9f5] px-4 py-3">
+			{#if shareResult === 'ok'}
+				<p class="flex items-center gap-2 text-sm text-[#0d8a5f]">
+					<Icon name="check" size={14} />
+					{m.settings_skills_share_sent()}
+				</p>
+			{:else}
+				<p class="text-xs text-neutral-500">{m.settings_skills_share_hint()}</p>
+				<div class="mt-2.5 flex flex-wrap items-center gap-2">
+					<button
+						onclick={() => shareTo('org')}
+						disabled={busy}
+						class="rounded-lg border border-[#e3e0d5] bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-[#d97757]/40 hover:text-[#bd5d3a] disabled:opacity-50"
+					>
+						{m.admin_skills_scope_org()}
+					</button>
+					{#each shareScopes ?? [] as scope (scope.id)}
+						<button
+							onclick={() => shareTo(scope.id)}
+							disabled={busy}
+							class="rounded-lg border border-[#e3e0d5] bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-[#d97757]/40 hover:text-[#bd5d3a] disabled:opacity-50"
+						>
+							{scope.name}
+						</button>
+					{/each}
+				</div>
+				{#if shareResult === 'duplicate'}
+					<p class="mt-2 text-xs text-red-600">{m.settings_skills_share_dup()}</p>
+				{:else if shareResult === 'error'}
+					<p class="mt-2 text-xs text-red-600">{m.settings_skills_share_err()}</p>
+				{/if}
+			{/if}
+		</div>
+	{/if}
 
 	{#if editing}
 		<div class="space-y-3">
