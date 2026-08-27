@@ -77,6 +77,7 @@
 	"tool_run_command": "Run command",
 	"tool_load_data": "Load data",
 	"tool_present_file": "Send file",
+	"tool_import_doc": "Import attachment",
 	"tool_query_db": "Query database",
 	"tool_edit_from": "Replace",
 	"tool_edit_to": "With",

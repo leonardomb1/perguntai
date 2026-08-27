@@ -360,6 +360,24 @@ export async function getSheet(
 	return sheet ? { document: doc.name, sheet } : null;
 }
 
+/**
+ * Full stored document (chunks + sheets) attached to THIS conversation, by
+ * fuzzy name — the sandbox import needs the whole content, not a search hit.
+ */
+export async function getConversationDoc(
+	username: string,
+	conversationId: string,
+	name: string
+): Promise<StoredDoc | null> {
+	const docs = (await readStore(username)).filter((d) => d.conversationId === conversationId);
+	const needle = name.toLowerCase();
+	return (
+		docs.find((d) => d.name.toLowerCase() === needle) ??
+		docs.find((d) => d.name.toLowerCase().includes(needle)) ??
+		null
+	);
+}
+
 /** Names of tabular documents (with their sheets), for not-found error messages. */
 export async function listTables(
 	username: string,

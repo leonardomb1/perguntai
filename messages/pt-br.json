@@ -77,6 +77,7 @@
 	"tool_run_command": "Executar comando",
 	"tool_load_data": "Carregar dados",
 	"tool_present_file": "Enviar arquivo",
+	"tool_import_doc": "Importar anexo",
 	"tool_query_db": "Consultar banco",
 	"tool_edit_from": "Substituir",
 	"tool_edit_to": "Por",

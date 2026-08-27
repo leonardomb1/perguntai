@@ -2,7 +2,7 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import { connectAsUser } from './db';
 import { getConversationSandbox, runSandboxedPython } from './sandbox';
-import { searchAllDocuments, getSheet, listTables } from './rag';
+import { searchAllDocuments, getConversationDoc, getSheet, listTables, type SheetData } from './rag';
 import { tableSchemas, schemaContext } from './schema';
 import { visibleDatabases } from './warehouse-access';
 import {
@@ -652,6 +652,17 @@ const MAX_FILE_READ_CHARS = 24_000;
  * sandboxEditFile changes only the passed span, so iterating on a script or
  * document never re-emits its full content through the model.
  */
+function csvCell(value: unknown): string {
+	const text = value == null ? '' : String(value);
+	return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function sheetToCsv(sheet: SheetData): string {
+	const header = sheet.columns.map(csvCell).join(',');
+	const lines = sheet.rows.map((r) => sheet.columns.map((c) => csvCell(r[c])).join(','));
+	return [header, ...lines].join('\n');
+}
+
 export function sandboxFileTools(
 	credentials: { username: string; password?: string },
 	conversationId: string
@@ -804,6 +815,53 @@ export function sandboxFileTools(
 					};
 				} catch (error) {
 					return { error: error instanceof Error ? error.message : 'exec failed' };
+				}
+			}
+		}),
+		sandboxImportDoc: tool({
+			description:
+				'Copy a document the user attached to THIS conversation into the sandbox workspace so ' +
+				'you can analyze it for real: spreadsheets are written as CSV (one file per sheet), text ' +
+				'documents as their full text, under uploads/. ALWAYS use this instead of searchDocuments ' +
+				'when the user wants computation, statistics or transformation over an attached file.',
+			inputSchema: z.object({
+				name: z.string().describe('Attached document name (fuzzy match ok)')
+			}),
+			execute: async ({ name }) => {
+				try {
+					const doc = await getConversationDoc(username, conversationId, name);
+					if (!doc) return { error: `no attached document matches "${name}" in this conversation` };
+					const { sandbox, workdir } = await getConversationSandbox(username, conversationId);
+					const slug =
+						doc.name
+							.replace(/\.[^.]+$/, '')
+							.replace(/[^\w.-]+/g, '_')
+							.slice(0, 60) || 'documento';
+					const files: { path: string; rows?: number; bytes: number; truncated?: boolean }[] = [];
+					const writeOne = async (path: string, body: string) => {
+						const full = `${workdir}/uploads/${path}`;
+						await sandbox.fs().mkdir(`${workdir}/uploads`).catch(() => {});
+						await sandbox.fs().write(full, body);
+						return full;
+					};
+					if (doc.sheets?.length) {
+						for (const sheet of doc.sheets) {
+							const suffix = doc.sheets.length > 1 ? `-${sheet.name.replace(/[^\w.-]+/g, '_')}` : '';
+							const body = sheetToCsv(sheet);
+							files.push({
+								path: await writeOne(`${slug}${suffix}.csv`, body),
+								rows: sheet.rows.length,
+								bytes: Buffer.byteLength(body),
+								...(sheet.truncated ? { truncated: true } : {})
+							});
+						}
+					} else {
+						const body = doc.chunks.join('\n\n');
+						files.push({ path: await writeOne(`${slug}.txt`, body), bytes: Buffer.byteLength(body) });
+					}
+					return { document: doc.name, files };
+				} catch (error) {
+					return { error: error instanceof Error ? error.message : 'import failed' };
 				}
 			}
 		}),

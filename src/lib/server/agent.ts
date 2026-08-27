@@ -16,7 +16,7 @@ import {
 	memoryTools
 } from './tools';
 import { listMemories } from './memory';
-import { sharedManifest } from './rag';
+import { listDocs, sharedManifest } from './rag';
 import { agentTelemetry } from './telemetry';
 import { departmentsForUser, getCapabilities, resolveRole, resolveSqlWrite } from './access';
 import { weightedTokens } from './usage';
@@ -115,13 +115,22 @@ export async function buildAgent(
 	// one via searchDocuments; the content itself is retrieved, never injected.
 	const docDepts = (await departmentsForUser(user.profile)).map((d) => ({ id: d.id, name: d.name }));
 	const docManifest = await sharedManifest(docDepts);
-	const docBlock = docManifest.length
-		? `You have reference documents on file — use them whenever a question might touch them, and cite the document you use. For text/PDF docs call searchDocuments; for a spreadsheet call previewTable. <available_documents>${docManifest
-				.map(
-					(d) =>
-						`- "${d.name}"${d.summary ? ` — ${d.summary}` : ''} [${d.source}${d.tabular ? ', spreadsheet' : ''}]`
-				)
-				.join('\n')}</available_documents> `
+	// Files the user attached to THIS conversation join the manifest — without
+	// this the model flatly denies an upload exists ("não recebi nenhum
+	// arquivo") because nothing ever announced it.
+	const attached = conversationId ? await listDocs(user.username, conversationId) : [];
+	const manifestLines = [
+		...attached.map(
+			(d) =>
+				`- "${d.name}" [attached to this conversation${d.sheets ? `, spreadsheet: ${d.sheets.join(', ')}` : ''}]`
+		),
+		...docManifest.map(
+			(d) =>
+				`- "${d.name}"${d.summary ? ` — ${d.summary}` : ''} [${d.source}${d.tabular ? ', spreadsheet' : ''}]`
+		)
+	];
+	const docBlock = manifestLines.length
+		? `You have documents on file — entries marked "attached to this conversation" are files THIS user uploaded HERE (never claim no file was received when one is listed). Use them whenever a question might touch them, and cite the document you use. For text/PDF docs call searchDocuments; for a quick look at a spreadsheet call previewTable. <available_documents>${manifestLines.join('\n')}</available_documents> `
 		: '';
 
 	const memoryGuidance = memoryEnabled
@@ -165,7 +174,7 @@ export async function buildAgent(
 	const codeExecution = (await getCapabilities()).codeExecution;
 	const codeExecutionGuidance = codeExecution
 		? conversationId
-			? 'This conversation has a PERSISTENT sandbox workspace (Python with pandas/numpy/statsmodels/scikit-learn, plus the `basalt` CLI for columnar SQL over files); its files survive across turns. For statistics, forecasting, or analysis beyond SQL: pull rows in with sandboxLoadData (read-only SQL under the user\u2019s own permissions — data never passes through you), write scripts with sandboxWriteFile, run them with sandboxExec, and iterate with sandboxEditFile passing only the exact span to change (NEVER rewrite a whole file for a small edit). When you produce a file the user should receive (report, dataset, document), deliver it with sandboxPresentFile — never paste whole files into the chat. Print compact results; return small summaries. '
+			? 'This conversation has a PERSISTENT sandbox workspace (Python with pandas/numpy/statsmodels/scikit-learn, plus the `basalt` CLI for columnar SQL over files); its files survive across turns. For statistics, forecasting, or analysis beyond SQL: pull warehouse rows in with sandboxLoadData (read-only SQL under the user\u2019s own permissions — data never passes through you), bring files the user attached to this conversation in with sandboxImportDoc (spreadsheets land as CSV under uploads/), write scripts with sandboxWriteFile, run them with sandboxExec, and iterate with sandboxEditFile passing only the exact span to change (NEVER rewrite a whole file for a small edit). When you produce a file the user should receive (report, dataset, document), deliver it with sandboxPresentFile — never paste whole files into the chat. Print compact results; return small summaries. '
 			: 'For statistics, forecasting, or analysis beyond SQL, use runPython (sandboxed Python with pandas/numpy/statsmodels/scikit-learn) — fetch data with its dataQuery option instead of pasting rows, print compact results, and return small summaries. '
 		: '';
 

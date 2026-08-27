@@ -36,7 +36,8 @@ const ICONS: Record<string, string> = {
 	sandboxWriteFile: 'file-plus',
 	sandboxReadFile: 'eye',
 	sandboxEditFile: 'square-pen',
-	sandboxPresentFile: 'upload'
+	sandboxPresentFile: 'upload',
+	sandboxImportDoc: 'paperclip'
 };
 
 /** Localized action labels (Claude-style verbs) for tools that have one. */
@@ -47,6 +48,7 @@ const LABELS: Record<string, () => string> = {
 	sandboxExec: () => m.tool_run_command(),
 	sandboxLoadData: () => m.tool_load_data(),
 	sandboxPresentFile: () => m.tool_present_file(),
+	sandboxImportDoc: () => m.tool_import_doc(),
 	queryDatabase: () => m.tool_query_db()
 };
 
@@ -63,6 +65,8 @@ function toolDetail(raw: string, input: unknown): { detail?: string; mono?: bool
 			return { detail: str(i.path) };
 		case 'sandboxPresentFile':
 			return { detail: str(i.filename) ?? str(i.path) };
+		case 'sandboxImportDoc':
+			return { detail: str(i.name) };
 		case 'sandboxExec':
 			return { detail: str(i.command), mono: true };
 		case 'sandboxLoadData':
