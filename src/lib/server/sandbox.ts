@@ -112,12 +112,21 @@ export async function runSandboxedPython(
  * Testar button doubles as a manual warm-up. Concurrent calls coalesce.
  */
 let warming: Promise<void> | null = null;
-export function warmSandbox(): void {
+export function warmSandbox(delayMs = 0): void {
 	if (warming) return;
 	warming = (async () => {
+		// Deferred past server init: invoking the napi runtime during module
+		// init has been seen to hang; a request-time call never does. The race
+		// keeps the coalescing guard from wedging if a run stalls anyway.
+		if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
 		const started = Date.now();
 		try {
-			const result = await runSandboxedPython('print("warm")');
+			const result = await Promise.race([
+				runSandboxedPython('print("warm")'),
+				new Promise<never>((_, reject) =>
+					setTimeout(() => reject(new Error('warm-up timed out after 10 min')), 600_000)
+				)
+			]);
 			console.log(
 				`sandbox warm-up ${result.ok ? 'ok' : 'FAILED'} in ${Date.now() - started}ms` +
 					(result.ok ? '' : ` — ${(result.stderr || result.stdout).slice(0, 200)}`)

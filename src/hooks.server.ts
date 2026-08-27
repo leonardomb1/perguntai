@@ -41,7 +41,9 @@ if (sentryOn) {
 // and failure-tolerant — a host without KVM just logs the warm-up failure.
 getCapabilities()
 	.then((caps) => {
-		if (caps.codeExecution) warmSandbox();
+		// 15s delay: let the server settle first — booting the napi microVM
+		// runtime during module init has been seen to hang.
+		if (caps.codeExecution) warmSandbox(15_000);
 	})
 	.catch(() => {});
 
