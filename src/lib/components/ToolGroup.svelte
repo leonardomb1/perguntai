@@ -32,7 +32,10 @@
 	const working = $derived(Boolean(runningTool) || (live && parts.at(-1)?.type === 'reasoning'));
 
 	const activity = $derived.by(() => {
-		if (runningTool) return toolDisplay(getToolName(runningTool)).label;
+		if (runningTool) {
+			const d = toolDisplay(getToolName(runningTool), runningTool.input);
+			return d.detail ? `${d.label} · ${d.detail}` : d.label;
+		}
 		return m.steps_thinking();
 	});
 

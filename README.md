@@ -61,7 +61,7 @@ Each user's allowed models come from their record plus matching policies (admins
 
 ## Tools
 
-Warehouse: `queryDatabase`, `listTables` (catalog served from the synced schema, kept out of the prompt for caching), `getTableSchema`. Output: `renderChart` (Chart.js), `renderDiagram` (Mermaid), `generateExcel` (result sets written server-side), `generateDocument`. Documents: `searchDocuments`, `previewTable`. UX: `askUser` (client-resolved option buttons, chat only). Memory (opt-in): `saveMemory`, `forgetMemory`. Code execution (capability, beta): `runPython`. Plus whatever tools the user's own MCP servers expose, prefixed by server name.
+Warehouse: `queryDatabase`, `listTables` (catalog served from the synced schema, kept out of the prompt for caching), `getTableSchema`. Output: `renderChart` (Chart.js), `renderDiagram` (Mermaid), `generateExcel` (result sets written server-side), `generateDocument`. Documents: `searchDocuments`, `previewTable`. UX: `askUser` (client-resolved option buttons, chat only). Memory (opt-in): `saveMemory`, `forgetMemory`. Code execution (capability, beta): in chat, workspace tools (`sandboxLoadData`, `sandboxWriteFile`, `sandboxReadFile`, `sandboxEditFile`, `sandboxExec`, `sandboxPresentFile`); on the stateless `/v1` API, the self-contained `runPython`. Plus whatever tools the user's own MCP servers expose, prefixed by server name.
 
 ## API access
 
@@ -70,7 +70,7 @@ Warehouse: `queryDatabase`, `listTables` (catalog served from the synced schema,
 
 ## Code execution (beta)
 
-`runPython` runs inside [microsandbox](https://github.com/microsandbox/microsandbox) microVMs: hardware isolation (libkrun/KVM), a fresh ephemeral VM per run, destroyed afterwards. The optional `dataQuery` input executes read-only SQL as the requesting user and pipes up to 20k rows server-side into the sandbox as a preloaded `data` variable, so datasets never pass through the model. The sandbox image (`deploy/sandbox/Dockerfile`) preinstalls the Python analysis stack and the [basalt](https://github.com/leonardomb1/basalt) binary for columnar SQL over files.
+Runs inside [microsandbox](https://github.com/microsandbox/microsandbox) microVMs: hardware isolation (libkrun/KVM). Each chat conversation gets a persistent workspace VM whose files survive across turns (idle VMs are stopped after 20 minutes and resume in ~300ms; the workspace is removed with its conversation). The assistant loads warehouse data with `sandboxLoadData` (read-only SQL as the requesting user, up to 20k rows written server-side into a workspace file, so datasets never pass through the model), then writes, delta-edits, and executes scripts with the file tools. Stateless `/v1` calls use `runPython` in a disposable VM instead. The sandbox image (`deploy/sandbox/Dockerfile`) preinstalls the Python analysis stack and the [basalt](https://github.com/leonardomb1/basalt) binary for columnar SQL over files.
 
 Requirements: the admin toggle in Capacidades, and `/dev/kvm` access for the app container (see `docker-compose.yml`), or the microsandbox cloud backend via `MSB_API_KEY`. The image is pulled and one VM is boot-tested in the background on server start and on toggle-on, so user runs get warm boots (about 300ms) instead of the one-time image pull. Configure with `MSB_IMAGE`, `MSB_MEMORY_MIB`, `MSB_CPUS`, `MSB_TIMEOUT_MS`.
 

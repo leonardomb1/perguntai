@@ -175,7 +175,11 @@
 						out.push({ kind: 'diagram', spec });
 						continue;
 					}
-				} else if (name === 'generateExcel' || name === 'generateDocument') {
+				} else if (
+					name === 'generateExcel' ||
+					name === 'generateDocument' ||
+					name === 'sandboxPresentFile'
+				) {
 					const spec = toolOutput<ExportSpec & { error?: string }>(part);
 					if (spec?.fileId) {
 						flush();

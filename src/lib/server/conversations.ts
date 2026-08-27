@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { env } from '$env/dynamic/private';
 import type { UIMessage } from 'ai';
 import { removeDocsForConversation } from './rag';
+import { removeConversationSandbox } from './sandbox';
 
 /**
  * Server-side conversation store: one index per user plus one JSON file per
@@ -93,10 +94,12 @@ export async function saveConversation(
 	const next = index.filter((c) => c.id !== id);
 	next.unshift(meta);
 
-	// Evict the oldest beyond the cap, including their files and documents.
+	// Evict the oldest beyond the cap, including their files, documents and
+	// sandbox workspaces.
 	for (const evicted of next.slice(MAX_CONVERSATIONS)) {
 		await rm(join(dir, `${evicted.id}.json`), { force: true }).catch(() => {});
 		await removeDocsForConversation(username, evicted.id).catch(() => {});
+		await removeConversationSandbox(username, evicted.id).catch(() => {});
 	}
 	await writeIndex(username, next.slice(0, MAX_CONVERSATIONS));
 	return meta;
@@ -116,9 +119,10 @@ export async function renameConversation(
 	await writeIndex(username, index);
 }
 
-/** Deletes the conversation AND the documents attached to it. */
+/** Deletes the conversation, its documents, and its sandbox workspace. */
 export async function deleteConversation(username: string, id: string): Promise<void> {
 	await rm(join(userDir(username), `${id}.json`), { force: true }).catch(() => {});
 	await writeIndex(username, (await readIndex(username)).filter((c) => c.id !== id));
 	await removeDocsForConversation(username, id);
+	await removeConversationSandbox(username, id).catch(() => {});
 }

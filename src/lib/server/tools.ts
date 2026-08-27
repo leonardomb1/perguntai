@@ -1,11 +1,18 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import { connectAsUser } from './db';
-import { runSandboxedPython } from './sandbox';
+import { getConversationSandbox, runSandboxedPython } from './sandbox';
 import { searchAllDocuments, getSheet, listTables } from './rag';
 import { tableSchemas, schemaContext } from './schema';
 import { visibleDatabases } from './warehouse-access';
-import { createExcelExport, createTextExport, type ExportSheet } from './exports';
+import {
+	createExcelExport,
+	createFileExport,
+	createTextExport,
+	EXPORT_TYPES,
+	type ExportExt,
+	type ExportSheet
+} from './exports';
 import { checkStatement, readOnlyStatement } from './sql-guard';
 import { saveMemory, removeMemory } from './memory';
 
@@ -633,6 +640,216 @@ export function sandboxPythonTool(credentials: { username: string; password?: st
 			}
 		}
 	});
+}
+
+
+const MAX_FILE_READ_CHARS = 24_000;
+
+/**
+ * BETA — Claude-style file tools over the conversation's PERSISTENT sandbox
+ * workspace (one named microVM per conversation; files survive across turns,
+ * stopped when idle, removed with the conversation). The point is DELTAS:
+ * sandboxEditFile changes only the passed span, so iterating on a script or
+ * document never re-emits its full content through the model.
+ */
+export function sandboxFileTools(
+	credentials: { username: string; password?: string },
+	conversationId: string
+) {
+	const username = credentials.username;
+	const resolvePath = (w: string, path: string) =>
+		path.startsWith('/') ? path : `${w}/${path}`;
+
+	return {
+		sandboxLoadData: tool({
+			description:
+				'Fetch warehouse data into the sandbox workspace WITHOUT it passing through you: runs a ' +
+				'single read-only SQL statement (database-qualified names, executed with the user\u2019s own ' +
+				`permissions, up to ${MAX_SANDBOX_INPUT_ROWS} rows) and writes the full result as a JSON ` +
+				'array of row objects to a workspace file. Then analyze it with sandboxExec (python/basalt).',
+			inputSchema: z.object({
+				sql: z.string().describe('A single read-only SQL statement'),
+				path: z
+					.string()
+					.optional()
+					.describe('Workspace file to write (default data.json)')
+			}),
+			execute: async ({ sql, path }) => {
+				const statement = checkStatement(sql, { allowWrites: false });
+				if (!statement) {
+					return { error: 'sql must be a single read-only statement (SELECT/SHOW/DESCRIBE/EXPLAIN)' };
+				}
+				let conn;
+				try {
+					conn = await connectAsUser(credentials, { selectDatabase: false });
+					const [result] = await conn.query(statement);
+					if (!Array.isArray(result)) return { error: 'query returned no row set' };
+					const rows = (jsonSafe(result) as Record<string, unknown>[]).slice(
+						0,
+						MAX_SANDBOX_INPUT_ROWS
+					);
+					const body = JSON.stringify(rows);
+					if (body.length > MAX_SANDBOX_INPUT_BYTES) {
+						return {
+							error: `result exceeds ${MAX_SANDBOX_INPUT_BYTES / 1024 / 1024} MiB — aggregate or select fewer columns`
+						};
+					}
+					const { sandbox, workdir } = await getConversationSandbox(username, conversationId);
+					const full = resolvePath(workdir, path?.trim() || 'data.json');
+					await sandbox.fs().write(full, body);
+					return {
+						path: full,
+						rows: rows.length,
+						columns: rows.length ? Object.keys(rows[0]) : []
+					};
+				} catch (error) {
+					return { error: error instanceof Error ? error.message : 'load failed' };
+				} finally {
+					await conn?.end().catch(() => {});
+				}
+			}
+		}),
+		sandboxWriteFile: tool({
+			description:
+				'Create or overwrite a file in this conversation\u2019s persistent sandbox workspace ' +
+				'(relative paths resolve inside the workspace). Files persist across turns. For SMALL ' +
+				'changes to an existing file use sandboxEditFile instead of rewriting it here.',
+			inputSchema: z.object({
+				path: z.string().describe('File path (relative to the workspace, or absolute)'),
+				content: z.string().describe('Full file content')
+			}),
+			execute: async ({ path, content }) => {
+				try {
+					const { sandbox, workdir } = await getConversationSandbox(username, conversationId);
+					const full = resolvePath(workdir, path);
+					const dir = full.slice(0, full.lastIndexOf('/'));
+					if (dir) await sandbox.fs().mkdir(dir).catch(() => {});
+					await sandbox.fs().write(full, content);
+					return { path: full, bytes: Buffer.byteLength(content) };
+				} catch (error) {
+					return { error: error instanceof Error ? error.message : 'write failed' };
+				}
+			}
+		}),
+		sandboxReadFile: tool({
+			description:
+				'Read a file from this conversation\u2019s sandbox workspace. Long files are truncated ' +
+				`at ${MAX_FILE_READ_CHARS} characters — prefer targeted sandboxExec (head/grep) for huge files.`,
+			inputSchema: z.object({
+				path: z.string().describe('File path (relative to the workspace, or absolute)')
+			}),
+			execute: async ({ path }) => {
+				try {
+					const { sandbox, workdir } = await getConversationSandbox(username, conversationId);
+					const text = await sandbox.fs().readToString(resolvePath(workdir, path));
+					return {
+						content: text.slice(0, MAX_FILE_READ_CHARS),
+						truncated: text.length > MAX_FILE_READ_CHARS
+					};
+				} catch (error) {
+					return { error: error instanceof Error ? error.message : 'read failed' };
+				}
+			}
+		}),
+		sandboxEditFile: tool({
+			description:
+				'Edit a workspace file by exact-string replacement — pass ONLY the span to change plus ' +
+				'its replacement, never the whole file. oldText must match exactly once (include enough ' +
+				'surrounding context to make it unique), or set replaceAll for every occurrence.',
+			inputSchema: z.object({
+				path: z.string().describe('File path (relative to the workspace, or absolute)'),
+				oldText: z.string().describe('Exact text to replace (must currently be in the file)'),
+				newText: z.string().describe('Replacement text'),
+				replaceAll: z.boolean().optional().describe('Replace every occurrence (default: exactly one)')
+			}),
+			execute: async ({ path, oldText, newText, replaceAll }) => {
+				try {
+					const { sandbox, workdir } = await getConversationSandbox(username, conversationId);
+					const full = resolvePath(workdir, path);
+					const text = await sandbox.fs().readToString(full);
+					const count = text.split(oldText).length - 1;
+					if (count === 0) return { error: 'oldText not found in file' };
+					if (count > 1 && !replaceAll) {
+						return {
+							error: `oldText matches ${count} times — add surrounding context to make it unique, or set replaceAll`
+						};
+					}
+					const next = replaceAll
+						? text.split(oldText).join(newText)
+						: text.replace(oldText, newText);
+					await sandbox.fs().write(full, next);
+					return { replaced: replaceAll ? count : 1, bytes: Buffer.byteLength(next) };
+				} catch (error) {
+					return { error: error instanceof Error ? error.message : 'edit failed' };
+				}
+			}
+		}),
+		sandboxExec: tool({
+			description:
+				'Run a shell command in this conversation\u2019s sandbox workspace (cwd = the workspace; ' +
+				'python and basalt are available). Output is truncated — keep it compact (head, wc, > file).',
+			inputSchema: z.object({
+				command: z.string().describe('Shell command line (sh -c)')
+			}),
+			execute: async ({ command }) => {
+				try {
+					const { sandbox, workdir } = await getConversationSandbox(username, conversationId);
+					const out = await sandbox.execWith('sh', (b) =>
+						b.arg('-c').arg(command).cwd(workdir).timeout(60_000)
+					);
+					return {
+						exitCode: out.code,
+						stdout: out.stdout().slice(0, MAX_FILE_READ_CHARS),
+						stderr: out.stderr().slice(0, 4000)
+					};
+				} catch (error) {
+					return { error: error instanceof Error ? error.message : 'exec failed' };
+				}
+			}
+		}),
+		sandboxPresentFile: tool({
+			description:
+				'Deliver a workspace file to the user: it appears in the chat as a downloadable file card ' +
+				'(text formats also open in the viewer panel). ALWAYS use this when you have produced a ' +
+				'file the user should receive — a report, dataset, or document — instead of pasting its ' +
+				`content. Supported formats: ${Object.keys(EXPORT_TYPES).join(', ')}.`,
+			inputSchema: z.object({
+				path: z.string().describe('Workspace file to deliver'),
+				filename: z
+					.string()
+					.optional()
+					.describe('Download name shown to the user (default: the file\u2019s own name)')
+			}),
+			execute: async ({ path, filename }) => {
+				try {
+					const { sandbox, workdir } = await getConversationSandbox(username, conversationId);
+					const full = resolvePath(workdir, path);
+					const name = (filename?.trim() || full.split('/').pop() || 'arquivo').replace(
+						/[^\w.\- ()]/g,
+						'_'
+					);
+					const ext = (name.split('.').pop() ?? '').toLowerCase();
+					if (!(ext in EXPORT_TYPES)) {
+						return {
+							error: `unsupported format .${ext} — supported: ${Object.keys(EXPORT_TYPES).join(', ')}`
+						};
+					}
+					// base64 through exec: the SDK fs API is text-only, this handles any file.
+					const out = await sandbox.exec('base64', ['-w0', full]);
+					if (out.code !== 0) return { error: out.stderr().trim() || 'file not found' };
+					const buffer = Buffer.from(out.stdout().replace(/\s/g, ''), 'base64');
+					if (buffer.length === 0) return { error: 'file is empty' };
+					if (buffer.length > MAX_SANDBOX_INPUT_BYTES) {
+						return { error: `file exceeds ${MAX_SANDBOX_INPUT_BYTES / 1024 / 1024} MiB` };
+					}
+					const { id } = await createFileExport(username, buffer, ext as ExportExt);
+					return { fileId: id, filename: name, bytes: buffer.length, format: ext };
+				} catch (error) {
+					return { error: error instanceof Error ? error.message : 'present failed' };
+				}
+			}
+		})
+	};
 }
 
 /**

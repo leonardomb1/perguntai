@@ -17,7 +17,11 @@ export const EXPORT_TYPES = {
 	xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 	md: 'text/markdown; charset=utf-8',
 	txt: 'text/plain; charset=utf-8',
-	csv: 'text/csv; charset=utf-8'
+	csv: 'text/csv; charset=utf-8',
+	json: 'application/json; charset=utf-8',
+	html: 'text/html; charset=utf-8',
+	pdf: 'application/pdf',
+	png: 'image/png'
 } as const;
 export type ExportExt = keyof typeof EXPORT_TYPES;
 
@@ -62,7 +66,15 @@ export async function createTextExport(
 	content: string,
 	ext: Exclude<ExportExt, 'xlsx'>
 ): Promise<{ id: string; bytes: number }> {
-	const buffer = Buffer.from(content, 'utf8');
+	return createFileExport(username, Buffer.from(content, 'utf8'), ext);
+}
+
+/** Arbitrary generated file (sandbox workspace deliveries and the like). */
+export async function createFileExport(
+	username: string,
+	buffer: Buffer,
+	ext: ExportExt
+): Promise<{ id: string; bytes: number }> {
 	const dir = userDir(username);
 	await mkdir(dir, { recursive: true });
 	const id = randomUUID();

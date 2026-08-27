@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { env } from '$env/dynamic/private';
 
 /**
@@ -57,29 +57,17 @@ async function sdk() {
  */
 export async function runSandboxedPython(
 	code: string,
-	data?: unknown[]
+	data?: unknown[],
+	/** With a conversation, the run happens in its PERSISTENT workspace, so
+	 *  main.py and any files it writes stay editable across turns. */
+	conversation?: { username: string; conversationId: string }
 ): Promise<SandboxRunResult> {
-	const { Sandbox } = await sdk();
 	const started = Date.now();
-	const name = `pai-${randomUUID().slice(0, 8)}`;
 
-	const sandbox = await Sandbox.builder(name)
-		.image(image())
-		.cpus(cpus())
-		.memory(memoryMib())
-		.ephemeral(true)
-		.create();
-	try {
-		// The guest agent runs as the image's (non-root) user, which may not own
-		// our workdir — create it as root and hand it to that user. Disk-backed
-		// (rootfs overlay), unlike the guest's small tmpfs /tmp.
-		const w = workdir();
-		const uidOut = await sandbox.exec('id', ['-u']);
-		const guestUid = uidOut.stdout().trim() || '1000';
-		await sandbox.execWith('sh', (b) =>
-			b.arg('-c').arg(`mkdir -p ${w} && chown ${guestUid} ${w}`).user('root')
-		);
-
+	const runIn = async (
+		sandbox: Awaited<ReturnType<typeof getConversationSandbox>>['sandbox'],
+		w: string
+	): Promise<SandboxRunResult> => {
 		const fs = sandbox.fs();
 		if (data) await fs.write(`${w}/data.json`, JSON.stringify(data));
 		// The prelude keeps the old runPython contract feel: `data` is ready.
@@ -98,6 +86,28 @@ export async function runSandboxedPython(
 			exitCode: out.code,
 			durationMs: Date.now() - started
 		};
+	};
+
+	if (conversation?.conversationId) {
+		const { sandbox, workdir: w } = await getConversationSandbox(
+			conversation.username,
+			conversation.conversationId
+		);
+		return runIn(sandbox, w);
+	}
+
+	// No conversation (warm-up, Testar, stateless /v1): one-shot ephemeral VM.
+	const { Sandbox } = await sdk();
+	const name = `pai-${randomUUID().slice(0, 8)}`;
+	const sandbox = await Sandbox.builder(name)
+		.image(image())
+		.cpus(cpus())
+		.memory(memoryMib())
+		.ephemeral(true)
+		.create();
+	try {
+		const w = await ensureWorkdir(sandbox);
+		return await runIn(sandbox, w);
 	} finally {
 		await sandbox[Symbol.asyncDispose]().catch(() => {});
 		await Sandbox.remove(name).catch(() => {});
@@ -158,3 +168,116 @@ export async function testSandbox(): Promise<
 		return { ok: false, error: message.slice(0, 300) };
 	}
 }
+
+// --- persistent per-conversation workspaces -------------------------------
+//
+// The file tools (sandboxReadFile/WriteFile/EditFile/Exec) and conversation
+// runPython calls share ONE named, non-ephemeral microVM per conversation:
+// files persist across tool calls and turns, so the model edits documents
+// and scripts with DELTAS (sandboxEditFile) instead of re-emitting full
+// content every time. `stop()` is documented to flush state to disk, so a
+// stopped workspace resumes with its files intact (~300ms warm boot).
+//
+// Lifecycle: created lazily on first use; stopped after IDLE_STOP_MS of
+// inactivity (files kept); removed when the conversation is deleted.
+
+interface ConvEntry {
+	sandbox: Awaited<ReturnType<(typeof import('microsandbox'))['Sandbox']['start']>>;
+	workdir: string;
+	lastUsed: number;
+}
+
+const IDLE_STOP_MS = 20 * 60_000;
+const convSandboxes = new Map<string, ConvEntry>();
+const convCreating = new Map<string, Promise<ConvEntry>>();
+
+function convName(username: string, conversationId: string): string {
+	const h = createHash('sha256').update(`${username}:${conversationId}`).digest('hex');
+	return `pai-c-${h.slice(0, 24)}`;
+}
+
+async function ensureWorkdir(sandbox: ConvEntry['sandbox']): Promise<string> {
+	const w = workdir();
+	const uidOut = await sandbox.exec('id', ['-u']);
+	const guestUid = uidOut.stdout().trim() || '1000';
+	await sandbox.execWith('sh', (b) =>
+		b.arg('-c').arg(`mkdir -p ${w} && chown ${guestUid} ${w}`).user('root')
+	);
+	return w;
+}
+
+/** The conversation's workspace VM: resume it, connect to it, or create it. */
+export async function getConversationSandbox(
+	username: string,
+	conversationId: string
+): Promise<{ sandbox: ConvEntry['sandbox']; workdir: string }> {
+	const name = convName(username, conversationId);
+	const cached = convSandboxes.get(name);
+	if (cached) {
+		cached.lastUsed = Date.now();
+		return cached;
+	}
+	const pending = convCreating.get(name);
+	if (pending) return pending;
+
+	const creating = (async (): Promise<ConvEntry> => {
+		const { Sandbox } = await sdk();
+		let sandbox: ConvEntry['sandbox'];
+		try {
+			// Resumes a stopped workspace with its files intact.
+			sandbox = await Sandbox.start(name);
+		} catch {
+			try {
+				// Already running (e.g. from before an app restart) — reattach.
+				sandbox = await (await Sandbox.get(name)).connect();
+			} catch {
+				sandbox = await Sandbox.builder(name)
+					.image(image())
+					.cpus(cpus())
+					.memory(memoryMib())
+					.ephemeral(false)
+					.create();
+			}
+		}
+		const w = await ensureWorkdir(sandbox);
+		const entry: ConvEntry = { sandbox, workdir: w, lastUsed: Date.now() };
+		convSandboxes.set(name, entry);
+		return entry;
+	})();
+	convCreating.set(name, creating);
+	try {
+		return await creating;
+	} finally {
+		convCreating.delete(name);
+	}
+}
+
+/** Called from the conversation-delete cascade: the workspace dies with it. */
+export async function removeConversationSandbox(
+	username: string,
+	conversationId: string
+): Promise<void> {
+	const name = convName(username, conversationId);
+	convSandboxes.delete(name);
+	try {
+		const { Sandbox } = await sdk();
+		await (await Sandbox.get(name)).stop().catch(() => {});
+		await Sandbox.remove(name);
+	} catch {
+		// Never created, or already gone — nothing to clean.
+	}
+}
+
+// Idle reaper: stop (not remove) workspaces nobody touched for a while.
+// Files persist; the next tool call resumes in ~300ms.
+setInterval(() => {
+	const now = Date.now();
+	for (const [name, entry] of convSandboxes) {
+		if (now - entry.lastUsed < IDLE_STOP_MS) continue;
+		convSandboxes.delete(name);
+		void (async () => {
+			const { Sandbox } = await sdk();
+			await (await Sandbox.get(name)).stop();
+		})().catch(() => {});
+	}
+}, 60_000).unref();

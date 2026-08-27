@@ -1,6 +1,7 @@
 import { ToolLoopAgent, stepCountIs, type ToolSet } from 'ai';
 import {
 	tools as localTools,
+	sandboxFileTools,
 	sandboxPythonTool,
 	starrocksQueryTool,
 	tablePreviewTool,
@@ -163,7 +164,9 @@ export async function buildAgent(
 	// the cached prompt prefix stays stable for a given toggle state.
 	const codeExecution = (await getCapabilities()).codeExecution;
 	const codeExecutionGuidance = codeExecution
-		? 'For statistics, forecasting, or analysis beyond SQL, use runPython (sandboxed Python with pandas/numpy/statsmodels/scikit-learn) — fetch data with its dataQuery option instead of pasting rows, print compact results, and return small summaries. Inside the sandbox the `basalt` CLI is also available (subprocess) for fast columnar SQL over files in the working directory, e.g. the piped data.json. '
+		? conversationId
+			? 'This conversation has a PERSISTENT sandbox workspace (Python with pandas/numpy/statsmodels/scikit-learn, plus the `basalt` CLI for columnar SQL over files); its files survive across turns. For statistics, forecasting, or analysis beyond SQL: pull rows in with sandboxLoadData (read-only SQL under the user\u2019s own permissions — data never passes through you), write scripts with sandboxWriteFile, run them with sandboxExec, and iterate with sandboxEditFile passing only the exact span to change (NEVER rewrite a whole file for a small edit). When you produce a file the user should receive (report, dataset, document), deliver it with sandboxPresentFile — never paste whole files into the chat. Print compact results; return small summaries. '
+			: 'For statistics, forecasting, or analysis beyond SQL, use runPython (sandboxed Python with pandas/numpy/statsmodels/scikit-learn) — fetch data with its dataQuery option instead of pasting rows, print compact results, and return small summaries. '
 		: '';
 
 	// The user's OWN access in the app — safe to tell them when they ask ("am I
@@ -276,7 +279,14 @@ export async function buildAgent(
 		tools: sortTools({
 			...localTools,
 			queryDatabase: starrocksQueryTool(user.credentials, { allowWrites: sqlWrite }),
-			...(codeExecution ? { runPython: sandboxPythonTool(user.credentials) } : {}),
+			// Stateless contexts (/v1) get the self-contained runPython; conversations
+			// get the orthogonal workspace tools instead (load data + write/edit/exec).
+			...(codeExecution && !conversationId
+				? { runPython: sandboxPythonTool(user.credentials) }
+				: {}),
+			...(codeExecution && conversationId
+				? sandboxFileTools(user.credentials, conversationId)
+				: {}),
 			listTables: warehouseCatalogTool(user.credentials),
 			getTableSchema: tableSchemaTool(user.credentials),
 			searchDocuments: documentSearchTool(user.username, conversationId, docDepts),
