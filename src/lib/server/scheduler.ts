@@ -1,5 +1,8 @@
+import { readUIMessageStream, createUIMessageStreamResponse, type UIMessage } from 'ai';
 import { buildAgent } from './agent';
 import { connectMcpTools } from './mcp';
+import { saveConversation } from './conversations';
+import { beginRun, liveStreamKey, recordStream } from './live-streams';
 import { getUserSettings } from './settings';
 import { getCapabilities, getEffectiveOrgPrompt, resolveDailyLimit, resolveModel } from './access';
 import { addUsage, usageToday, weightedTokens } from './usage';
@@ -10,6 +13,7 @@ import {
 	listSchedules,
 	markRan,
 	scheduleOwners,
+	updateRun,
 	type Schedule,
 	type ScheduleRun
 } from './schedules';
@@ -27,8 +31,6 @@ import type { AuthUser } from './auth';
 const SWEEP_MS = 60_000;
 /** At most this many runs per sweep — a backlog drains over minutes, not at once. */
 const MAX_RUNS_PER_SWEEP = 3;
-/** Hard wall-clock cap per run. */
-export const SCHEDULE_RUN_TIMEOUT_MS = 15 * 60_000;
 /** Step budget for scheduled runs — a full report + PDF + e-mail pipeline
  *  routinely passes chat's 24. */
 export const SCHEDULE_MAX_STEPS = 60;
@@ -122,86 +124,147 @@ export async function buildScheduleAgent(username: string, schedule: Schedule) {
 	return { agent, mcp };
 }
 
-/** Persists one finished run: history entry + owner usage + audit. */
-export async function finishScheduleRun(
+/**
+ * Starts one run AS A CONVERSATION: the transcript streams into the regular
+ * conversation store and the live-streams registry, so ChatPane can watch it
+ * live (and reattach after navigation) exactly like a normal chat, and the
+ * user can keep talking to the finished run afterwards — fixing a failed run
+ * where it stopped instead of re-running from scratch.
+ *
+ * Returns immediately with the run pointer; `done` resolves when the run
+ * finishes (the sweep awaits it to bound concurrency, the run-now endpoint
+ * does not).
+ */
+export async function startScheduleRun(
 	username: string,
-	schedule: Schedule,
-	run: ScheduleRun,
-	startedMs: number
-): Promise<void> {
-	await appendRun(username, schedule.id, run);
-	await addUsage(username, run.tokens, undefined, { viaApi: true }).catch(() => {});
-	logAudit({
-		actor: username,
-		via: 'session',
-		category: 'chat',
-		action: 'schedule.run',
-		target: schedule.title,
-		status: run.status === 'ok' ? 'ok' : 'error',
-		detail: {
-			scheduleId: schedule.id,
-			tokens: run.tokens,
-			durationMs: Date.now() - startedMs,
-			...(run.error ? { error: run.error } : {})
-		}
-	});
-}
-
-/** One headless run — the sweep path (the run-now endpoint streams instead). */
-export async function executeSchedule(username: string, schedule: Schedule): Promise<ScheduleRun> {
+	schedule: Schedule
+): Promise<{ run: ScheduleRun; done: Promise<void> }> {
 	const startedAt = new Date().toISOString();
-	const started = Date.now();
+	const startedMs = Date.now();
+	const runId = crypto.randomUUID();
+	// Valid conversation id ([A-Za-z0-9-], ≤64): sched- + uuid + base36 time.
+	const conversationId = `sched-${schedule.id}-${Date.now().toString(36)}`;
+	const prompt = schedulePrompt(schedule);
 
-	let totalTokens = 0;
-	const toolsUsed = new Set<string>();
-	let run: ScheduleRun;
+	const userMessage: UIMessage = {
+		id: crypto.randomUUID(),
+		role: 'user',
+		parts: [{ type: 'text', text: prompt }]
+	};
+	const title = `${schedule.title} — ${new Date().toLocaleString('pt-BR', {
+		day: '2-digit',
+		month: '2-digit',
+		hour: '2-digit',
+		minute: '2-digit'
+	})}`;
+	await saveConversation(username, conversationId, [userMessage], title);
 
-	try {
-		const { agent, mcp } = await buildScheduleAgent(username, schedule);
+	const run: ScheduleRun = {
+		id: runId,
+		startedAt,
+		finishedAt: '',
+		status: 'running',
+		text: '',
+		tools: [],
+		tokens: 0,
+		conversationId
+	};
+	await appendRun(username, schedule.id, run);
+
+	const done = (async () => {
+		let totalTokens = 0;
+		let stepCount = 0;
+		const toolsUsed = new Set<string>();
+		let assistantMessage: UIMessage | undefined;
+		let failure: string | null = null;
+
 		try {
-			const result = await Promise.race([
-				agent.generate({
-					messages: [{ role: 'user' as const, content: schedulePrompt(schedule) }],
+			const { agent, mcp } = await buildScheduleAgent(username, schedule);
+			try {
+				// Same resumable-run registration as chat: the signal fires on
+				// explicit stop or the run timeout, never on client disconnects.
+				// beginRun's registry enforces the 20-min hard cap; the schedule's
+				// own step budget (SCHEDULE_MAX_STEPS) bounds the loop before that.
+				const signal = beginRun(username, conversationId);
+				const result = agent.stream({
+					messages: [{ role: 'user' as const, content: prompt }],
+					abortSignal: signal,
 					onStepFinish: (step: {
 						usage?: Parameters<typeof weightedTokens>[0];
 						toolCalls?: { toolName?: string }[];
 					}) => {
+						stepCount += 1;
 						totalTokens += weightedTokens(step.usage);
 						for (const call of step.toolCalls ?? []) {
 							if (call.toolName) toolsUsed.add(call.toolName);
 						}
 					}
-				}),
-				new Promise<never>((_, reject) =>
-					setTimeout(() => reject(new Error('run timed out')), SCHEDULE_RUN_TIMEOUT_MS)
-				)
-			]);
-			const truncated = (result.steps?.length ?? 0) >= SCHEDULE_MAX_STEPS;
-			run = {
-				id: crypto.randomUUID(),
-				startedAt,
-				finishedAt: new Date().toISOString(),
-				status: 'ok',
-				text: result.text + (truncated ? TRUNCATION_NOTE : ''),
-				tools: [...toolsUsed],
-				tokens: Math.round(totalTokens)
-			};
-		} finally {
-			await mcp.close().catch(() => {});
+				});
+				const streamResult = await result;
+				const uiStream = streamResult.toUIMessageStream();
+				const [forResume, forCapture] = uiStream.tee();
+
+				// Feed the resumable buffer — GET /api/chat/{id}/stream replays it.
+				recordStream(
+					liveStreamKey(username, conversationId),
+					createUIMessageStreamResponse({ stream: forResume })
+				);
+
+				// Capture the final assistant UIMessage (reasoning + tool parts
+				// included) for the server-side conversation save.
+				for await (const message of readUIMessageStream({ stream: forCapture })) {
+					assistantMessage = message as UIMessage;
+				}
+			} finally {
+				await mcp.close().catch(() => {});
+			}
+		} catch (error) {
+			failure = error instanceof Error ? error.message.slice(0, 500) : 'run failed';
 		}
-	} catch (error) {
-		run = {
-			id: crypto.randomUUID(),
-			startedAt,
+
+		const finalText = assistantMessage
+			? assistantMessage.parts
+					.filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+					.map((part) => part.text)
+					.join('\n')
+			: '';
+		const truncated = stepCount >= SCHEDULE_MAX_STEPS && !failure;
+
+		const messages = assistantMessage ? [userMessage, assistantMessage] : [userMessage];
+		await saveConversation(username, conversationId, messages, title).catch(() => {});
+
+		const finished: ScheduleRun = {
+			...run,
 			finishedAt: new Date().toISOString(),
-			status: 'error',
-			text: '',
+			status: failure ? 'error' : 'ok',
+			text: finalText + (truncated ? TRUNCATION_NOTE : ''),
 			tools: [...toolsUsed],
 			tokens: Math.round(totalTokens),
-			error: error instanceof Error ? error.message.slice(0, 500) : 'run failed'
+			...(failure ? { error: failure } : {})
 		};
-	}
+		await updateRun(username, schedule.id, runId, finished).catch(() => {});
+		await addUsage(username, finished.tokens, undefined, { viaApi: true }).catch(() => {});
+		logAudit({
+			actor: username,
+			via: 'session',
+			category: 'chat',
+			action: 'schedule.run',
+			target: schedule.title,
+			status: failure ? 'error' : 'ok',
+			detail: {
+				scheduleId: schedule.id,
+				tokens: finished.tokens,
+				durationMs: Date.now() - startedMs,
+				...(failure ? { error: failure } : {})
+			}
+		});
+	})();
 
-	await finishScheduleRun(username, schedule, run, started);
-	return run;
+	return { run, done };
+}
+
+/** The sweep path: fire and await, bounding concurrency per sweep. */
+export async function executeSchedule(username: string, schedule: Schedule): Promise<void> {
+	const { done } = await startScheduleRun(username, schedule);
+	await done;
 }

@@ -267,9 +267,40 @@
 
 	const actionButton =
 		'rounded-md p-1.5 text-neutral-400 transition hover:bg-[#f0eee6] hover:text-neutral-700';
+
+	// A scheduled run's opening prompt renders as a quiet "Tarefa agendada
+	// executada" marker (Claude-style) instead of a giant user bubble — the
+	// standing instructions expand on demand.
+	const SCHED_PREFIX = '[Scheduled run]';
+	const scheduledPrompt = $derived(
+		message.role === 'user' && messageText.startsWith(SCHED_PREFIX) ? messageText : null
+	);
+	let schedOpen = $state(false);
 </script>
 
-{#if message.role === 'user'}
+{#if scheduledPrompt !== null}
+	<div>
+		<button
+			onclick={() => (schedOpen = !schedOpen)}
+			class="flex w-full items-center gap-2.5 rounded-xl border border-[#e3e0d5] bg-white px-4 py-3 text-left transition hover:bg-[#faf9f5]"
+		>
+			<Icon name="clock" size={15} class="shrink-0 text-neutral-400" />
+			<span class="min-w-0 flex-1 truncate text-sm text-neutral-700">{m.sched_run_executed()}</span>
+			<Icon
+				name="chevron-down"
+				size={13}
+				class="shrink-0 text-neutral-300 transition-transform {schedOpen ? '' : '-rotate-90'}"
+			/>
+		</button>
+		{#if schedOpen}
+			<div class="mt-1.5 rounded-xl border border-[#e9e6dd] bg-[#faf9f5] px-4 py-3">
+				<p class="text-sm leading-relaxed whitespace-pre-wrap text-neutral-600">
+					{scheduledPrompt.slice(SCHED_PREFIX.length).trim()}
+				</p>
+			</div>
+		{/if}
+	</div>
+{:else if message.role === 'user'}
 	<div class="group flex flex-col items-end">
 		<div class="flex w-full items-start justify-end gap-3">
 			{#if editing}

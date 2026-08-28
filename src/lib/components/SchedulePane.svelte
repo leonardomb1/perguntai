@@ -1,14 +1,11 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import { getLocale } from '$lib/paraglide/runtime';
-	import { Chat } from '@ai-sdk/svelte';
-	import { DefaultChatTransport } from 'ai';
-	import { getToken } from '$lib/session';
 	import Icon from './Icon.svelte';
 	import Markdown from './Markdown.svelte';
-	import ChatMessage from './ChatMessage.svelte';
 	import {
 		fetchRuns,
+		runNow,
 		saveSchedule,
 		deleteSchedule,
 		type ScheduleRun,
@@ -23,11 +20,14 @@
 	let {
 		schedule,
 		onChanged,
-		onDeleted
+		onDeleted,
+		onOpenConversation
 	}: {
 		schedule: UserSchedule | null; // null = create mode
 		onChanged: (updated: UserSchedule) => void;
 		onDeleted: () => void;
+		/** Runs ARE conversations — rows open them in the normal chat pane. */
+		onOpenConversation: (conversationId: string) => void;
 	} = $props();
 
 	// The pane is {#key}-ed by schedule id, so capturing the initial values on
@@ -131,48 +131,15 @@
 		if (ok) onDeleted();
 	}
 
-	// "Executar agora" streams the run live: a throwaway Chat instance renders
-	// the agent's reasoning and tool calls through the same components as a
-	// normal conversation. The server persists the run regardless of this
-	// socket, so navigating away only hides the live view — the result still
-	// lands in the history.
-	let runChat = $state<Chat | null>(null);
-	const liveBusy = $derived(
-		runChat !== null && (runChat.status === 'submitted' || runChat.status === 'streaming')
-	);
-	$effect(() => {
-		// When the live run settles (an assistant message exists and streaming
-		// stopped), fold it into the history list — only clearing the live view
-		// once the refreshed history is actually on screen.
-		if (runChat && !liveBusy && runChat.messages.some((msg) => msg.role === 'assistant')) {
-			const id = schedule?.id;
-			const settled = runChat;
-			if (!id) {
-				runChat = null;
-				return;
-			}
-			setTimeout(() => {
-				fetchRuns(id).then((list) => {
-					runs = list;
-					openRun = list[0]?.id ?? null;
-					if (runChat === settled) runChat = null;
-				});
-			}, 300);
-		}
-	});
-
-	function fireNow() {
-		if (!schedule || liveBusy) return;
-		const chat = new Chat({
-			transport: new DefaultChatTransport({
-				api: `/api/schedules/${encodeURIComponent(schedule.id)}/runs`,
-				headers: () => ({ Authorization: `Bearer ${getToken() ?? ''}` })
-			})
-		});
-		runChat = chat;
-		// The text is a placeholder — the server composes the real prompt from
-		// the schedule's standing instructions.
-		chat.sendMessage({ text: m.sched_run_now() });
+	// "Executar agora": the server starts the run as a conversation and hands
+	// back its pointer — we jump straight into it and watch live in ChatPane.
+	let starting = $state(false);
+	async function fireNow() {
+		if (!schedule || starting) return;
+		starting = true;
+		const run = await runNow(schedule.id);
+		starting = false;
+		if (run?.conversationId) onOpenConversation(run.conversationId);
 	}
 </script>
 
@@ -194,10 +161,10 @@
 			{#if schedule && !editing}
 				<button
 					onclick={fireNow}
-					disabled={liveBusy}
+					disabled={starting}
 					class="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#e3e0d5] px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-[#d97757]/50 hover:text-[#bd5d3a] disabled:opacity-50"
 				>
-					{#if liveBusy}
+					{#if starting}
 						<span class="size-3 animate-spin rounded-full border-2 border-[#e3e0d5] border-t-[#d97757]"></span>
 						{m.sched_running()}
 					{:else}
@@ -312,29 +279,6 @@
 				</p>
 			</details>
 
-			{#if runChat}
-				<!-- live run: the agent working, reasoning and tools included -->
-				<div class="mt-5 rounded-xl border border-[#d97757]/30 bg-white p-4">
-					<p class="mb-3 flex items-center gap-2 text-xs font-medium text-[#bd5d3a]">
-						<span class="size-3 animate-spin rounded-full border-2 border-[#e3e0d5] border-t-[#d97757]"></span>
-						{m.sched_running()}
-					</p>
-					<div class="flex flex-col gap-3">
-						{#each runChat.messages.filter((msg) => msg.role === 'assistant') as message, i (message.id)}
-							<ChatMessage
-								{message}
-								username="agenda"
-								isLast={i === runChat.messages.filter((msg) => msg.role === 'assistant').length - 1}
-								busy={liveBusy}
-							/>
-						{/each}
-					</div>
-					{#if runChat.status === 'error'}
-						<p class="text-sm text-red-600">{runChat.error?.message?.slice(0, 300)}</p>
-					{/if}
-				</div>
-			{/if}
-
 			<!-- run history -->
 			<h3 class="mt-6 mb-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase">
 				{m.sched_history()}
@@ -352,14 +296,21 @@
 					{#each runs as run (run.id)}
 						<div class="overflow-hidden rounded-xl border border-[#e3e0d5] bg-white">
 							<button
-								onclick={() => (openRun = openRun === run.id ? null : run.id)}
-								class="flex w-full items-center gap-2.5 px-4 py-3 text-left"
+								onclick={() =>
+									run.conversationId
+										? onOpenConversation(run.conversationId)
+										: (openRun = openRun === run.id ? null : run.id)}
+								class="flex w-full items-center gap-2.5 px-4 py-3 text-left transition hover:bg-[#faf9f5]"
 							>
-								<Icon
-									name="clock"
-									size={14}
-									class="shrink-0 {run.status === 'ok' ? 'text-neutral-400' : 'text-red-400'}"
-								/>
+								{#if run.status === 'running'}
+									<span class="size-3.5 shrink-0 animate-spin rounded-full border-2 border-[#e3e0d5] border-t-[#d97757]"></span>
+								{:else}
+									<Icon
+										name="clock"
+										size={14}
+										class="shrink-0 {run.status === 'ok' ? 'text-neutral-400' : 'text-red-400'}"
+									/>
+								{/if}
 								<span class="min-w-0 flex-1 truncate text-sm text-neutral-700">
 									{m.sched_run_executed()}
 								</span>
@@ -370,12 +321,12 @@
 								{/if}
 								<span class="shrink-0 text-xs text-neutral-400">{fmtDate(run.startedAt)}</span>
 								<Icon
-									name="chevron-down"
+									name={run.conversationId ? 'arrow-right' : 'chevron-down'}
 									size={13}
-									class="shrink-0 text-neutral-300 transition-transform {openRun === run.id ? '' : '-rotate-90'}"
+									class="shrink-0 text-neutral-300 transition-transform {run.conversationId || openRun === run.id ? '' : '-rotate-90'}"
 								/>
 							</button>
-							{#if openRun === run.id}
+							{#if !run.conversationId && openRun === run.id}
 								<div class="border-t border-[#efede3] px-4 py-4">
 									{#if run.tools.length}
 										<p class="mb-3 text-xs text-neutral-400">

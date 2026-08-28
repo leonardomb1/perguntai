@@ -20,11 +20,12 @@ export interface ScheduleRun {
 	id: string;
 	startedAt: string;
 	finishedAt: string;
-	status: 'ok' | 'error';
+	status: 'running' | 'ok' | 'error';
 	text: string;
 	tools: string[];
 	tokens: number;
 	error?: string;
+	conversationId?: string;
 }
 
 export interface ScheduleInput {
@@ -94,3 +95,16 @@ export async function fetchRuns(id: string): Promise<ScheduleRun[]> {
 	}
 }
 
+/** Starts a run; the server returns its pointer immediately (202). */
+export async function runNow(id: string): Promise<ScheduleRun | null> {
+	try {
+		const res = await fetch(`/api/schedules/${encodeURIComponent(id)}/runs`, {
+			method: 'POST',
+			headers: headers()
+		});
+		if (!res.ok) return null;
+		return (await res.json()).run ?? null;
+	} catch {
+		return null;
+	}
+}

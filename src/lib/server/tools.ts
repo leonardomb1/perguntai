@@ -576,29 +576,49 @@ const MAX_TYPST_SOURCE = 120_000;
  * in through `dataQuery` (read-only SQL as the user, rows delivered as
  * sys.inputs JSON), never by pasting rows into markup.
  */
-export function pdfReportTool(username: string, credentials: { username: string; password?: string }) {
+export function pdfReportTool(
+	username: string,
+	credentials: { username: string; password?: string },
+	/** Set when the sandbox workspace is available — enables sourcePath/dataPath. */
+	sandboxConversationId?: string
+) {
 	return tool({
 		description:
-			'Create a polished, professional PDF document from Typst source you write — reports, briefs, ' +
-			'formatted analyses. Prefer this over generateDocument whenever presentation matters. Write ' +
-			'complete Typst markup (set page/text rules, headings, tables, colors). To include warehouse ' +
-			'data, pass dataQuery (a single read-only SQL statement, executed with the user\u2019s own ' +
-			'permissions, up to 2000 rows): the rows arrive as JSON in sys.inputs — read them with ' +
+			'Create a polished, professional PDF document from Typst source — reports, briefs, formatted ' +
+			'analyses. Prefer this over generateDocument whenever presentation matters. ' +
+			(sandboxConversationId
+				? 'PREFERRED FLOW: write the Typst to a workspace file (e.g. report.typ) with ' +
+					'sandboxWriteFile, fetch data ONCE into the workspace with sandboxLoadData, then call ' +
+					'this with sourcePath + dataPath — on compile errors fix the file with sandboxEditFile ' +
+					'(small deltas) and call again, never resending the whole source inline. Inline ' +
+					'`source` remains available for short one-shot documents. '
+				: 'Write complete Typst markup (set page/text rules, headings, tables, colors). ') +
+			'Data arrives as JSON in sys.inputs — read it with ' +
 			'#let data = json(bytes(sys.inputs.at("data", default: "[]"))) and build tables from that, ' +
 			'NEVER paste row values into the source. When <pdf_templates> lists a matching template, ' +
 			'pass its name as `template` and write ONLY the document body (no page/text setup — the ' +
 			'template supplies layout and branding), and fill `meta` with the fields the template\u2019s ' +
 			'description names (title, author, date, \u2026) — they arrive as sys.inputs strings. ' +
-			'On a compile error, fix the source using the ' +
-			'diagnostics (only the first error is reported — fixing one may reveal the next) and retry. ' +
+			'Only the FIRST compile error is reported — fixing one may reveal the next. ' +
 			'The user gets a download card and an inline preview.',
 		inputSchema: z.object({
 			filename: z.string().describe('File name, e.g. relatorio-frota.pdf (extension optional)'),
-			source: z.string().describe('Complete Typst source for the document'),
+			source: z
+				.string()
+				.optional()
+				.describe('Inline Typst source — use sourcePath instead for long/iterative documents'),
+			sourcePath: z
+				.string()
+				.optional()
+				.describe('Workspace path of the Typst source file (e.g. report.typ)'),
 			dataQuery: z
 				.string()
 				.optional()
 				.describe('Single read-only SQL statement — its rows become sys.inputs.data (JSON array)'),
+			dataPath: z
+				.string()
+				.optional()
+				.describe('Workspace path of a JSON file (e.g. data.json from sandboxLoadData) — becomes sys.inputs.data'),
 			template: z
 				.string()
 				.optional()
@@ -608,8 +628,26 @@ export function pdfReportTool(username: string, credentials: { username: string;
 				.optional()
 				.describe('Template metadata as flat strings (title, author, date, …) — become sys.inputs')
 		}),
-		execute: async ({ filename, source, dataQuery, template, meta }) => {
-			if (!source.trim()) return { error: 'source is empty' };
+		execute: async ({ filename, source, sourcePath, dataQuery, dataPath, template, meta }) => {
+			if ((sourcePath || dataPath) && !sandboxConversationId) {
+				return { error: 'sourcePath/dataPath need the sandbox workspace (unavailable here) — pass inline source' };
+			}
+			const readWorkspaceFile = async (path: string, cap: number) => {
+				const { sandbox, workdir } = await getConversationSandbox(
+					username,
+					sandboxConversationId as string
+				);
+				const full = path.startsWith('/') ? path : `${workdir}/${path}`;
+				const text = await sandbox.fs().readToString(full);
+				if (text.length > cap) throw new Error(`${path} exceeds ${cap} characters`);
+				return text;
+			};
+			try {
+				if (sourcePath?.trim()) source = await readWorkspaceFile(sourcePath.trim(), MAX_TYPST_SOURCE);
+			} catch (error) {
+				return { error: error instanceof Error ? error.message : `could not read ${sourcePath}` };
+			}
+			if (!source?.trim()) return { error: 'provide source or sourcePath' };
 			if (source.length > MAX_TYPST_SOURCE) {
 				return { error: `source exceeds ${MAX_TYPST_SOURCE} characters` };
 			}
@@ -623,7 +661,20 @@ export function pdfReportTool(username: string, credentials: { username: string;
 					if (typeof value === 'string') inputs[key.slice(0, 60)] = value.slice(0, 4000);
 				}
 			}
-			if (dataQuery?.trim()) {
+			if (dataPath?.trim()) {
+				// Data staged in the workspace (sandboxLoadData) — reused across
+				// compile iterations without re-querying the warehouse.
+				try {
+					const body = await readWorkspaceFile(dataPath.trim(), MAX_SANDBOX_INPUT_BYTES);
+					JSON.parse(body); // must be valid JSON before it reaches sys.inputs
+					inputs = { ...inputs, data: body };
+				} catch (error) {
+					return {
+						error:
+							error instanceof Error ? `dataPath: ${error.message}` : `could not read ${dataPath}`
+					};
+				}
+			} else if (dataQuery?.trim()) {
 				const statement = checkStatement(dataQuery, { allowWrites: false });
 				if (!statement) {
 					return { error: 'dataQuery must be a single read-only statement (SELECT/SHOW/DESCRIBE/EXPLAIN)' };

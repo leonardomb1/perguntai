@@ -54,8 +54,12 @@
 		fetchSettings().then((s) => (settings = s));
 	});
 
+	// Scheduled-run transcripts are conversations too, but they belong under
+	// their schedule in PROGRAMADO — keep them out of the chats list.
+	const isRunConversation = (id: string) => id.startsWith('sched-');
+
 	async function refreshList() {
-		conversations = await listConversations();
+		conversations = (await listConversations()).filter((c) => !isRunConversation(c.id));
 	}
 
 	// Autosave returns the saved conversation's index entry — move/insert it at
@@ -63,7 +67,9 @@
 	// (saves fire on every streaming pause, so the GETs added up fast).
 	function upsertConversation(meta: ConversationMeta | null) {
 		if (!meta) return;
-		conversations = [meta, ...conversations.filter((c) => c.id !== meta.id)];
+		if (!isRunConversation(meta.id)) {
+			conversations = [meta, ...conversations.filter((c) => c.id !== meta.id)];
+		}
 		// The agent can create/delete schedules mid-turn (scheduleReport tool) —
 		// piggyback a throttled refresh on the autosave pulses so the sidebar
 		// picks them up without polling.
@@ -373,6 +379,7 @@
 					schedule={selectedSchedule}
 					onChanged={onScheduleChanged}
 					onDeleted={onScheduleDeleted}
+					onOpenConversation={openConversation}
 				/>
 			{/key}
 		{:else}

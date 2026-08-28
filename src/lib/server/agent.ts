@@ -258,7 +258,7 @@ export async function buildAgent(
 	const scheduledRuns = capabilities.scheduledRuns;
 	const codeExecutionGuidance = codeExecution
 		? conversationId
-			? 'This conversation has a PERSISTENT sandbox workspace (Python with pandas/numpy/statsmodels/scikit-learn, plus the `basalt` CLI for columnar SQL over files); its files survive across turns. For statistics, forecasting, or analysis beyond SQL: pull warehouse rows in with sandboxLoadData (read-only SQL under the user\u2019s own permissions — data never passes through you), bring files the user attached to this conversation in with sandboxImportDoc (spreadsheets land as CSV under uploads/), write scripts with sandboxWriteFile, run them with sandboxExec, and iterate with sandboxEditFile passing only the exact span to change (NEVER rewrite a whole file for a small edit). When you produce a file the user should receive (report, dataset, document), deliver it with sandboxPresentFile — never paste whole files into the chat. Print compact results; return small summaries. '
+			? 'This conversation has a PERSISTENT sandbox workspace (Python with pandas/numpy/statsmodels/scikit-learn, plus the `basalt` CLI for columnar SQL over files); its files survive across turns. For statistics, forecasting, or analysis beyond SQL: pull warehouse rows in with sandboxLoadData (read-only SQL under the user\u2019s own permissions — data never passes through you), bring files the user attached to this conversation in with sandboxImportDoc (spreadsheets land as CSV under uploads/), write scripts with sandboxWriteFile, run them with sandboxExec, and iterate with sandboxEditFile passing only the exact span to change (NEVER rewrite a whole file for a small edit). For PDFs, keep report.typ (and its data) in the workspace and call generatePdf with sourcePath + dataPath — compile-error fixes are then small edits, not full re-sends. When you produce a file the user should receive (report, dataset, document), deliver it with sandboxPresentFile — never paste whole files into the chat. Print compact results; return small summaries. '
 			: 'For statistics, forecasting, or analysis beyond SQL, use runPython (sandboxed Python with pandas/numpy/statsmodels/scikit-learn) — fetch data with its dataQuery option instead of pasting rows, print compact results, and return small summaries. '
 		: '';
 
@@ -380,7 +380,11 @@ export async function buildAgent(
 			renderChart: chartTool,
 			renderDiagram: diagramTool,
 			...(mode === 'ui' ? { askUser: askUserTool } : {}),
-			generatePdf: pdfReportTool(user.username, user.credentials),
+			generatePdf: pdfReportTool(
+				user.username,
+				user.credentials,
+				codeExecution && conversationId ? conversationId : undefined
+			),
 			...(emailReports ? { emailReport: emailReportTool(user.username) } : {}),
 			...(scheduledRuns && mode === 'ui' ? scheduleTools(user.username) : {}),
 			...(memoryEnabled ? memoryTools(user.username, conversationId) : {}),

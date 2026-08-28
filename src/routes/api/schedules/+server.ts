@@ -1,7 +1,8 @@
 import { json } from '@sveltejs/kit';
 import { authenticateRequest } from '$lib/server/auth';
 import { getCapabilities } from '$lib/server/access';
-import { listSchedules, removeSchedule, saveSchedule } from '$lib/server/schedules';
+import { listRuns, listSchedules, removeSchedule, saveSchedule } from '$lib/server/schedules';
+import { deleteConversation } from '$lib/server/conversations';
 import { logAudit, requestMeta } from '$lib/server/audit';
 import type { RequestHandler } from './$types';
 
@@ -55,6 +56,10 @@ export const DELETE: RequestHandler = async ({ request, url }) => {
 	if (!user) return json({ error: 'Unauthorized' }, { status: 401 });
 	const id = url.searchParams.get('id');
 	if (!id) return json({ error: 'Missing id' }, { status: 400 });
+	// Cascade: run transcripts live in the conversation store.
+	for (const run of await listRuns(user.username, id)) {
+		if (run.conversationId) await deleteConversation(user.username, run.conversationId).catch(() => {});
+	}
 	const removed = await removeSchedule(user.username, id);
 	if (!removed) return json({ error: 'Not found' }, { status: 404 });
 	logAudit({

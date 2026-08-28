@@ -35,13 +35,20 @@ export interface ScheduleRun {
 	id: string;
 	startedAt: string;
 	finishedAt: string;
-	status: 'ok' | 'error';
-	/** The agent's final answer (markdown) — what the history view renders. */
+	status: 'running' | 'ok' | 'error';
+	/** The agent's final answer (markdown) — kept for the run-row preview. */
 	text: string;
 	/** Tool names used, for the quiet "ferramentas" line. */
 	tools: string[];
 	tokens: number;
 	error?: string;
+	/**
+	 * The run IS a conversation: full transcript (reasoning, tool calls) lives
+	 * in the regular conversation store under this id, viewable live in
+	 * ChatPane and continuable afterwards like any chat. Old records without
+	 * it fall back to the inline text view.
+	 */
+	conversationId?: string;
 }
 
 const MAX_SCHEDULES = 10;
@@ -181,6 +188,21 @@ export async function listRuns(username: string, scheduleId: string): Promise<Sc
 	} catch {
 		return [];
 	}
+}
+
+export async function updateRun(
+	username: string,
+	scheduleId: string,
+	runId: string,
+	patch: Partial<ScheduleRun>
+): Promise<void> {
+	const path = runsPath(username, scheduleId);
+	const runs = await listRuns(username, scheduleId);
+	const run = runs.find((r) => r.id === runId);
+	if (!run) return;
+	Object.assign(run, patch);
+	await mkdir(join(path, '..'), { recursive: true });
+	await writeFile(path, JSON.stringify({ runs }));
 }
 
 export async function appendRun(
