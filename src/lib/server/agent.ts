@@ -22,6 +22,7 @@ import {
 import { listMemories } from './memory';
 import { listDocs, sharedManifest } from './rag';
 import { skillsManifest } from './skills';
+import { listTemplates } from './typstTemplates';
 import { agentTelemetry } from './telemetry';
 import { departmentsForUser, getCapabilities, resolveRole, resolveSqlWrite } from './access';
 import { weightedTokens } from './usage';
@@ -191,6 +192,15 @@ export async function buildAgent(
 	// Learned skills (procedural memory) — the manifest advertises name +
 	// one-liner; the playbook itself loads on demand via useSkill, keeping the
 	// cached prompt prefix stable until a skill actually changes.
+	// Organization PDF templates: name + one-liner ride in the prompt; the
+	// template source itself never does — generatePdf resolves it server-side.
+	const pdfTemplates = await listTemplates();
+	const templateBlock = pdfTemplates.length
+		? `<pdf_templates>${pdfTemplates
+				.map((t) => `- "${t.name}"${t.description ? ` — ${t.description}` : ''}`)
+				.join('\n')}</pdf_templates> `
+		: '';
+
 	const skillEntries = await skillsManifest(user.username, docDepts);
 	const skillBlock = skillEntries.length
 		? `<available_skills>${skillEntries
@@ -309,7 +319,7 @@ export async function buildAgent(
 				? { providerOptions: { anthropic: { cacheControl: { type: 'ephemeral', ttl: '1h' } } } }
 				: {}),
 			content:
-				`You are PerguntAI, a helpful assistant with access to tools. ${identity}${accessBlock}${memoryBlock}${docBlock}${skillBlock}` +
+				`You are PerguntAI, a helpful assistant with access to tools. ${identity}${accessBlock}${memoryBlock}${docBlock}${skillBlock}${templateBlock}` +
 			'Use tools whenever they would make your answer more accurate — exact arithmetic, current time, ' +
 			'SQL queries against the StarRocks data warehouse (queryDatabase, running with the user’s own permissions). ' +
 			'For any warehouse question, FIRST call listTables to see the available tables/views, THEN getTableSchema for the columns of the ones you’ll query; ' +

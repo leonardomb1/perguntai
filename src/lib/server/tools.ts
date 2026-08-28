@@ -18,6 +18,7 @@ import { checkStatement, readOnlyStatement } from './sql-guard';
 import { saveMemory, removeMemory } from './memory';
 import { proposeSkill, removeSkill, resolveSkill, saveSkill } from './skills';
 import { compileTypstPdf, TypstCompileError } from './typst';
+import { resolveTemplate, TEMPLATE_CONTENT_FILE } from './typstTemplates';
 import { listSchedules as listUserSchedules, removeSchedule, saveSchedule } from './schedules';
 import { invalidRecipients, sendReportEmail } from './email';
 import { logAudit } from './audit';
@@ -584,7 +585,9 @@ export function pdfReportTool(username: string, credentials: { username: string;
 			'data, pass dataQuery (a single read-only SQL statement, executed with the user\u2019s own ' +
 			'permissions, up to 2000 rows): the rows arrive as JSON in sys.inputs — read them with ' +
 			'#let data = json(bytes(sys.inputs.at("data", default: "[]"))) and build tables from that, ' +
-			'NEVER paste row values into the source. On a compile error, fix the source using the ' +
+			'NEVER paste row values into the source. When <pdf_templates> lists a matching template, ' +
+			'pass its name as `template` and write ONLY the document body (no page/text setup — the ' +
+			'template supplies layout and branding). On a compile error, fix the source using the ' +
 			'diagnostics (only the first error is reported — fixing one may reveal the next) and retry. ' +
 			'The user gets a download card and an inline preview.',
 		inputSchema: z.object({
@@ -593,9 +596,13 @@ export function pdfReportTool(username: string, credentials: { username: string;
 			dataQuery: z
 				.string()
 				.optional()
-				.describe('Single read-only SQL statement — its rows become sys.inputs.data (JSON array)')
+				.describe('Single read-only SQL statement — its rows become sys.inputs.data (JSON array)'),
+			template: z
+				.string()
+				.optional()
+				.describe('Name of an organization PDF template from <pdf_templates>; source is then the BODY only')
 		}),
-		execute: async ({ filename, source, dataQuery }) => {
+		execute: async ({ filename, source, dataQuery, template }) => {
 			if (!source.trim()) return { error: 'source is empty' };
 			if (source.length > MAX_TYPST_SOURCE) {
 				return { error: `source exceeds ${MAX_TYPST_SOURCE} characters` };
@@ -620,7 +627,15 @@ export function pdfReportTool(username: string, credentials: { username: string;
 				}
 			}
 			try {
-				const { pdf, pages } = await compileTypstPdf(source, inputs);
+				let main = source;
+				let files: Record<string, string> | undefined;
+				if (template?.trim()) {
+					const resolved = await resolveTemplate(template);
+					if (!resolved) return { error: `no enabled PDF template matches "${template}"` };
+					main = resolved.source;
+					files = { [TEMPLATE_CONTENT_FILE]: source };
+				}
+				const { pdf, pages } = await compileTypstPdf(main, inputs, files);
 				const clean = filename.replace(/[^\w.\- ()]/g, '_').replace(/\.pdf$/i, '');
 				const { id, bytes } = await createFileExport(username, Buffer.from(pdf), 'pdf');
 				return { fileId: id, filename: `${clean || 'documento'}.pdf`, bytes, format: 'pdf', pages };

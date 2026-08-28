@@ -10,6 +10,7 @@
 	import AdminPanel from '$lib/components/AdminPanel.svelte';
 	import SecurityPanel from '$lib/components/SecurityPanel.svelte';
 	import SkillsPanel from '$lib/components/SkillsPanel.svelte';
+	import TypstTemplatesPanel from '$lib/components/TypstTemplatesPanel.svelte';
 	import { hasSession } from '$lib/session';
 	import { fetchSettings } from '$lib/settings';
 	import { copyText } from '$lib/clipboard';
@@ -46,7 +47,7 @@
 		});
 	});
 
-	type Section = 'knowledge' | 'skills' | 'users' | 'stats' | 'audit' | 'capabilities';
+	type Section = 'knowledge' | 'skills' | 'pdftemplates' | 'users' | 'stats' | 'audit' | 'capabilities';
 	let section = $state<Section>('knowledge');
 	/** Users/stats apply immediately — no batch save, so no Save button there. */
 	const adminSection = $derived(
@@ -54,7 +55,8 @@
 		section === 'stats' ||
 		section === 'audit' ||
 		section === 'capabilities' ||
-		section === 'skills'
+		section === 'skills' ||
+		section === 'pdftemplates'
 	);
 
 	// --- deployment capabilities (Capacidades) — applied immediately ---
@@ -230,6 +232,7 @@
 	const nav = [
 		{ id: 'knowledge' as const, icon: 'book' as const, label: m.org_nav_knowledge() },
 		{ id: 'skills' as const, icon: 'graduation-cap' as const, label: m.org_nav_skills() },
+		{ id: 'pdftemplates' as const, icon: 'file' as const, label: m.org_nav_pdft() },
 		{ id: 'users' as const, icon: 'users' as const, label: m.admin_users_title() },
 		{ id: 'stats' as const, icon: 'activity' as const, label: m.admin_stats_tab() },
 		{ id: 'audit' as const, icon: 'eye' as const, label: m.org_nav_audit() },
@@ -240,6 +243,7 @@
 		({
 			knowledge: { title: m.org_nav_knowledge(), subtitle: m.org_subtitle() },
 			skills: { title: m.org_nav_skills(), subtitle: m.org_skills_subtitle() },
+			pdftemplates: { title: m.org_nav_pdft(), subtitle: m.org_pdft_subtitle() },
 			users: { title: m.admin_users_title(), subtitle: m.org_users_subtitle() },
 			stats: { title: m.admin_stats_tab(), subtitle: m.org_stats_subtitle() },
 			audit: { title: m.org_nav_audit(), subtitle: m.org_audit_subtitle() },
@@ -342,7 +346,9 @@
 		{#if adminSection}
 			<div class="min-h-0 flex-1 overflow-y-auto">
 				<div class="mx-auto max-w-5xl px-4 py-5 sm:px-6">
-					{#if section === 'skills'}
+					{#if section === 'pdftemplates'}
+						<TypstTemplatesPanel />
+					{:else if section === 'skills'}
 						<SkillsPanel />
 					{:else if section === 'audit'}
 						<SecurityPanel />

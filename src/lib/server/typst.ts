@@ -83,12 +83,23 @@ function normalize(raw: unknown[]): TypstDiagnostic[] {
  * `json(bytes(sys.inputs.at("data", default: "[]")))`), keeping rows out of
  * the markup itself. Throws TypstCompileError with actionable diagnostics.
  */
-export async function compileTypstPdf(
-	source: string,
-	inputs?: Record<string, string>
-): Promise<{ pdf: Uint8Array; pages: number }> {
-	const c = await compiler();
-	const res = c.compile({ mainFileContent: source, ...(inputs ? { inputs } : {}) });
+export interface CompileOptions {
+	inputs?: Record<string, string>;
+	/** Extra source files shadow-mapped into the workspace (e.g. content.typ
+	 *  when an admin template is the main file and does #include "content.typ"). */
+	files?: Record<string, string>;
+}
+
+function applyFiles(c: NodeCompilerType, files?: Record<string, string>) {
+	if (!files) return;
+	const root = workspaceRoot();
+	for (const [key, content] of Object.entries(files)) {
+		const rel = key.replace(/^\/+/, '');
+		c.mapShadow(path.join(root, rel), Buffer.from(content, 'utf8'));
+	}
+}
+
+function assertOk(c: NodeCompilerType, res: ReturnType<NodeCompilerType['compile']>) {
 	if (res.hasError()) {
 		// hasError() must be read BEFORE takeError(): taking consumes the error.
 		const err = res.takeError();
@@ -96,7 +107,40 @@ export async function compileTypstPdf(
 		const first = diags.find((d) => d.severity === 'error') ?? diags[0];
 		throw new TypstCompileError(first ? `typst: ${first.message}` : 'typst: compilation failed', diags);
 	}
-	const doc = res.result!;
-	const pdf = c.pdf(doc, { pdfTags: true });
-	return { pdf: new Uint8Array(pdf), pages: doc.numOfPages };
+}
+
+export async function compileTypstPdf(
+	source: string,
+	inputs?: Record<string, string>,
+	files?: Record<string, string>
+): Promise<{ pdf: Uint8Array; pages: number }> {
+	const c = await compiler();
+	try {
+		applyFiles(c, files);
+		const res = c.compile({ mainFileContent: source, ...(inputs ? { inputs } : {}) });
+		assertOk(c, res);
+		const doc = res.result!;
+		const pdf = c.pdf(doc, { pdfTags: true });
+		return { pdf: new Uint8Array(pdf), pages: doc.numOfPages };
+	} finally {
+		c.resetShadow();
+	}
+}
+
+/** SVG of the first pages — the console's template live preview. */
+export async function compileTypstSvg(
+	source: string,
+	inputs?: Record<string, string>,
+	files?: Record<string, string>
+): Promise<{ svg: string; pages: number }> {
+	const c = await compiler();
+	try {
+		applyFiles(c, files);
+		const res = c.compile({ mainFileContent: source, ...(inputs ? { inputs } : {}) });
+		assertOk(c, res);
+		const doc = res.result!;
+		return { svg: c.svg(doc), pages: doc.numOfPages };
+	} finally {
+		c.resetShadow();
+	}
 }

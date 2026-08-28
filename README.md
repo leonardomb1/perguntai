@@ -48,6 +48,7 @@ External clients                  | /v1/chat/completions (OpenAI-  |
 The whole admin surface lives on one page, admin-only, with immediate-apply sections:
 
 - **Conhecimento**: organization and department knowledge blocks, standing instructions (`MAX_ORG_PROMPT` chars, default 8000), and shared document libraries, edited per scope in a master-detail layout.
+- **Modelos PDF**: Typst report templates with a live compiled preview — the template carries page setup and branding (`#include "content.typ"` marks the body slot), the assistant writes only the content.
 - **Habilidades**: review queue for skills proposed for shared use (approve, suspend, remove), plus the active shared-skill list per scope.
 - **Usuarios**: access policies (claim-rule editor with a "matches you" preview), plus one table of everyone the platform has seen: explicit records with full controls, policy-admitted users read-only with a "create exception" action.
 - **Estatisticas**: token usage tiles (today, month, active users, cache rate, via-API split), a 30-day daily chart, per-department share (donut) and per-policy usage. Usage is tagged at request time with the departments and policies that matched, so attribution stays correct over time.
