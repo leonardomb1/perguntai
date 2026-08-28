@@ -17,7 +17,8 @@ const BADGES: Record<string, string> = {
 	searchDocuments: 'Docs',
 	renderChart: 'Chart',
 	web_search: 'Web',
-	runPython: 'Python'
+	runPython: 'Python',
+	generatePdf: 'PDF'
 };
 
 const ICONS: Record<string, string> = {
@@ -28,6 +29,11 @@ const ICONS: Record<string, string> = {
 	web_search: 'globe',
 	generateExcel: 'download',
 	generateDocument: 'download',
+	generatePdf: 'file',
+	emailReport: 'mail',
+	scheduleReport: 'clock',
+	listSchedules: 'clock',
+	deleteSchedule: 'clock',
 	renderChart: 'wrench',
 	renderDiagram: 'wrench',
 	runPython: 'code',
@@ -53,6 +59,11 @@ const LABELS: Record<string, () => string> = {
 	sandboxLoadData: () => m.tool_load_data(),
 	sandboxPresentFile: () => m.tool_present_file(),
 	sandboxImportDoc: () => m.tool_import_doc(),
+	generatePdf: () => m.tool_generate_pdf(),
+	emailReport: () => m.tool_email_report(),
+	scheduleReport: () => m.tool_schedule(),
+	listSchedules: () => m.tool_list_schedules(),
+	deleteSchedule: () => m.tool_delete_schedule(),
 	useSkill: () => m.tool_use_skill(),
 	saveSkill: () => m.tool_save_skill(),
 	forgetSkill: () => m.tool_forget_skill(),
@@ -75,6 +86,14 @@ function toolDetail(raw: string, input: unknown): { detail?: string; mono?: bool
 			return { detail: str(i.filename) ?? str(i.path) };
 		case 'sandboxImportDoc':
 			return { detail: str(i.name) };
+		case 'generatePdf':
+			return { detail: str(i.filename) };
+		case 'scheduleReport':
+			return { detail: str(i.title) };
+		case 'emailReport':
+			return {
+				detail: Array.isArray(i.to) ? i.to.filter((x) => typeof x === 'string').join(', ') : undefined
+			};
 		case 'useSkill':
 			return { detail: str(i.skill) };
 		case 'saveSkill':

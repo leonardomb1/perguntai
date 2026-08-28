@@ -20,6 +20,7 @@
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"@tailwindcss/vite": "^4.3.2",
 		"@types/dompurify": "^3.0.5",
+		"@types/nodemailer": "^8.0.1",
 		"svelte": "^5.56.1",
 		"svelte-check": "^4.6.0",
 		"tailwindcss": "^4.3.2",
@@ -34,6 +35,7 @@
 		"@dagrejs/dagre": "^3.0.0",
 		"@fontsource-variable/dm-sans": "^5.2.8",
 		"@fontsource-variable/source-serif-4": "^5.2.9",
+		"@myriaddreamin/typst-ts-node-compiler": "^0.7.0",
 		"@sentry/sveltekit": "^10.67.0",
 		"ai": "^7.0.11",
 		"chart.js": "^4.5.1",
@@ -46,6 +48,7 @@
 		"mermaid": "^11.16.0",
 		"microsandbox": "^0.6.15",
 		"mysql2": "^3.22.5",
+		"nodemailer": "^9.0.6",
 		"unpdf": "^1.6.2",
 		"xlsx": "^0.18.5",
 		"zod": "^4.4.3"

@@ -27,6 +27,7 @@
 		testCodeExecution,
 		type Capabilities,
 		type EmbedInfo,
+		type EmailInfo,
 		type OrgKnowledgeEntry,
 		type Department,
 		type CallerProfile
@@ -59,6 +60,7 @@
 	// --- deployment capabilities (Capacidades) — applied immediately ---
 	let capabilities = $state<Capabilities | null>(null);
 	let embedInfo = $state<EmbedInfo | null>(null);
+	let emailInfo = $state<EmailInfo | null>(null);
 	let capBusy = $state(false);
 	let embedUrlCopied = $state(false);
 	let capTest = $state<
@@ -71,10 +73,13 @@
 			if (c) {
 				capabilities = c.capabilities;
 				embedInfo = c.embed;
+				emailInfo = c.email;
 			}
 		});
 	});
-	async function toggleCapability(key: 'codeExecution' | 'embedChat') {
+	async function toggleCapability(
+		key: 'codeExecution' | 'embedChat' | 'emailReports' | 'scheduledRuns'
+	) {
 		if (!capabilities || capBusy) return;
 		capBusy = true;
 		const updated = await saveCapabilities({ [key]: !capabilities[key] });
@@ -535,6 +540,75 @@
 										{m.embedkey_create()}
 									</button>
 								</div>
+							</div>
+						</div>
+
+						<div class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+							<div class="flex flex-wrap items-start gap-3">
+								<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-[#128a5f]/12 text-[#128a5f]">
+									<Icon name="mail" size={18} />
+								</span>
+								<div class="min-w-0 flex-1">
+									<h3 class="flex items-center gap-2 text-base font-semibold text-neutral-900">
+										{m.cap_email_title()}
+										<span class="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-amber-700 uppercase">beta</span>
+										<HelpTip text={m.cap_email_help()} />
+									</h3>
+									<p class="mt-0.5 text-[13px] leading-relaxed text-neutral-500">{m.cap_email_desc()}</p>
+								</div>
+								<button
+									role="switch"
+									aria-checked={capabilities?.emailReports === true}
+									disabled={!capabilities || capBusy}
+									onclick={() => toggleCapability('emailReports')}
+									aria-label={m.cap_email_title()}
+									class="relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40
+										{capabilities?.emailReports ? 'bg-[#d97757]' : 'bg-[#d9d6c8]'}"
+								>
+									<span
+										class="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200
+											{capabilities?.emailReports ? 'translate-x-5' : 'translate-x-0'}"
+									></span>
+								</button>
+							</div>
+							<div class="mt-4 border-t border-[#efede3] pt-4">
+								{#if emailInfo && !emailInfo.configured}
+									<p class="text-xs text-red-600">{m.cap_email_not_configured()}</p>
+								{:else if emailInfo}
+									<p class="text-xs text-neutral-500">
+										{m.cap_email_status({ from: emailInfo.from, domains: emailInfo.allowedDomains.join(', ') || '—' })}
+									</p>
+								{/if}
+							</div>
+						</div>
+
+						<div class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+							<div class="flex flex-wrap items-start gap-3">
+								<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-[#7c5cd6]/12 text-[#7c5cd6]">
+									<Icon name="clock" size={18} />
+								</span>
+								<div class="min-w-0 flex-1">
+									<h3 class="flex items-center gap-2 text-base font-semibold text-neutral-900">
+										{m.cap_sched_title()}
+										<span class="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-amber-700 uppercase">beta</span>
+										<HelpTip text={m.cap_sched_help()} />
+									</h3>
+									<p class="mt-0.5 text-[13px] leading-relaxed text-neutral-500">{m.cap_sched_desc()}</p>
+								</div>
+								<button
+									role="switch"
+									aria-checked={capabilities?.scheduledRuns === true}
+									disabled={!capabilities || capBusy}
+									onclick={() => toggleCapability('scheduledRuns')}
+									aria-label={m.cap_sched_title()}
+									class="relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40
+										{capabilities?.scheduledRuns ? 'bg-[#d97757]' : 'bg-[#d9d6c8]'}"
+								>
+									<span
+										class="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200
+											{capabilities?.scheduledRuns ? 'translate-x-5' : 'translate-x-0'}"
+									></span>
+								</button>
 							</div>
 						</div>
 						</div>

@@ -12,6 +12,7 @@ Talk to your organization's data. An agentic data-analytics assistant built on *
 - **Connectors**: users plug their own MCP servers (URL plus token) into the assistant; every call runs with the user's own credentials.
 - **Programmatic access**: an OpenAI-compatible `/v1` endpoint and personal API keys with scopes, so any client that speaks the OpenAI protocol (openai SDKs, LangChain, Open WebUI, LiteLLM) can use the full agent.
 - **Embedded chat**: an anonymous, read-only `/embed` page for intranet portals — visitors talk to the warehouse through a dedicated StarRocks service account scoped to curated views, with a message cap per conversation, a daily budget, and a restricted model tier. No accounts, no history, no advanced tools. Admins mint per-portal embed keys (`/embed?key=emb_…`), each carrying its own service account (encrypted server-side, never exposed), limits, framing origins, and usage attribution — individually revocable.
+- **Scheduled runs (Programado)**: standing instructions the assistant executes automatically on a cadence (daily/weekly/monthly) with nobody logged in — headless runs on the user's stored warehouse credential, charged to their daily token budget, with run history in the sidebar and optional e-mail delivery. Created from a conversation ("agende isso toda segunda às 8h") or in the UI.
 - **Governance**: claim-based access policies, per-user exceptions, per-department usage attribution, and an audit log of sign-ins, requests, key and connector changes, and admin actions.
 
 ## Architecture
@@ -51,7 +52,7 @@ The whole admin surface lives on one page, admin-only, with immediate-apply sect
 - **Usuarios**: access policies (claim-rule editor with a "matches you" preview), plus one table of everyone the platform has seen: explicit records with full controls, policy-admitted users read-only with a "create exception" action.
 - **Estatisticas**: token usage tiles (today, month, active users, cache rate, via-API split), a 30-day daily chart, per-department share (donut) and per-policy usage. Usage is tagged at request time with the departments and policies that matched, so attribution stays correct over time.
 - **Auditoria**: every user's API keys (with admin revocation), the MCP connector fleet, and a filterable activity log (sign-ins, chat and API requests with the credential used, admin changes, key lifecycle, connector changes). Append-only JSONL under `DATA_DIR/audit/`, 6-month retention.
-- **Capacidades**: deployment-wide feature switches. Currently: code execution (beta) with a sandbox test button, and embedded chat (beta) with its service-account status and embed URL.
+- **Capacidades**: deployment-wide feature switches. Currently: code execution (beta) with a sandbox test button, embedded chat (beta) with embed keys, report e-mails (beta) with SMTP status, and scheduled runs (beta).
 
 ## Models
 
@@ -64,7 +65,7 @@ Each user's allowed models come from their record plus matching policies (admins
 
 ## Tools
 
-Warehouse: `queryDatabase`, `listTables` (catalog served from the synced schema, kept out of the prompt for caching), `getTableSchema`. Output: `renderChart` (Chart.js), `renderDiagram` (Mermaid), `generateExcel` (result sets written server-side), `generateDocument`. Documents: `searchDocuments`, `previewTable`. UX: `askUser` (client-resolved option buttons, chat only). Memory (opt-in): `saveMemory`, `forgetMemory`. Code execution (capability, beta): in chat, workspace tools (`sandboxLoadData`, `sandboxWriteFile`, `sandboxReadFile`, `sandboxEditFile`, `sandboxExec`, `sandboxPresentFile`); on the stateless `/v1` API, the self-contained `runPython`. Plus whatever tools the user's own MCP servers expose, prefixed by server name.
+Warehouse: `queryDatabase`, `listTables` (catalog served from the synced schema, kept out of the prompt for caching), `getTableSchema`. Output: `renderChart` (Chart.js), `renderDiagram` (Mermaid), `generateExcel` (result sets written server-side), `generateDocument`, `generatePdf` (model-authored Typst compiled in-process; data injected via `dataQuery` as `sys.inputs`, compile diagnostics fed back for self-correction), `emailReport` (capability, beta: branded HTML e-mail through one tested template — the model fills subject/greeting/markdown body and attaches a generated export; recipients domain-allow-listed, sends audited). Documents: `searchDocuments`, `previewTable`. UX: `askUser` (client-resolved option buttons, chat only). Memory (opt-in): `saveMemory`, `forgetMemory`. Code execution (capability, beta): in chat, workspace tools (`sandboxLoadData`, `sandboxWriteFile`, `sandboxReadFile`, `sandboxEditFile`, `sandboxExec`, `sandboxPresentFile`); on the stateless `/v1` API, the self-contained `runPython`. Plus whatever tools the user's own MCP servers expose, prefixed by server name.
 
 ## API access
 

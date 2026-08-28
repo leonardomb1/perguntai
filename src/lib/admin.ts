@@ -199,6 +199,14 @@ export async function removeUser(username: string): Promise<string | null> {
 export interface Capabilities {
 	codeExecution: boolean;
 	embedChat: boolean;
+	emailReports: boolean;
+	scheduledRuns: boolean;
+}
+
+export interface EmailInfo {
+	configured: boolean;
+	from: string;
+	allowedDomains: string[];
 }
 
 export interface EmbedInfo {
@@ -211,12 +219,15 @@ export interface EmbedInfo {
 export async function fetchCapabilities(): Promise<{
 	capabilities: Capabilities;
 	embed: EmbedInfo;
+	email: EmailInfo;
 } | null> {
 	try {
 		const res = await fetch('/api/admin/capabilities', { headers: headers() });
 		if (!res.ok) return null;
 		const data = await res.json();
-		return data.capabilities ? { capabilities: data.capabilities, embed: data.embed } : null;
+		return data.capabilities
+			? { capabilities: data.capabilities, embed: data.embed, email: data.email }
+			: null;
 	} catch {
 		return null;
 	}

@@ -3,6 +3,7 @@ import { authenticateRequest, type AuthUser } from '$lib/server/auth';
 import { getCapabilities, resolveRole, setCapabilities } from '$lib/server/access';
 import { testSandbox, warmSandbox } from '$lib/server/sandbox';
 import { embedConfig } from '$lib/server/embed';
+import { emailConfig } from '$lib/server/email';
 import { logAudit, requestMeta } from '$lib/server/audit';
 import type { RequestHandler } from './$types';
 
@@ -19,6 +20,7 @@ export const GET: RequestHandler = async ({ request }) => {
 	const admin = await requireAdmin(request);
 	if (admin instanceof Response) return admin;
 	const config = embedConfig();
+	const mail = emailConfig();
 	return json({
 		capabilities: await getCapabilities(),
 		embed: {
@@ -26,6 +28,11 @@ export const GET: RequestHandler = async ({ request }) => {
 			model: config.model,
 			maxMessages: config.maxMessages,
 			dailyTokens: config.dailyTokens
+		},
+		email: {
+			configured: mail.configured,
+			from: mail.from,
+			allowedDomains: mail.allowedDomains
 		}
 	});
 };
@@ -35,9 +42,12 @@ export const PATCH: RequestHandler = async ({ request }) => {
 	if (admin instanceof Response) return admin;
 
 	const body = await request.json().catch(() => ({}));
-	const patch: { codeExecution?: boolean; embedChat?: boolean } = {};
-	if (typeof body.codeExecution === 'boolean') patch.codeExecution = body.codeExecution;
-	if (typeof body.embedChat === 'boolean') patch.embedChat = body.embedChat;
+	const patch: Partial<
+		Record<'codeExecution' | 'embedChat' | 'emailReports' | 'scheduledRuns', boolean>
+	> = {};
+	for (const key of ['codeExecution', 'embedChat', 'emailReports', 'scheduledRuns'] as const) {
+		if (typeof body[key] === 'boolean') patch[key] = body[key];
+	}
 	const capabilities = await setCapabilities(patch);
 	// Enabling code execution kicks the warm-up immediately, so the image pull
 	// happens now (visible to the admin via Testar) — never on a user's turn.

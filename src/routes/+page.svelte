@@ -6,6 +6,8 @@
 	import ChatPane from '$lib/components/ChatPane.svelte';
 	import ArtifactPanel from '$lib/components/ArtifactPanel.svelte';
 	import { closeArtifact } from '$lib/artifact-panel.svelte';
+	import SchedulePane from '$lib/components/SchedulePane.svelte';
+	import { fetchSchedules, type UserSchedule } from '$lib/schedules';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import ConversationDocs from '$lib/components/ConversationDocs.svelte';
@@ -79,15 +81,52 @@
 		});
 	});
 
+	// --- Programado (scheduled runs) ---
+	let schedules = $state<UserSchedule[]>([]);
+	let schedulesEnabled = $state(false);
+	/** null = chat view; '__new__' = create form; else a schedule id. */
+	let selectedScheduleId = $state<string | null>(null);
+	$effect(() => {
+		if (!browser || !hasSession()) return;
+		fetchSchedules().then((data) => {
+			if (data) {
+				schedulesEnabled = data.enabled;
+				schedules = data.schedules;
+			}
+		});
+	});
+	const selectedSchedule = $derived(
+		selectedScheduleId && selectedScheduleId !== '__new__'
+			? (schedules.find((s) => s.id === selectedScheduleId) ?? null)
+			: null
+	);
+	function openSchedule(id: string) {
+		selectedScheduleId = id;
+		sidebarOpen = false;
+		closeArtifact();
+	}
+	function onScheduleChanged(updated: UserSchedule) {
+		const idx = schedules.findIndex((s) => s.id === updated.id);
+		if (idx >= 0) schedules[idx] = updated;
+		else schedules = [...schedules, updated];
+		selectedScheduleId = updated.id;
+	}
+	function onScheduleDeleted() {
+		schedules = schedules.filter((s) => s.id !== selectedScheduleId);
+		selectedScheduleId = null;
+	}
+
 	function newChat() {
 		currentId = newId();
 		sidebarOpen = false;
+		selectedScheduleId = null;
 		closeArtifact();
 	}
 
 	function openConversation(id: string) {
-		if (id !== currentId) closeArtifact();
+		if (id !== currentId || selectedScheduleId) closeArtifact();
 		currentId = id;
+		selectedScheduleId = null;
 		sidebarOpen = false;
 	}
 
@@ -175,7 +214,44 @@
 		</div>
 
 		<nav class="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-			<h2 class="px-2 py-1.5 text-xs font-semibold tracking-wide text-neutral-500 uppercase">
+			{#if schedulesEnabled || schedules.length > 0}
+				<div class="flex items-center justify-between px-2 py-1.5">
+					<h2 class="text-xs font-semibold tracking-wide text-neutral-500 uppercase">
+						{m.sched_section()}
+					</h2>
+					{#if schedulesEnabled}
+						<button
+							onclick={() => openSchedule('__new__')}
+							class="rounded p-0.5 text-neutral-400 transition hover:text-[#bd5d3a]"
+							title={m.sched_new()}
+							aria-label={m.sched_new()}
+						>
+							<Icon name="plus" size={14} />
+						</button>
+					{/if}
+				</div>
+				{#if schedules.length === 0}
+					<p class="px-2 py-2 text-center text-xs text-neutral-400">{m.sched_none()}</p>
+				{/if}
+				{#each schedules as sched (sched.id)}
+					<button
+						onclick={() => openSchedule(sched.id)}
+						class="group flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition
+							{sched.id === selectedScheduleId
+							? 'bg-white text-neutral-900 shadow-sm'
+							: 'text-neutral-600 hover:bg-white/60'}"
+					>
+						<Icon
+							name="clock"
+							size={14}
+							class="shrink-0 {sched.enabled ? 'text-[#bd5d3a]' : 'text-neutral-300'}"
+						/>
+						<span class="min-w-0 flex-1 truncate">{sched.title}</span>
+					</button>
+				{/each}
+			{/if}
+
+			<h2 class="px-2 py-1.5 text-xs font-semibold tracking-wide text-neutral-500 uppercase {schedulesEnabled || schedules.length > 0 ? 'mt-4' : ''}">
 				{m.chats()}
 			</h2>
 			{#if conversations.length === 0}
@@ -189,7 +265,7 @@
 					onclick={() => openConversation(convo.id)}
 					onkeydown={(e) => e.key === 'Enter' && openConversation(convo.id)}
 					class="group flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition
-						{convo.id === currentId
+						{convo.id === currentId && !selectedScheduleId
 						? 'bg-white text-neutral-900 shadow-sm'
 						: 'text-neutral-600 hover:bg-white/60'}"
 				>
@@ -226,6 +302,7 @@
 					</button>
 				</div>
 			{/each}
+
 		</nav>
 
 
@@ -275,6 +352,15 @@
 			{/key}
 		</div>
 
+		{#if selectedScheduleId}
+			{#key selectedScheduleId}
+				<SchedulePane
+					schedule={selectedSchedule}
+					onChanged={onScheduleChanged}
+					onDeleted={onScheduleDeleted}
+				/>
+			{/key}
+		{:else}
 		{#key currentId}
 			{#if pane?.id === currentId}
 				<ChatPane
@@ -292,6 +378,7 @@
 				</div>
 			{/if}
 		{/key}
+		{/if}
 	</div>
 
 	<ArtifactPanel />

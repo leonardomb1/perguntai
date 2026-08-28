@@ -11,8 +11,14 @@ FROM node:22-slim
 # ca-certificates: node:slim ships none, and the microsandbox SDK's native
 # (Rust) OCI pull ABORTS THE WHOLE PROCESS without system CAs. Needed for the
 # code-execution capability; harmless otherwise.
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+# Fonts: Typst embeds no text fonts — without these, generatePdf renders
+# documents with missing glyphs. TYPST_FONTS_PATH points the compiler at them.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+		ca-certificates \
+		fonts-dejavu-core \
+		fonts-liberation \
 	&& rm -rf /var/lib/apt/lists/*
+ENV TYPST_FONTS_PATH=/usr/share/fonts
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \

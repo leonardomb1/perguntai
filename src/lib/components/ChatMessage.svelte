@@ -186,6 +186,7 @@
 				} else if (
 					name === 'generateExcel' ||
 					name === 'generateDocument' ||
+					name === 'generatePdf' ||
 					name === 'sandboxPresentFile'
 				) {
 					const spec = toolOutput<ExportSpec & { error?: string }>(part);

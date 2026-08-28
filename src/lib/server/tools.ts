@@ -8,6 +8,7 @@ import { visibleDatabases } from './warehouse-access';
 import {
 	createExcelExport,
 	createFileExport,
+	readExport,
 	createTextExport,
 	EXPORT_TYPES,
 	type ExportExt,
@@ -16,6 +17,10 @@ import {
 import { checkStatement, readOnlyStatement } from './sql-guard';
 import { saveMemory, removeMemory } from './memory';
 import { proposeSkill, removeSkill, resolveSkill, saveSkill } from './skills';
+import { compileTypstPdf, TypstCompileError } from './typst';
+import { listSchedules as listUserSchedules, removeSchedule, saveSchedule } from './schedules';
+import { invalidRecipients, sendReportEmail } from './email';
+import { logAudit } from './audit';
 
 /**
  * Tools available to the agent. Each tool runs server-side; the agent loop
@@ -380,6 +385,251 @@ export function documentExportTool(username: string) {
 			const clean = filename.replace(/[^\w.\- ()]/g, '_').replace(/\.(md|txt|csv)$/i, '');
 			const { id, bytes } = await createTextExport(username, content, format);
 			return { fileId: id, filename: `${clean || 'documento'}.${format}`, bytes, format };
+		}
+	});
+}
+
+/**
+ * Programado from chat: after a conversation lands on an analysis worth
+ * repeating, the model distills it into standing instructions and schedules
+ * it. The schedule then runs headless on its cadence (see scheduler.ts).
+ */
+export function scheduleTools(username: string) {
+	return {
+		scheduleReport: tool({
+			description:
+				'Schedule a recurring automatic run of an analysis (Programado). Distill THIS ' +
+				'conversation\u2019s analysis into complete standing instructions — exact tables, filters ' +
+				'and output format, plus e-mail recipients if the user wants delivery — because each run ' +
+				'starts from scratch with no conversation context. ONLY call after the user explicitly ' +
+				'asked to schedule and confirmed the cadence. Pass an existing id to UPDATE.',
+			inputSchema: z.object({
+				id: z.string().optional().describe('Existing schedule id to UPDATE; omit to create'),
+				title: z.string().describe('Short name, e.g. "Ativos de TI semanal"'),
+				instructions: z
+					.string()
+					.describe('Complete standing instructions for each run (self-contained)'),
+				frequency: z.enum(['daily', 'weekly', 'monthly']),
+				time: z.string().describe('Time of day HH:MM (24h, server timezone)'),
+				weekday: z
+					.number()
+					.optional()
+					.describe('weekly only: 0=Sunday … 6=Saturday'),
+				dayOfMonth: z.number().optional().describe('monthly only: 1–28')
+			}),
+			execute: async ({ id, title, instructions, frequency, time, weekday, dayOfMonth }) => {
+				const result = await saveSchedule(username, {
+					id,
+					title,
+					instructions,
+					frequency,
+					time,
+					weekday,
+					dayOfMonth
+				});
+				if (!result.ok) {
+					return {
+						ok: false,
+						reason: result.reason,
+						hint:
+							result.reason === 'full'
+								? 'Schedule limit reached — delete one first (listSchedules/deleteSchedule).'
+								: result.reason === 'not_found'
+									? 'No schedule with that id — omit id to create.'
+									: 'title and instructions are required.'
+					};
+				}
+				return {
+					ok: true,
+					id: result.schedule.id,
+					title: result.schedule.title,
+					note: 'Visible in the sidebar under Programado; first run at the next occurrence.'
+				};
+			}
+		}),
+		listSchedules: tool({
+			description: 'List the user\u2019s scheduled runs (Programado) with their ids and cadences.',
+			inputSchema: z.object({}),
+			execute: async () => ({
+				schedules: (await listUserSchedules(username)).map((s) => ({
+					id: s.id,
+					title: s.title,
+					frequency: s.frequency,
+					time: s.time,
+					enabled: s.enabled,
+					lastRunAt: s.lastRunAt
+				}))
+			})
+		}),
+		deleteSchedule: tool({
+			description:
+				'Delete one of the user\u2019s scheduled runs by id — only when they explicitly ask.',
+			inputSchema: z.object({ id: z.string().describe('Schedule id') }),
+			execute: async ({ id }) => {
+				const ok = await removeSchedule(username, id);
+				return ok ? { ok: true } : { ok: false, error: `no schedule with id "${id}"` };
+			}
+		})
+	};
+}
+
+const MAX_EMAIL_RECIPIENTS = 10;
+const MAX_EMAIL_BODY = 20_000;
+
+/**
+ * Send a branded report e-mail. The model fills a CONSTRAINED schema (subject,
+ * greeting, markdown body, optional CTA) rendered through one tested
+ * table-based template — it never writes raw e-mail HTML (Outlook renders
+ * with Word's engine; hand-written markup breaks silently). Attachments
+ * reference the user's OWN exports by fileId, composing with generatePdf /
+ * generateExcel. Recipient domains are allow-listed; every send is audited.
+ */
+export function emailReportTool(username: string) {
+	return tool({
+		description:
+			'Send a branded HTML report e-mail, optionally attaching a file you already generated in ' +
+			'this conversation (pass the fileId returned by generatePdf/generateExcel/generateDocument). ' +
+			'ONLY call this when the user explicitly asked to send an e-mail, and confirm the recipients ' +
+			'with them first. The body is markdown (paragraphs, **bold**, lists, pipe tables) rendered ' +
+			'into the organization\u2019s template — write a concise executive summary, not the whole ' +
+			'report (the attachment carries the detail). Recipients must belong to allowed domains.',
+		inputSchema: z.object({
+			to: z.array(z.string()).min(1).max(MAX_EMAIL_RECIPIENTS).describe('Recipient e-mail addresses'),
+			subject: z.string().describe('E-mail subject — also shown as the title band'),
+			bodyMarkdown: z
+				.string()
+				.describe('Body in markdown: short executive summary, key numbers, optional pipe table'),
+			greeting: z.string().optional().describe('Greeting line, e.g. "Olá Equipe," (default none)'),
+			ctaText: z.string().optional().describe('Optional call-to-action button label'),
+			ctaUrl: z.string().optional().describe('Optional call-to-action URL (required with ctaText)'),
+			attachmentFileId: z
+				.string()
+				.optional()
+				.describe('fileId of an export generated in this conversation to attach'),
+			attachmentName: z
+				.string()
+				.optional()
+				.describe('Attachment filename shown to recipients (default: the export id)')
+		}),
+		execute: async ({ to, subject, bodyMarkdown, greeting, ctaText, ctaUrl, attachmentFileId, attachmentName }) => {
+			const recipients = to.map((r) => r.trim()).filter(Boolean);
+			const bad = invalidRecipients(recipients);
+			if (bad.length) {
+				return { error: `recipients outside the allowed domains: ${bad.join(', ')}` };
+			}
+			if (bodyMarkdown.length > MAX_EMAIL_BODY) {
+				return { error: `bodyMarkdown exceeds ${MAX_EMAIL_BODY} characters — summarize; the detail belongs in the attachment` };
+			}
+			let attachment;
+			if (attachmentFileId) {
+				const hit = await readExport(username, attachmentFileId);
+				if (!hit) return { error: 'attachmentFileId not found among your exports (expired?)' };
+				const clean = (attachmentName?.trim() || `relatorio.${hit.ext}`).replace(/[^\w.\- ()]/g, '_');
+				attachment = {
+					filename: clean.endsWith(`.${hit.ext}`) ? clean : `${clean}.${hit.ext}`,
+					content: hit.buffer,
+					contentType: EXPORT_TYPES[hit.ext].split(';')[0]
+				};
+			}
+			try {
+				const { messageId } = await sendReportEmail({
+					to: recipients,
+					subject,
+					bodyMarkdown,
+					greeting,
+					ctaText,
+					ctaUrl,
+					attachment
+				});
+				logAudit({
+					actor: username,
+					via: 'session',
+					category: 'chat',
+					action: 'email.send',
+					target: subject,
+					status: 'ok',
+					detail: { to: recipients, attachment: attachment?.filename }
+				});
+				return { ok: true, messageId, to: recipients, attachment: attachment?.filename };
+			} catch (error) {
+				logAudit({
+					actor: username,
+					via: 'session',
+					category: 'chat',
+					action: 'email.send',
+					status: 'error',
+					detail: { to: recipients }
+				});
+				return { error: error instanceof Error ? error.message : 'send failed' };
+			}
+		}
+	});
+}
+
+const MAX_TYPST_SOURCE = 120_000;
+
+/**
+ * Model-authored PDF reports via Typst (in-process compile, ~tens of ms).
+ * The model writes real Typst source — full layout freedom — and iterates on
+ * the structured compile diagnostics when it gets something wrong. Data flows
+ * in through `dataQuery` (read-only SQL as the user, rows delivered as
+ * sys.inputs JSON), never by pasting rows into markup.
+ */
+export function pdfReportTool(username: string, credentials: { username: string; password?: string }) {
+	return tool({
+		description:
+			'Create a polished, professional PDF document from Typst source you write — reports, briefs, ' +
+			'formatted analyses. Prefer this over generateDocument whenever presentation matters. Write ' +
+			'complete Typst markup (set page/text rules, headings, tables, colors). To include warehouse ' +
+			'data, pass dataQuery (a single read-only SQL statement, executed with the user\u2019s own ' +
+			'permissions, up to 2000 rows): the rows arrive as JSON in sys.inputs — read them with ' +
+			'#let data = json(bytes(sys.inputs.at("data", default: "[]"))) and build tables from that, ' +
+			'NEVER paste row values into the source. On a compile error, fix the source using the ' +
+			'diagnostics (only the first error is reported — fixing one may reveal the next) and retry. ' +
+			'The user gets a download card and an inline preview.',
+		inputSchema: z.object({
+			filename: z.string().describe('File name, e.g. relatorio-frota.pdf (extension optional)'),
+			source: z.string().describe('Complete Typst source for the document'),
+			dataQuery: z
+				.string()
+				.optional()
+				.describe('Single read-only SQL statement — its rows become sys.inputs.data (JSON array)')
+		}),
+		execute: async ({ filename, source, dataQuery }) => {
+			if (!source.trim()) return { error: 'source is empty' };
+			if (source.length > MAX_TYPST_SOURCE) {
+				return { error: `source exceeds ${MAX_TYPST_SOURCE} characters` };
+			}
+			let inputs: Record<string, string> | undefined;
+			if (dataQuery?.trim()) {
+				const statement = checkStatement(dataQuery, { allowWrites: false });
+				if (!statement) {
+					return { error: 'dataQuery must be a single read-only statement (SELECT/SHOW/DESCRIBE/EXPLAIN)' };
+				}
+				let conn;
+				try {
+					conn = await connectAsUser(credentials, { selectDatabase: false });
+					const [result] = await conn.query(statement);
+					if (!Array.isArray(result)) return { error: 'dataQuery returned no row set' };
+					const rows = (jsonSafe(result) as Record<string, unknown>[]).slice(0, 2000);
+					inputs = { data: JSON.stringify(rows) };
+				} catch (error) {
+					return { error: error instanceof Error ? error.message : 'dataQuery failed' };
+				} finally {
+					await conn?.end().catch(() => {});
+				}
+			}
+			try {
+				const { pdf, pages } = await compileTypstPdf(source, inputs);
+				const clean = filename.replace(/[^\w.\- ()]/g, '_').replace(/\.pdf$/i, '');
+				const { id, bytes } = await createFileExport(username, Buffer.from(pdf), 'pdf');
+				return { fileId: id, filename: `${clean || 'documento'}.pdf`, bytes, format: 'pdf', pages };
+			} catch (error) {
+				if (error instanceof TypstCompileError) {
+					return { error: error.message, diagnostics: error.diagnostics };
+				}
+				return { error: error instanceof Error ? error.message : 'compile failed' };
+			}
 		}
 	});
 }

@@ -7,6 +7,7 @@ import { getTextDirection } from '$lib/paraglide/runtime';
 import { getCapabilities } from '$lib/server/access';
 import { warmSandbox } from '$lib/server/sandbox';
 import { embedConfig } from '$lib/server/embed';
+import { startScheduler } from '$lib/server/scheduler';
 import { verifyEmbedKey } from '$lib/server/embedKeys';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 
@@ -48,6 +49,11 @@ getCapabilities()
 		if (caps.codeExecution) warmSandbox(15_000);
 	})
 	.catch(() => {});
+
+// Programado sweep — a 60s interval that fires due schedules as headless
+// agent runs. Started unconditionally; each sweep re-checks the capability,
+// so the console toggle takes effect without a restart.
+startScheduler();
 
 const handleParaglide: Handle = ({ event, resolve }) =>
 	paraglideMiddleware(event.request, ({ request, locale }) => {

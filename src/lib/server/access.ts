@@ -107,6 +107,10 @@ export interface Capabilities {
 	codeExecution: boolean;
 	/** Anonymous read-only embedded chat at /embed (see server/embed.ts). */
 	embedChat: boolean;
+	/** Branded report e-mails sent by the agent (see server/email.ts). */
+	emailReports: boolean;
+	/** Programado — standing instructions executed on a cadence (scheduler.ts). */
+	scheduledRuns: boolean;
 }
 
 interface AccessFile {
@@ -232,7 +236,9 @@ async function load(): Promise<AccessFile> {
 			users: typeof parsed.users === 'object' && parsed.users ? parsed.users : {},
 			capabilities: {
 				codeExecution: parsed.capabilities?.codeExecution === true,
-				embedChat: parsed.capabilities?.embedChat === true
+				embedChat: parsed.capabilities?.embedChat === true,
+				emailReports: parsed.capabilities?.emailReports === true,
+				scheduledRuns: parsed.capabilities?.scheduledRuns === true
 			},
 			policies: sanitizePolicies(parsed.policies),
 			orgSystemPrompt: typeof parsed.orgSystemPrompt === 'string' ? parsed.orgSystemPrompt : '',
@@ -245,7 +251,12 @@ async function load(): Promise<AccessFile> {
 		// First run — seed from the legacy env allowlist, then persist.
 		const seeded: AccessFile = {
 			users: {},
-			capabilities: { codeExecution: false, embedChat: false },
+			capabilities: {
+				codeExecution: false,
+				embedChat: false,
+				emailReports: false,
+				scheduledRuns: false
+			},
 			policies: [],
 			orgSystemPrompt: '',
 			orgKnowledge: [],
@@ -452,7 +463,9 @@ export async function setCapabilities(patch: Partial<Capabilities>): Promise<Cap
 	const data = await load();
 	data.capabilities = {
 		codeExecution: patch.codeExecution ?? data.capabilities.codeExecution,
-		embedChat: patch.embedChat ?? data.capabilities.embedChat
+		embedChat: patch.embedChat ?? data.capabilities.embedChat,
+		emailReports: patch.emailReports ?? data.capabilities.emailReports,
+		scheduledRuns: patch.scheduledRuns ?? data.capabilities.scheduledRuns
 	};
 	await save(data);
 	return data.capabilities;

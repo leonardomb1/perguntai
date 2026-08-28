@@ -7,6 +7,9 @@ import {
 	tablePreviewTool,
 	excelReportTool,
 	documentExportTool,
+	pdfReportTool,
+	emailReportTool,
+	scheduleTools,
 	chartTool,
 	diagramTool,
 	documentSearchTool,
@@ -236,7 +239,10 @@ export async function buildAgent(
 	// BETA capability — sandboxed Python (microsandbox). Deployment-wide admin
 	// toggle; the tool only exists (and is only described) when it is on, so
 	// the cached prompt prefix stays stable for a given toggle state.
-	const codeExecution = (await getCapabilities()).codeExecution;
+	const capabilities = await getCapabilities();
+	const codeExecution = capabilities.codeExecution;
+	const emailReports = capabilities.emailReports;
+	const scheduledRuns = capabilities.scheduledRuns;
 	const codeExecutionGuidance = codeExecution
 		? conversationId
 			? 'This conversation has a PERSISTENT sandbox workspace (Python with pandas/numpy/statsmodels/scikit-learn, plus the `basalt` CLI for columnar SQL over files); its files survive across turns. For statistics, forecasting, or analysis beyond SQL: pull warehouse rows in with sandboxLoadData (read-only SQL under the user\u2019s own permissions — data never passes through you), bring files the user attached to this conversation in with sandboxImportDoc (spreadsheets land as CSV under uploads/), write scripts with sandboxWriteFile, run them with sandboxExec, and iterate with sandboxEditFile passing only the exact span to change (NEVER rewrite a whole file for a small edit). When you produce a file the user should receive (report, dataset, document), deliver it with sandboxPresentFile — never paste whole files into the chat. Print compact results; return small summaries. '
@@ -313,6 +319,13 @@ export async function buildAgent(
 			'use renderChart for visual patterns — line/area for trends, bar/horizontalBar for comparisons (horizontal when names are long), pie for shares, scatter for correlations — one chart per insight, at most 8 series; use renderDiagram (Mermaid) for processes, flows, sequences, and table relationships. ' +
 			'For downloadable reports/exports (Excel), use generateExcel — prefer its dataQuery per sheet so full result sets are written server-side. ' +
 			'To export prose (documentation, summaries, analyses) as a downloadable file, use generateDocument (.md/.txt/.csv). ' +
+			'For POLISHED formatted documents — executive reports, briefs, anything presentation-grade — write Typst and use generatePdf (pull data with its dataQuery, read it via sys.inputs; iterate on compile diagnostics until it builds). ' +
+			(emailReports
+				? 'To DELIVER a report by e-mail (only when the user explicitly asks): generate the file first (generatePdf/generateExcel), CONFIRM the recipients with the user, then emailReport with the fileId — body is a short markdown executive summary, the attachment carries the detail. '
+				: '') +
+			(scheduledRuns && mode === 'ui'
+				? 'To REPEAT an analysis automatically (only when the user explicitly asks to schedule it): distill the analysis into complete self-contained standing instructions (exact tables, filters, output format, e-mail recipients if any), confirm the cadence with the user, then scheduleReport. Each run starts from scratch — the instructions must carry everything. '
+				: '') +
 			'After rendering a chart, add only a brief takeaway; don’t repeat the numbers. ' +
 			'When a request is ambiguous in a way that a few concrete options would resolve — which period, ' +
 			'status, table/system, or metric — call askUser with 2–5 short options instead of guessing or ' +
@@ -354,6 +367,9 @@ export async function buildAgent(
 			renderChart: chartTool,
 			renderDiagram: diagramTool,
 			...(mode === 'ui' ? { askUser: askUserTool } : {}),
+			generatePdf: pdfReportTool(user.username, user.credentials),
+			...(emailReports ? { emailReport: emailReportTool(user.username) } : {}),
+			...(scheduledRuns && mode === 'ui' ? scheduleTools(user.username) : {}),
 			...(memoryEnabled ? memoryTools(user.username, conversationId) : {}),
 			...skillTools(user.username, conversationId, docDepts),
 			...webSearchTools,
