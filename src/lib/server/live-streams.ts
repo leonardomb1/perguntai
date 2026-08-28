@@ -59,21 +59,15 @@ export function liveStreamKey(username: string, conversationId: string): string 
 /**
  * Registers a new run for this conversation and returns the AbortSignal the
  * agent loop should honor. The signal fires on an explicit stop (DELETE), on
- * being superseded by a NEWER SEND FROM THE SAME USER (any conversation — one
- * active run per user: Ollama serves one request at a time, so a surviving
- * "zombie" run from a retried/abandoned chat would starve the new one for up
- * to the run timeout), or at the hard run timeout — NOT on client disconnect.
+ * being superseded by a newer send in the SAME conversation, or at the hard
+ * run timeout — NOT on client disconnect, and NOT on activity in other
+ * conversations: switching to another chat and asking something there must
+ * never kill a run still streaming here (the Claude backend handles
+ * concurrent requests fine; the old one-run-per-user rule was a relic of
+ * serialized local inference).
  */
 export function beginRun(username: string, conversationId: string): AbortSignal {
 	const key = liveStreamKey(username, conversationId);
-	// Abort the user's other LIVE runs but keep their entries: the recorder
-	// marks them done, preserving the partial buffer for replay until TTL.
-	const prefix = `${username}${SEP}`;
-	for (const [otherKey, other] of streams) {
-		if (otherKey !== key && otherKey.startsWith(prefix) && !other.done) {
-			other.abort.abort();
-		}
-	}
 	const previous = streams.get(key);
 	if (previous) {
 		previous.abort.abort();

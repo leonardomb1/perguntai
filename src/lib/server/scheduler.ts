@@ -69,7 +69,77 @@ async function sweep(): Promise<void> {
 	}
 }
 
-/** One headless run — also used by the "Executar agora" button. */
+/** The headless prompt wrapper both run paths share. */
+export function schedulePrompt(schedule: Schedule): string {
+	return (
+		`[Scheduled run] These are the user's standing instructions, executed automatically on a schedule — ` +
+		`they are not present to answer questions, so state assumptions instead of asking. If the ` +
+		`instructions name e-mail recipients, that IS their explicit request to send. Finish with a ` +
+		`concise report of what you did and found.\n\n${schedule.instructions}`
+	);
+}
+
+/**
+ * Everything a headless run needs: owner-budget check (throws when spent),
+ * the user's MCP connections, and the agent (mode 'api', stable
+ * pseudo-conversation id so sandbox workspace files persist across runs).
+ * Caller MUST close mcp when done.
+ */
+export async function buildScheduleAgent(username: string, schedule: Schedule) {
+	const dailyLimit = await resolveDailyLimit(username, undefined);
+	let tokenBudget: number | null = null;
+	if (dailyLimit) {
+		const used = await usageToday(username);
+		if (used >= dailyLimit) throw new Error('daily token limit reached');
+		tokenBudget = dailyLimit - used;
+	}
+
+	const user: AuthUser = {
+		username,
+		displayName: null,
+		credentials: { username }
+	} as AuthUser;
+	const settings = await getUserSettings(username);
+	const mcp = await connectMcpTools(settings.mcpServers.filter((sv) => sv.enabled));
+	const agent = await buildAgent(
+		user,
+		settings,
+		mcp.tools,
+		`sched-${schedule.id}`,
+		await getEffectiveOrgPrompt(),
+		tokenBudget,
+		await resolveModel(username, '', undefined),
+		'api'
+	);
+	return { agent, mcp };
+}
+
+/** Persists one finished run: history entry + owner usage + audit. */
+export async function finishScheduleRun(
+	username: string,
+	schedule: Schedule,
+	run: ScheduleRun,
+	startedMs: number
+): Promise<void> {
+	await appendRun(username, schedule.id, run);
+	await addUsage(username, run.tokens, undefined, { viaApi: true }).catch(() => {});
+	logAudit({
+		actor: username,
+		via: 'session',
+		category: 'chat',
+		action: 'schedule.run',
+		target: schedule.title,
+		status: run.status === 'ok' ? 'ok' : 'error',
+		detail: {
+			scheduleId: schedule.id,
+			tokens: run.tokens,
+			durationMs: Date.now() - startedMs,
+			...(run.error ? { error: run.error } : {})
+		}
+	});
+}
+
+/** One headless run — the sweep path (the run-now endpoint streams instead). */
 export async function executeSchedule(username: string, schedule: Schedule): Promise<ScheduleRun> {
 	const startedAt = new Date().toISOString();
 	const started = Date.now();
@@ -79,46 +149,11 @@ export async function executeSchedule(username: string, schedule: Schedule): Pro
 	let run: ScheduleRun;
 
 	try {
-		// Budget: a scheduled run spends the OWNER's daily tokens.
-		const dailyLimit = await resolveDailyLimit(username, undefined);
-		let tokenBudget: number | null = null;
-		if (dailyLimit) {
-			const used = await usageToday(username);
-			if (used >= dailyLimit) throw new Error('daily token limit reached');
-			tokenBudget = dailyLimit - used;
-		}
-
-		const user: AuthUser = {
-			username,
-			displayName: null,
-			credentials: { username }
-		} as AuthUser;
-		const settings = await getUserSettings(username);
-		const mcp = await connectMcpTools(settings.mcpServers.filter((sv) => sv.enabled));
-
+		const { agent, mcp } = await buildScheduleAgent(username, schedule);
 		try {
-			const agent = await buildAgent(
-				user,
-				settings,
-				mcp.tools,
-				// Stable pseudo-conversation id: sandbox workspace files persist
-				// across this schedule's runs.
-				`sched-${schedule.id}`,
-				await getEffectiveOrgPrompt(),
-				tokenBudget,
-				await resolveModel(username, '', undefined),
-				'api'
-			);
-
-			const prompt =
-				`[Scheduled run] These are the user's standing instructions, executed automatically on a schedule — ` +
-				`they are not present to answer questions, so state assumptions instead of asking. If the ` +
-				`instructions name e-mail recipients, that IS their explicit request to send. Finish with a ` +
-				`concise report of what you did and found.\n\n${schedule.instructions}`;
-
 			const result = await Promise.race([
 				agent.generate({
-					messages: [{ role: 'user' as const, content: prompt }],
+					messages: [{ role: 'user' as const, content: schedulePrompt(schedule) }],
 					onStepFinish: (step: {
 						usage?: Parameters<typeof weightedTokens>[0];
 						toolCalls?: { toolName?: string }[];
@@ -133,7 +168,6 @@ export async function executeSchedule(username: string, schedule: Schedule): Pro
 					setTimeout(() => reject(new Error('run timed out')), RUN_TIMEOUT_MS)
 				)
 			]);
-
 			run = {
 				id: crypto.randomUUID(),
 				startedAt,
@@ -159,21 +193,6 @@ export async function executeSchedule(username: string, schedule: Schedule): Pro
 		};
 	}
 
-	await appendRun(username, schedule.id, run);
-	await addUsage(username, totalTokens, undefined, { viaApi: true }).catch(() => {});
-	logAudit({
-		actor: username,
-		via: 'session',
-		category: 'chat',
-		action: 'schedule.run',
-		target: schedule.title,
-		status: run.status === 'ok' ? 'ok' : 'error',
-		detail: {
-			scheduleId: schedule.id,
-			tokens: run.tokens,
-			durationMs: Date.now() - started,
-			...(run.error ? { error: run.error } : {})
-		}
-	});
+	await finishScheduleRun(username, schedule, run, started);
 	return run;
 }

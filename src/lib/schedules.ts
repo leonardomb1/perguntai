@@ -94,16 +94,3 @@ export async function fetchRuns(id: string): Promise<ScheduleRun[]> {
 	}
 }
 
-/** Fires a run and resolves with it (the server executes synchronously). */
-export async function runNow(id: string): Promise<ScheduleRun | null> {
-	try {
-		const res = await fetch(`/api/schedules/${encodeURIComponent(id)}/runs`, {
-			method: 'POST',
-			headers: headers()
-		});
-		if (!res.ok) return null;
-		return (await res.json()).run ?? null;
-	} catch {
-		return null;
-	}
-}

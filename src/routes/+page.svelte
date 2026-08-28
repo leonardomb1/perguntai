@@ -64,6 +64,21 @@
 	function upsertConversation(meta: ConversationMeta | null) {
 		if (!meta) return;
 		conversations = [meta, ...conversations.filter((c) => c.id !== meta.id)];
+		// The agent can create/delete schedules mid-turn (scheduleReport tool) —
+		// piggyback a throttled refresh on the autosave pulses so the sidebar
+		// picks them up without polling.
+		maybeRefreshSchedules();
+	}
+
+	let lastSchedulesFetch = 0;
+	function maybeRefreshSchedules() {
+		if (!schedulesEnabled) return;
+		const now = Date.now();
+		if (now - lastSchedulesFetch < 5000) return;
+		lastSchedulesFetch = now;
+		fetchSchedules().then((data) => {
+			if (data) schedules = data.schedules;
+		});
 	}
 
 	// One-time migration of pre-server localStorage history, then load the list.
