@@ -587,7 +587,9 @@ export function pdfReportTool(username: string, credentials: { username: string;
 			'#let data = json(bytes(sys.inputs.at("data", default: "[]"))) and build tables from that, ' +
 			'NEVER paste row values into the source. When <pdf_templates> lists a matching template, ' +
 			'pass its name as `template` and write ONLY the document body (no page/text setup — the ' +
-			'template supplies layout and branding). On a compile error, fix the source using the ' +
+			'template supplies layout and branding), and fill `meta` with the fields the template\u2019s ' +
+			'description names (title, author, date, \u2026) — they arrive as sys.inputs strings. ' +
+			'On a compile error, fix the source using the ' +
 			'diagnostics (only the first error is reported — fixing one may reveal the next) and retry. ' +
 			'The user gets a download card and an inline preview.',
 		inputSchema: z.object({
@@ -600,14 +602,27 @@ export function pdfReportTool(username: string, credentials: { username: string;
 			template: z
 				.string()
 				.optional()
-				.describe('Name of an organization PDF template from <pdf_templates>; source is then the BODY only')
+				.describe('Name of an organization PDF template from <pdf_templates>; source is then the BODY only'),
+			meta: z
+				.record(z.string(), z.string())
+				.optional()
+				.describe('Template metadata as flat strings (title, author, date, …) — become sys.inputs')
 		}),
-		execute: async ({ filename, source, dataQuery, template }) => {
+		execute: async ({ filename, source, dataQuery, template, meta }) => {
 			if (!source.trim()) return { error: 'source is empty' };
 			if (source.length > MAX_TYPST_SOURCE) {
 				return { error: `source exceeds ${MAX_TYPST_SOURCE} characters` };
 			}
 			let inputs: Record<string, string> | undefined;
+			if (meta && typeof meta === 'object') {
+				// Bounded flat strings only — metadata for the template's cover and
+				// front matter, never a data channel (dataQuery is that, and wins
+				// the `data` key on collision).
+				inputs = {};
+				for (const [key, value] of Object.entries(meta).slice(0, 30)) {
+					if (typeof value === 'string') inputs[key.slice(0, 60)] = value.slice(0, 4000);
+				}
+			}
 			if (dataQuery?.trim()) {
 				const statement = checkStatement(dataQuery, { allowWrites: false });
 				if (!statement) {
@@ -619,7 +634,7 @@ export function pdfReportTool(username: string, credentials: { username: string;
 					const [result] = await conn.query(statement);
 					if (!Array.isArray(result)) return { error: 'dataQuery returned no row set' };
 					const rows = (jsonSafe(result) as Record<string, unknown>[]).slice(0, 2000);
-					inputs = { data: JSON.stringify(rows) };
+					inputs = { ...inputs, data: JSON.stringify(rows) };
 				} catch (error) {
 					return { error: error instanceof Error ? error.message : 'dataQuery failed' };
 				} finally {
