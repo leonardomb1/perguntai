@@ -6,7 +6,10 @@ import { listRuns, listSchedules, type ScheduleRun } from '$lib/server/schedules
 import {
 	buildScheduleAgent,
 	finishScheduleRun,
-	schedulePrompt
+	schedulePrompt,
+	SCHEDULE_MAX_STEPS,
+	SCHEDULE_RUN_TIMEOUT_MS,
+	TRUNCATION_NOTE
 } from '$lib/server/scheduler';
 import { weightedTokens } from '$lib/server/usage';
 import { withHeartbeat } from '$lib/server/heartbeat';
@@ -39,6 +42,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
 	const startedAt = new Date().toISOString();
 	const startedMs = Date.now();
 	let totalTokens = 0;
+	let stepCount = 0;
 	const toolsUsed = new Set<string>();
 	let finalText = '';
 	let streamError: string | null = null;
@@ -56,7 +60,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
 	// Bounded by its own timer, never by the client connection.
 	const abort = new AbortController();
-	const timeout = setTimeout(() => abort.abort(), 5 * 60_000);
+	const timeout = setTimeout(() => abort.abort(), SCHEDULE_RUN_TIMEOUT_MS);
 
 	return withHeartbeat(
 		await createAgentUIStreamResponse({
@@ -70,6 +74,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
 			],
 			abortSignal: abort.signal,
 			onStepEnd: (event) => {
+				stepCount += 1;
 				totalTokens += weightedTokens(event.usage);
 				const e = event as { toolCalls?: { toolName?: string }[]; text?: string };
 				for (const call of e.toolCalls ?? []) {
@@ -85,7 +90,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
 					startedAt,
 					finishedAt: new Date().toISOString(),
 					status: streamError ? 'error' : 'ok',
-					text: finalText,
+					text: finalText + (stepCount >= SCHEDULE_MAX_STEPS && !streamError ? TRUNCATION_NOTE : ''),
 					tools: [...toolsUsed],
 					tokens: Math.round(totalTokens),
 					...(streamError ? { error: streamError } : {})

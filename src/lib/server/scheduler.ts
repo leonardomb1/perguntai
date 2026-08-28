@@ -28,7 +28,14 @@ const SWEEP_MS = 60_000;
 /** At most this many runs per sweep — a backlog drains over minutes, not at once. */
 const MAX_RUNS_PER_SWEEP = 3;
 /** Hard wall-clock cap per run. */
-const RUN_TIMEOUT_MS = 5 * 60_000;
+export const SCHEDULE_RUN_TIMEOUT_MS = 15 * 60_000;
+/** Step budget for scheduled runs — a full report + PDF + e-mail pipeline
+ *  routinely passes chat's 24. */
+export const SCHEDULE_MAX_STEPS = 60;
+/** Appended to a run's text when a cap cut the loop mid-work — without it the
+ *  history shows a mid-sentence "final" answer and nobody knows why. */
+export const TRUNCATION_NOTE =
+	'\n\n---\n⚠️ *Execução interrompida no limite de passos — o relatório acima está incompleto. Considere dividir as instruções em agendamentos menores.*';
 
 let started = false;
 let sweeping = false;
@@ -109,7 +116,8 @@ export async function buildScheduleAgent(username: string, schedule: Schedule) {
 		await getEffectiveOrgPrompt(),
 		tokenBudget,
 		await resolveModel(username, '', undefined),
-		'api'
+		'api',
+		SCHEDULE_MAX_STEPS
 	);
 	return { agent, mcp };
 }
@@ -165,15 +173,16 @@ export async function executeSchedule(username: string, schedule: Schedule): Pro
 					}
 				}),
 				new Promise<never>((_, reject) =>
-					setTimeout(() => reject(new Error('run timed out')), RUN_TIMEOUT_MS)
+					setTimeout(() => reject(new Error('run timed out')), SCHEDULE_RUN_TIMEOUT_MS)
 				)
 			]);
+			const truncated = (result.steps?.length ?? 0) >= SCHEDULE_MAX_STEPS;
 			run = {
 				id: crypto.randomUUID(),
 				startedAt,
 				finishedAt: new Date().toISOString(),
 				status: 'ok',
-				text: result.text,
+				text: result.text + (truncated ? TRUNCATION_NOTE : ''),
 				tools: [...toolsUsed],
 				tokens: Math.round(totalTokens)
 			};

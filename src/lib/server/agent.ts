@@ -128,7 +128,10 @@ export async function buildAgent(
 	 */
 	model: string = DEFAULT_MODEL,
 	/** 'api' runs strip interactive-only tools (askUser needs a UI to resolve). */
-	mode: 'ui' | 'api' = 'ui'
+	mode: 'ui' | 'api' = 'ui',
+	/** Loop-iteration cap — scheduled runs raise it (full report + PDF + e-mail
+	 *  pipelines legitimately run long); interactive chat keeps the default. */
+	maxSteps = 24
 ) {
 	// Profile from the user's settings: who they are and what to call them.
 	const callName = settings.displayName || settings.fullName || user.displayName || user.username;
@@ -401,7 +404,7 @@ export async function buildAgent(
 		// teens. The token budget below is the guard that actually scales with
 		// cost; this one only stops a pathological loop.
 		stopWhen: [
-			stepCountIs(24),
+			stepCountIs(maxSteps),
 			({ steps }) =>
 				tokenBudget !== null &&
 				steps.reduce((sum, step) => sum + weightedTokens(step.usage), 0) >= tokenBudget
