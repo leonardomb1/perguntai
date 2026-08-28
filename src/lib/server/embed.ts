@@ -10,6 +10,8 @@ import {
 	askUserTool
 } from './tools';
 import { cachedPrepareStep, sortTools } from './agent';
+import { schemaContext } from './schema';
+import { visibleDatabases } from './warehouse-access';
 import { verifyEmbedKey } from './embedKeys';
 import { agentTelemetry } from './telemetry';
 import { weightedTokens } from './usage';
@@ -114,7 +116,7 @@ export async function resolveEmbedAccess(rawKey?: string | null): Promise<EmbedA
  * breakpoints) — embed traffic is exactly the bursty, repeated-prefix shape
  * prompt caching pays off on.
  */
-export function buildEmbedAgent(
+export async function buildEmbedAgent(
 	access: EmbedAccess,
 	orgSystemPrompt: string,
 	tokenBudget: number | null
@@ -122,6 +124,23 @@ export function buildEmbedAgent(
 	const model = access.model;
 	const promptCache = modelPromptCache(model);
 	const thinking = modelThinking(model);
+
+	// The service account is deliberately scoped to a few curated views — put
+	// its ACTUAL catalog in the prompt so the model never suggests topics the
+	// surface cannot answer (tickets, backups, …). Stable per account, so the
+	// cached prefix survives; capped in case an admin scoped it too broadly.
+	let catalog = '';
+	try {
+		catalog = await schemaContext(await visibleDatabases(access.credentials));
+	} catch {
+		/* catalog unavailable — the model falls back to listTables */
+	}
+	const catalogBlock = catalog
+		? `This surface can access ONLY the following tables/views — this list is complete. NEVER mention, suggest, or offer any data, system, or subject outside it: <available_tables>${
+				catalog.length > 5000 ? `${catalog.slice(0, 5000)}
+… (lista truncada — confirme com listTables)` : catalog
+			}</available_tables> `
+		: '';
 
 	return new ToolLoopAgent({
 		model: resolveLanguageModel(model),
@@ -147,7 +166,8 @@ export function buildEmbedAgent(
 				(orgSystemPrompt
 					? `The organization's administrators set these standing instructions: <org_instructions>${orgSystemPrompt}</org_instructions> `
 					: '') +
-				'For any warehouse question, FIRST call listTables to see the available tables/views, THEN getTableSchema for the columns of the ones you’ll query; ' +
+				catalogBlock +
+				'For any warehouse question, call getTableSchema for the columns of the tables you’ll query (the available tables are listed above); ' +
 				'always write database-qualified table names like gold.table_name — there is no default database. ' +
 				'You can only read: never attempt INSERT/UPDATE/DDL, and if asked, say this surface is read-only. ' +
 				'When presenting data: use a markdown table when exact values matter or the result is small; ' +

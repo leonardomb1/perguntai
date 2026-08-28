@@ -87,7 +87,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 
 	return withHeartbeat(
 		await createAgentUIStreamResponse({
-			agent: buildEmbedAgent(access, await getEffectiveOrgPrompt(), access.dailyTokens - used),
+			agent: await buildEmbedAgent(access, await getEffectiveOrgPrompt(), access.dailyTokens - used),
 			uiMessages: messages,
 			abortSignal: request.signal,
 			onStepEnd: (event) => {
