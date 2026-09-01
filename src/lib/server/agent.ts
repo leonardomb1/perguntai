@@ -22,6 +22,7 @@ import {
 import { listMemories } from './memory';
 import { listDocs, sharedManifest } from './rag';
 import { skillsManifest } from './skills';
+import { basaltReference } from './basalt';
 import { listTemplates } from './typstTemplates';
 import { agentTelemetry } from './telemetry';
 import { departmentsForUser, getCapabilities, resolveRole, resolveSqlWrite } from './access';
@@ -256,6 +257,13 @@ export async function buildAgent(
 	const codeExecution = capabilities.codeExecution;
 	const emailReports = capabilities.emailReports;
 	const scheduledRuns = capabilities.scheduledRuns;
+	// Full Basalt SQL dialect reference (env-gated, see server/basalt.ts) —
+	// only when the sandbox actually carries the binary.
+	const basaltDoc = codeExecution ? await basaltReference() : '';
+	const basaltBlock = basaltDoc
+		? `The \`basalt\` CLI in the sandbox speaks its own SQL dialect — this is the COMPLETE language reference; follow it exactly instead of guessing syntax: <basalt_reference>${basaltDoc}</basalt_reference> `
+		: '';
+
 	const codeExecutionGuidance = codeExecution
 		? conversationId
 			? 'This conversation has a PERSISTENT sandbox workspace (Python with pandas/numpy/statsmodels/scikit-learn, plus the `basalt` CLI for columnar SQL over files); its files survive across turns. For statistics, forecasting, or analysis beyond SQL: pull warehouse rows in with sandboxLoadData (read-only SQL under the user\u2019s own permissions — data never passes through you), bring files the user attached to this conversation in with sandboxImportDoc (spreadsheets land as CSV under uploads/), write scripts with sandboxWriteFile, run them with sandboxExec, and iterate with sandboxEditFile passing only the exact span to change (NEVER rewrite a whole file for a small edit). For PDFs, keep report.typ (and its data) in the workspace and call generatePdf with sourcePath + dataPath — compile-error fixes are then small edits, not full re-sends. When you produce a file the user should receive (report, dataset, document), deliver it with sandboxPresentFile — never paste whole files into the chat. Print compact results; return small summaries. '
@@ -345,6 +353,7 @@ export async function buildAgent(
 			'asking in free text; the user clicks one and you continue. ' +
 			sqlWriteGuidance +
 			codeExecutionGuidance +
+			basaltBlock +
 			webSearchGuidance +
 			memoryGuidance +
 			skillGuidance +
