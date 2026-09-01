@@ -120,3 +120,7 @@ Requirements: the admin toggle in Capacidades, and `/dev/kvm` access for the app
 | `npm run check` | svelte-check + TypeScript |
 | `npm run sync-schema` | regenerate `schema.json` from StarRocks |
 | `npm run lint` / `npm run format` | prettier |
+
+## License
+
+[AGPL-3.0](LICENSE). Run it, self-host it, modify it freely; if you offer a modified version to others over a network, you must make your modified source available under the same license.
