@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 	&& pip install --no-cache-dir --only-binary=:all: pandas numpy statsmodels scikit-learn
 
 # basalt — single static binary, no dependencies. Pinned + checksum-verified.
-ARG BASALT_VERSION=v0.6.4
+ARG BASALT_VERSION=v0.6.5
 ADD https://github.com/leonardomb1/basalt/releases/download/${BASALT_VERSION}/basalt-x86_64-linux /usr/local/bin/basalt
 ADD https://github.com/leonardomb1/basalt/releases/download/${BASALT_VERSION}/basalt-x86_64-linux.sha256 /tmp/basalt.sha256
 RUN cd /usr/local/bin \
