@@ -1,4 +1,4 @@
-import { getToken } from '$lib/session';
+import { authFetch, getToken } from '$lib/session';
 
 /**
  * Client for /api/settings. MCP tokens are write-only from the browser's
@@ -47,7 +47,7 @@ function headers(): Record<string, string> {
 
 export async function fetchSettings(): Promise<PublicSettings | null> {
 	try {
-		const res = await fetch('/api/settings', { headers: headers() });
+		const res = await authFetch('/api/settings', { headers: headers() });
 		if (!res.ok) return null;
 		return await res.json();
 	} catch {
@@ -57,7 +57,7 @@ export async function fetchSettings(): Promise<PublicSettings | null> {
 
 export async function saveSettings(patch: SettingsPatch): Promise<PublicSettings | null> {
 	try {
-		const res = await fetch('/api/settings', {
+		const res = await authFetch('/api/settings', {
 			method: 'PUT',
 			headers: headers(),
 			body: JSON.stringify(patch)

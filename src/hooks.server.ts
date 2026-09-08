@@ -5,6 +5,8 @@ import { env } from '$env/dynamic/private';
 import type { Handle } from '@sveltejs/kit';
 import { getTextDirection } from '$lib/paraglide/runtime';
 import { getCapabilities } from '$lib/server/access';
+import { maybeSlideToken } from '$lib/server/auth';
+import { looksLikeApiKey } from '$lib/server/apiKeys';
 import { warmSandbox } from '$lib/server/sandbox';
 import { embedConfig } from '$lib/server/embed';
 import { startScheduler } from '$lib/server/scheduler';
@@ -81,5 +83,26 @@ const handleEmbedFraming: Handle = async ({ event, resolve }) => {
 	return response;
 };
 
-export const handle: Handle = sequence(Sentry.sentryHandle(), handleParaglide, handleEmbedFraming);
+// Sliding sessions: any API request bearing a session token past half-life
+// gets a re-minted replacement in this header; the client's authFetch stores
+// it. API keys never slide — they have their own lifecycle.
+const handleSessionSlide: Handle = async ({ event, resolve }) => {
+	const response = await resolve(event);
+	const header = event.request.headers.get('authorization');
+	if (header?.startsWith('Bearer ')) {
+		const presented = header.slice('Bearer '.length);
+		if (presented && !looksLikeApiKey(presented)) {
+			const fresh = await maybeSlideToken(presented);
+			if (fresh) response.headers.set('x-session-token', fresh);
+		}
+	}
+	return response;
+};
+
+export const handle: Handle = sequence(
+	Sentry.sentryHandle(),
+	handleParaglide,
+	handleSessionSlide,
+	handleEmbedFraming
+);
 export const handleError = Sentry.handleErrorWithSentry();

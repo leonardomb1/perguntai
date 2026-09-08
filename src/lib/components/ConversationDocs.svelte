@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken } from '$lib/session';
+	import { authFetch, getToken } from '$lib/session';
 	import Icon from './Icon.svelte';
 
 	interface DocMeta {
@@ -23,7 +23,7 @@
 
 	async function refresh() {
 		try {
-			const res = await fetch(`/api/documents?conversation=${encodeURIComponent(conversationId)}`, {
+			const res = await authFetch(`/api/documents?conversation=${encodeURIComponent(conversationId)}`, {
 				headers: authHeaders()
 			});
 			if (res.ok) docs = (await res.json()).documents;
@@ -41,7 +41,7 @@
 	});
 
 	async function remove(id: string) {
-		await fetch(`/api/documents?id=${encodeURIComponent(id)}`, {
+		await authFetch(`/api/documents?id=${encodeURIComponent(id)}`, {
 			method: 'DELETE',
 			headers: authHeaders()
 		});

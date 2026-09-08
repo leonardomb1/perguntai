@@ -2,11 +2,20 @@ import { EncryptJWT, jwtDecrypt } from 'jose';
 import { createHash } from 'node:crypto';
 import { env } from '$env/dynamic/private';
 import { isEnvAdmin, isUserAllowed, resolveRole } from './access';
+import { isSessionRevoked } from './logoutDenylist';
 import { looksLikeApiKey, resolveKeyOwner } from './apiKeys';
 
 export { isUserAllowed };
 
 const TOKEN_TTL = '24h';
+/** A token older than this gets re-minted on its next use (see maybeSlideToken). */
+const SLIDE_AFTER_MS = 12 * 60 * 60 * 1000;
+/**
+ * Absolute cap on a sliding session. Sliding re-encrypts the claims captured at
+ * sign-in, so directory changes (groups, title) only land on a fresh login —
+ * the cap bounds how stale those claims can get for an always-active user.
+ */
+const MAX_SESSION_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * The bearer token is an ENCRYPTED JWT (JWE, A256GCM), not a plain signed one.
@@ -65,6 +74,10 @@ export interface AuthUser {
 	/** Server/bootstrap admin (in the ADMIN_USERS env — the "SERVIDOR" badge).
 	 *  Cannot be blocked or demoted. Also resolved live. */
 	isPlatformAdmin?: boolean;
+	/** IdP identifiers captured at an SSO sign-in, matched by the back-channel
+	 *  logout denylist. Absent on LDAP sessions and legacy tokens. */
+	oidcSub?: string;
+	sid?: string;
 }
 
 /**
@@ -157,14 +170,78 @@ export async function sessionFromClaims(
 	};
 
 	const credentials = options.password ? { username, password: options.password } : { username };
-	const token = await new EncryptJWT({ displayName, credentials, profile })
+	// Only an SSO session carries IdP identifiers: back-channel logout events
+	// name the IdP's sub/sid, and an LDAP session never had either.
+	const sso = !options.password;
+	const token = await mintToken({
+		sub: username,
+		displayName,
+		credentials,
+		profile,
+		sessionStart: Math.floor(Date.now() / 1000),
+		oidcSub: sso ? claims.sub : undefined,
+		sid: sso && typeof claims.sid === 'string' ? claims.sid : undefined
+	});
+
+	return { token, username, displayName, profile };
+}
+
+interface TokenPayload {
+	sub: string;
+	displayName: string | null;
+	credentials: AuthUser['credentials'];
+	profile: UserProfile;
+	/** Epoch seconds of the original sign-in; survives every slide. */
+	sessionStart: number;
+	oidcSub?: string;
+	sid?: string;
+}
+
+async function mintToken(p: TokenPayload): Promise<string> {
+	return new EncryptJWT({
+		displayName: p.displayName,
+		credentials: p.credentials,
+		profile: p.profile,
+		sessionStart: p.sessionStart,
+		...(p.oidcSub ? { oidcSub: p.oidcSub } : {}),
+		...(p.sid ? { sid: p.sid } : {})
+	})
 		.setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
-		.setSubject(username)
+		.setSubject(p.sub)
 		.setIssuedAt()
 		.setExpirationTime(TOKEN_TTL)
 		.encrypt(key());
+}
 
-	return { token, username, displayName, profile };
+/**
+ * Sliding sessions: a valid token past half-life is re-minted with the same
+ * claims, so active users never expire mid-day while idle sessions still die
+ * at TOKEN_TTL. Bounded by MAX_SESSION_MS from the original sign-in — after
+ * that the token runs out its remaining life and the user logs in again,
+ * which is also what refreshes directory claims. Access is NOT re-checked
+ * here: every request already does that live in authenticateRequest, so a
+ * blocked user's slid token is still a locked door.
+ */
+export async function maybeSlideToken(token: string): Promise<string | null> {
+	try {
+		const { payload } = await jwtDecrypt(token, key());
+		if (!payload.sub || !payload.iat) return null;
+		const now = Date.now();
+		const sessionStart = typeof payload.sessionStart === 'number' ? payload.sessionStart : payload.iat;
+		if (now - payload.iat * 1000 < SLIDE_AFTER_MS) return null;
+		if (now - sessionStart * 1000 > MAX_SESSION_MS) return null;
+		return await mintToken({
+			sub: payload.sub,
+			displayName: (payload.displayName as string | null) ?? null,
+			credentials: payload.credentials as AuthUser['credentials'],
+			profile: payload.profile as UserProfile,
+			sessionStart,
+			oidcSub: typeof payload.oidcSub === 'string' ? payload.oidcSub : undefined,
+			sid: typeof payload.sid === 'string' ? payload.sid : undefined
+		});
+	} catch {
+		return null;
+	}
 }
 
 /** Decrypts and validates a bearer token, returning the authenticated user or null. */
@@ -178,6 +255,8 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
 			username: payload.sub,
 			displayName: (payload.displayName as string | null) ?? null,
 			credentials,
+			oidcSub: typeof payload.oidcSub === 'string' ? payload.oidcSub : undefined,
+			sid: typeof payload.sid === 'string' ? payload.sid : undefined,
 			// Tokens minted before `claims` existed still verify; they just carry none.
 			profile: profile
 				? {
@@ -239,6 +318,9 @@ export async function authenticateRequest(request: Request): Promise<AuthUser | 
 	// user in the admin panel locks them out on their next request, even
 	// though their stateless token is still cryptographically valid.
 	if (user && !(await isUserAllowed(user.username, user.profile))) return null;
+	// Same live pattern for OIDC back-channel logout: a session whose IdP
+	// sub/sid was revoked dies on its next request, sliding or not.
+	if (user && (await isSessionRevoked(user.oidcSub, user.sid))) return null;
 	// Least privilege: a 'chat'-scoped key is data-plane only — the OpenAI-compat
 	// surface, the app's chat endpoint, and the model catalog. Everything else
 	// (conversations, settings, documents, admin) needs a 'full' key or a session.

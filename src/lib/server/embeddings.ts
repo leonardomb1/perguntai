@@ -24,6 +24,18 @@ export function embeddingsModel(): string {
 	return env.EMBEDDINGS_MODEL || 'text-embedding-3-small';
 }
 
+/**
+ * Optional requested output size (Matryoshka truncation). Sent as OpenAI's
+ * `dimensions` — or Voyage's `output_dimension` when the base URL is Voyage —
+ * so the same env works across providers. Unset = the model's native size.
+ * (The JSON store is dimension-agnostic; this exists to keep both apps on one
+ * vector size when that is wanted.)
+ */
+function requestedDimensions(): number | null {
+	const n = Number(env.EMBEDDINGS_DIMENSIONS);
+	return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 function timeoutMs(): number {
 	const n = Number(env.EMBEDDINGS_TIMEOUT_MS || 30_000);
 	return Number.isFinite(n) && n > 0 ? n : 30_000;
@@ -74,7 +86,15 @@ async function requestEmbeddings(inputs: string[]): Promise<Float32Array[]> {
 				// Both header styles: Azure wants api-key, everyone else a bearer.
 				...(key ? { authorization: `Bearer ${key}`, 'api-key': key } : {})
 			},
-			body: JSON.stringify({ model: embeddingsModel(), input: inputs }),
+			body: JSON.stringify({
+				model: embeddingsModel(),
+				input: inputs,
+				...(requestedDimensions()
+					? base.includes('voyageai')
+						? { output_dimension: requestedDimensions() }
+						: { dimensions: requestedDimensions() }
+					: {})
+			}),
 			signal: AbortSignal.timeout(timeoutMs())
 		});
 		// Azure S0 quotas throttle a large document mid-way as a matter of course;

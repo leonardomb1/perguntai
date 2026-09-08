@@ -1,4 +1,4 @@
-import { getToken } from '$lib/session';
+import { authFetch, getToken } from '$lib/session';
 
 /** Client for /api/schedules — the user's own Programado entries. */
 
@@ -48,7 +48,7 @@ export async function fetchSchedules(): Promise<{
 	schedules: UserSchedule[];
 } | null> {
 	try {
-		const res = await fetch('/api/schedules', { headers: headers() });
+		const res = await authFetch('/api/schedules', { headers: headers() });
 		if (!res.ok) return null;
 		const data = await res.json();
 		return { enabled: data.enabled === true, schedules: data.schedules ?? [] };
@@ -59,7 +59,7 @@ export async function fetchSchedules(): Promise<{
 
 export async function saveSchedule(input: ScheduleInput): Promise<UserSchedule | null> {
 	try {
-		const res = await fetch('/api/schedules', {
+		const res = await authFetch('/api/schedules', {
 			method: 'POST',
 			headers: headers(),
 			body: JSON.stringify(input)
@@ -73,7 +73,7 @@ export async function saveSchedule(input: ScheduleInput): Promise<UserSchedule |
 
 export async function deleteSchedule(id: string): Promise<boolean> {
 	try {
-		const res = await fetch(`/api/schedules?id=${encodeURIComponent(id)}`, {
+		const res = await authFetch(`/api/schedules?id=${encodeURIComponent(id)}`, {
 			method: 'DELETE',
 			headers: headers()
 		});
@@ -85,7 +85,7 @@ export async function deleteSchedule(id: string): Promise<boolean> {
 
 export async function fetchRuns(id: string): Promise<ScheduleRun[]> {
 	try {
-		const res = await fetch(`/api/schedules/${encodeURIComponent(id)}/runs`, {
+		const res = await authFetch(`/api/schedules/${encodeURIComponent(id)}/runs`, {
 			headers: headers()
 		});
 		if (!res.ok) return [];
@@ -98,7 +98,7 @@ export async function fetchRuns(id: string): Promise<ScheduleRun[]> {
 /** Starts a run; the server returns its pointer immediately (202). */
 export async function runNow(id: string): Promise<ScheduleRun | null> {
 	try {
-		const res = await fetch(`/api/schedules/${encodeURIComponent(id)}/runs`, {
+		const res = await authFetch(`/api/schedules/${encodeURIComponent(id)}/runs`, {
 			method: 'POST',
 			headers: headers()
 		});

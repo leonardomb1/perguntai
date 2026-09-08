@@ -11,7 +11,7 @@
 	import { browser } from '$app/environment';
 	import MemoryManager from './MemoryManager.svelte';
 	import SkillManager from './SkillManager.svelte';
-	import { getToken } from '$lib/session';
+	import { authFetch, getToken } from '$lib/session';
 	import { copyText } from '$lib/clipboard';
 	import {
 		createKey,
@@ -177,7 +177,7 @@
 	async function testConnector(key: string, body: Record<string, unknown>) {
 		tests[key] = { busy: true };
 		try {
-			const res = await fetch('/api/settings/mcp-test', {
+			const res = await authFetch('/api/settings/mcp-test', {
 				method: 'POST',
 				headers: { Authorization: `Bearer ${getToken() ?? ''}`, 'Content-Type': 'application/json' },
 				body: JSON.stringify(body)

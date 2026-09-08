@@ -24,7 +24,7 @@
 	import { newId } from '$lib/id';
 	import { EMPTY_MATCH } from '$lib/dept-rules';
 	import type { ModelOption } from '$lib/models';
-	import { getToken } from '$lib/session';
+	import { authFetch, getToken } from '$lib/session';
 	import { providerLogo } from '$lib/providers';
 	import { clickOutside } from '$lib/actions/clickOutside';
 	import { placeMenu } from '$lib/floating';
@@ -180,7 +180,7 @@
 			}
 		}
 		try {
-			const res = await fetch('/api/models', {
+			const res = await authFetch('/api/models', {
 				headers: { Authorization: `Bearer ${getToken() ?? ''}` }
 			});
 			if (res.ok) {

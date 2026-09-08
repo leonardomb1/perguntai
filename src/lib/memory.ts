@@ -1,4 +1,4 @@
-import { getToken } from '$lib/session';
+import { authFetch, getToken } from '$lib/session';
 
 /** Client for /api/memory — the user's own personal memory (topics). */
 
@@ -26,7 +26,7 @@ function headers(): Record<string, string> {
 
 export async function listMemories(): Promise<UserMemory[]> {
 	try {
-		const res = await fetch('/api/memory', { headers: headers() });
+		const res = await authFetch('/api/memory', { headers: headers() });
 		if (!res.ok) return [];
 		return (await res.json()).memories ?? [];
 	} catch {
@@ -36,7 +36,7 @@ export async function listMemories(): Promise<UserMemory[]> {
 
 /** Create (no id) or update (id given) a topic. */
 export async function saveMemory(input: MemoryInput): Promise<UserMemory | null> {
-	const res = await fetch('/api/memory', {
+	const res = await authFetch('/api/memory', {
 		method: 'POST',
 		headers: headers(),
 		body: JSON.stringify(input)
@@ -46,7 +46,7 @@ export async function saveMemory(input: MemoryInput): Promise<UserMemory | null>
 }
 
 export async function removeMemory(id: string): Promise<boolean> {
-	const res = await fetch(`/api/memory?id=${encodeURIComponent(id)}`, {
+	const res = await authFetch(`/api/memory?id=${encodeURIComponent(id)}`, {
 		method: 'DELETE',
 		headers: headers()
 	});
@@ -54,6 +54,6 @@ export async function removeMemory(id: string): Promise<boolean> {
 }
 
 export async function clearMemories(): Promise<boolean> {
-	const res = await fetch('/api/memory?all=1', { method: 'DELETE', headers: headers() });
+	const res = await authFetch('/api/memory?all=1', { method: 'DELETE', headers: headers() });
 	return res.ok;
 }

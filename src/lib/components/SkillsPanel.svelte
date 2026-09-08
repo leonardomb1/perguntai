@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken } from '$lib/session';
+	import { authFetch, getToken } from '$lib/session';
 	import Icon from './Icon.svelte';
 	import HelpTip from './HelpTip.svelte';
 	import Markdown from './Markdown.svelte';
@@ -40,7 +40,7 @@
 
 	async function refresh() {
 		try {
-			const res = await fetch('/api/admin/skills', { headers: headers() });
+			const res = await authFetch('/api/admin/skills', { headers: headers() });
 			if (!res.ok) return;
 			const data = (await res.json()) as {
 				org: SharedSkill[];
@@ -63,7 +63,7 @@
 
 	async function setEnabled(row: Row, enabled: boolean) {
 		busyId = row.skill.id;
-		await fetch('/api/admin/skills', {
+		await authFetch('/api/admin/skills', {
 			method: 'PATCH',
 			headers: headers(),
 			body: JSON.stringify({ scope: row.scope, id: row.skill.id, enabled })
@@ -74,7 +74,7 @@
 
 	async function remove(row: Row) {
 		busyId = row.skill.id;
-		await fetch(
+		await authFetch(
 			`/api/admin/skills?scope=${encodeURIComponent(row.scope)}&id=${encodeURIComponent(row.skill.id)}`,
 			{ method: 'DELETE', headers: headers() }
 		).catch(() => {});

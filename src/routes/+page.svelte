@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import { flip } from 'svelte/animate';
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import ChatPane from '$lib/components/ChatPane.svelte';
@@ -13,7 +14,7 @@
 	import ConversationDocs from '$lib/components/ConversationDocs.svelte';
 	import SettingsModal from '$lib/components/SettingsModal.svelte';
 	import OnboardingModal from '$lib/components/OnboardingModal.svelte';
-	import { getDisplayName, getToken, clearSession, hasSession } from '$lib/session';
+	import { authFetch, getDisplayName, getToken, clearSession, hasSession } from '$lib/session';
 	import { fetchSettings, type PublicSettings } from '$lib/settings';
 	import { newId } from '$lib/id';
 	import type { UIMessage } from 'ai';
@@ -26,9 +27,13 @@
 		type ConversationMeta
 	} from '$lib/history';
 
-	// Redirect straight to login when no session is stored.
+	// Redirect straight to login when no session is stored; probe the server
+	// once for a stored-but-expired token (authFetch redirects on the 401).
 	$effect(() => {
 		if (browser && !hasSession()) goto('/login');
+	});
+	onMount(() => {
+		if (hasSession()) void authFetch('/api/me');
 	});
 
 	let conversations = $state<ConversationMeta[]>([]);

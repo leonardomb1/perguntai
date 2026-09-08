@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken } from '$lib/session';
+	import { authFetch, getToken } from '$lib/session';
 	import Icon from './Icon.svelte';
 	import HelpTip from './HelpTip.svelte';
 
@@ -40,7 +40,7 @@
 	});
 
 	async function refresh() {
-		const res = await fetch('/api/admin/typst-templates', { headers: headers() }).catch(() => null);
+		const res = await authFetch('/api/admin/typst-templates', { headers: headers() }).catch(() => null);
 		templates = res?.ok ? ((await res.json()).templates ?? []) : [];
 	}
 	void refresh();
@@ -90,7 +90,7 @@
 		previewing = true;
 		previewError = null;
 		try {
-			const res = await fetch('/api/admin/typst-templates', {
+			const res = await authFetch('/api/admin/typst-templates', {
 				method: 'POST',
 				headers: headers(),
 				body: JSON.stringify({ preview: true, source: draft.source })
@@ -112,7 +112,7 @@
 		if (busy || !draft.name.trim() || !draft.source.trim()) return;
 		busy = true;
 		saveError = null;
-		const res = await fetch('/api/admin/typst-templates', {
+		const res = await authFetch('/api/admin/typst-templates', {
 			method: 'POST',
 			headers: headers(),
 			body: JSON.stringify({
@@ -134,7 +134,7 @@
 	}
 
 	async function toggle(t: Template) {
-		await fetch('/api/admin/typst-templates', {
+		await authFetch('/api/admin/typst-templates', {
 			method: 'POST',
 			headers: headers(),
 			body: JSON.stringify({ id: t.id, enabled: !t.enabled })
@@ -144,7 +144,7 @@
 
 	async function remove(t: Template) {
 		if (!confirm(m.pdft_delete_confirm())) return;
-		await fetch(`/api/admin/typst-templates?id=${encodeURIComponent(t.id)}`, {
+		await authFetch(`/api/admin/typst-templates?id=${encodeURIComponent(t.id)}`, {
 			method: 'DELETE',
 			headers: headers()
 		}).catch(() => null);

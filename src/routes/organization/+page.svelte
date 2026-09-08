@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import Icon from '$lib/components/Icon.svelte';
@@ -11,7 +12,7 @@
 	import SecurityPanel from '$lib/components/SecurityPanel.svelte';
 	import SkillsPanel from '$lib/components/SkillsPanel.svelte';
 	import TypstTemplatesPanel from '$lib/components/TypstTemplatesPanel.svelte';
-	import { hasSession } from '$lib/session';
+	import { authFetch, hasSession } from '$lib/session';
 	import { fetchSettings } from '$lib/settings';
 	import { copyText } from '$lib/clipboard';
 	import { newId } from '$lib/id';
@@ -37,8 +38,12 @@
 
 	// Redirect to login without a session; bounce non-admins to chat. The
 	// /api/admin/org routes enforce the admin role again on every request.
+	// The /api/me probe catches a stored-but-expired token on load.
 	$effect(() => {
 		if (browser && !hasSession()) goto('/login');
+	});
+	onMount(() => {
+		if (hasSession()) void authFetch('/api/me');
 	});
 	$effect(() => {
 		if (!browser || !hasSession()) return;

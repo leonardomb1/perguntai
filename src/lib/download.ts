@@ -1,4 +1,4 @@
-import { getToken } from '$lib/session';
+import { authFetch, getToken } from '$lib/session';
 import { m } from '$lib/paraglide/messages.js';
 
 /**
@@ -7,7 +7,7 @@ import { m } from '$lib/paraglide/messages.js';
  */
 async function fetchAuthed(url: string): Promise<{ blob?: Blob; error?: string }> {
 	try {
-		const res = await fetch(url, { headers: { Authorization: `Bearer ${getToken() ?? ''}` } });
+		const res = await authFetch(url, { headers: { Authorization: `Bearer ${getToken() ?? ''}` } });
 		if (!res.ok) {
 			const data = await res.json().catch(() => ({}));
 			return { error: data.error ?? `${m.download_failed()} (${res.status})` };

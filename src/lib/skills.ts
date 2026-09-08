@@ -1,4 +1,4 @@
-import { getToken } from '$lib/session';
+import { authFetch, getToken } from '$lib/session';
 
 /** Client for /api/skills — the user's own learned skills (playbooks). */
 
@@ -30,7 +30,7 @@ function headers(): Record<string, string> {
 
 export async function listSkills(): Promise<UserSkill[]> {
 	try {
-		const res = await fetch('/api/skills', { headers: headers() });
+		const res = await authFetch('/api/skills', { headers: headers() });
 		if (!res.ok) return [];
 		return (await res.json()).skills ?? [];
 	} catch {
@@ -40,7 +40,7 @@ export async function listSkills(): Promise<UserSkill[]> {
 
 /** Create (no id) or update (id given) a skill. */
 export async function saveSkill(input: SkillInput): Promise<UserSkill | null> {
-	const res = await fetch('/api/skills', {
+	const res = await authFetch('/api/skills', {
 		method: 'POST',
 		headers: headers(),
 		body: JSON.stringify(input)
@@ -50,7 +50,7 @@ export async function saveSkill(input: SkillInput): Promise<UserSkill | null> {
 }
 
 export async function removeSkill(id: string): Promise<boolean> {
-	const res = await fetch(`/api/skills?id=${encodeURIComponent(id)}`, {
+	const res = await authFetch(`/api/skills?id=${encodeURIComponent(id)}`, {
 		method: 'DELETE',
 		headers: headers()
 	});
@@ -60,7 +60,7 @@ export async function removeSkill(id: string): Promise<boolean> {
 /** Departments the current user matches — valid share targets besides 'org'. */
 export async function listShareScopes(): Promise<{ id: string; name: string }[]> {
 	try {
-		const res = await fetch('/api/skills/propose', { headers: headers() });
+		const res = await authFetch('/api/skills/propose', { headers: headers() });
 		if (!res.ok) return [];
 		return (await res.json()).departments ?? [];
 	} catch {
@@ -74,7 +74,7 @@ export async function proposeSkillTo(
 	scope: string
 ): Promise<'ok' | 'duplicate' | 'error'> {
 	try {
-		const res = await fetch('/api/skills/propose', {
+		const res = await authFetch('/api/skills/propose', {
 			method: 'POST',
 			headers: headers(),
 			body: JSON.stringify({ id, scope })

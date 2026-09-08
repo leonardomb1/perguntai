@@ -1,4 +1,4 @@
-import { getToken } from '$lib/session';
+import { authFetch, getToken } from '$lib/session';
 import { matchesDept, type DeptMatch, type ProfileClaims } from './dept-rules';
 
 /** Client for the admin endpoints (server enforces the admin role again). */
@@ -65,7 +65,7 @@ export interface SharedDoc {
 
 export async function listOrgDocuments(scope: string): Promise<SharedDoc[]> {
 	try {
-		const res = await fetch(`/api/admin/org/documents?scope=${encodeURIComponent(scope)}`, {
+		const res = await authFetch(`/api/admin/org/documents?scope=${encodeURIComponent(scope)}`, {
 			headers: authHeader()
 		});
 		if (!res.ok) return [];
@@ -85,7 +85,7 @@ export async function uploadOrgDocument(
 	body.append('file', file);
 	if (description.trim()) body.append('description', description.trim());
 	try {
-		const res = await fetch('/api/admin/org/documents', { method: 'POST', headers: authHeader(), body });
+		const res = await authFetch('/api/admin/org/documents', { method: 'POST', headers: authHeader(), body });
 		const data = await res.json().catch(() => ({}));
 		if (!res.ok) return { ok: false, error: data.error ?? `HTTP ${res.status}` };
 		return { ok: true, doc: data };
@@ -95,7 +95,7 @@ export async function uploadOrgDocument(
 }
 
 export async function removeOrgDocument(scope: string, id: string): Promise<boolean> {
-	const res = await fetch(
+	const res = await authFetch(
 		`/api/admin/org/documents?scope=${encodeURIComponent(scope)}&id=${encodeURIComponent(id)}`,
 		{ method: 'DELETE', headers: authHeader() }
 	);
@@ -124,7 +124,7 @@ export async function listUsers(): Promise<{
 	you: CallerProfile;
 } | null> {
 	try {
-		const res = await fetch('/api/admin/users', { headers: headers() });
+		const res = await authFetch('/api/admin/users', { headers: headers() });
 		if (!res.ok) return null;
 		const data = await res.json();
 		return {
@@ -144,7 +144,7 @@ export async function listUsers(): Promise<{
 /** Replace the access-policy list; returns the sanitized list or null on failure. */
 export async function savePolicies(policies: AccessPolicy[]): Promise<AccessPolicy[] | null> {
 	try {
-		const res = await fetch('/api/admin/users', {
+		const res = await authFetch('/api/admin/users', {
 			method: 'PUT',
 			headers: headers(),
 			body: JSON.stringify({ policies })
@@ -157,7 +157,7 @@ export async function savePolicies(policies: AccessPolicy[]): Promise<AccessPoli
 }
 
 export async function addUser(username: string, role: 'admin' | 'user' = 'user'): Promise<string | null> {
-	const res = await fetch('/api/admin/users', {
+	const res = await authFetch('/api/admin/users', {
 		method: 'POST',
 		headers: headers(),
 		body: JSON.stringify({ username, role })
@@ -176,7 +176,7 @@ export async function patchUser(
 		sqlWrite?: boolean;
 	}
 ): Promise<string | null> {
-	const res = await fetch('/api/admin/users', {
+	const res = await authFetch('/api/admin/users', {
 		method: 'PATCH',
 		headers: headers(),
 		body: JSON.stringify({ username, ...patch })
@@ -186,7 +186,7 @@ export async function patchUser(
 }
 
 export async function removeUser(username: string): Promise<string | null> {
-	const res = await fetch(`/api/admin/users?username=${encodeURIComponent(username)}`, {
+	const res = await authFetch(`/api/admin/users?username=${encodeURIComponent(username)}`, {
 		method: 'DELETE',
 		headers: headers()
 	});
@@ -222,7 +222,7 @@ export async function fetchCapabilities(): Promise<{
 	email: EmailInfo;
 } | null> {
 	try {
-		const res = await fetch('/api/admin/capabilities', { headers: headers() });
+		const res = await authFetch('/api/admin/capabilities', { headers: headers() });
 		if (!res.ok) return null;
 		const data = await res.json();
 		return data.capabilities
@@ -235,7 +235,7 @@ export async function fetchCapabilities(): Promise<{
 
 export async function saveCapabilities(patch: Partial<Capabilities>): Promise<Capabilities | null> {
 	try {
-		const res = await fetch('/api/admin/capabilities', {
+		const res = await authFetch('/api/admin/capabilities', {
 			method: 'PATCH',
 			headers: headers(),
 			body: JSON.stringify(patch)
@@ -251,7 +251,7 @@ export async function testCodeExecution(): Promise<
 	{ ok: true; latencyMs: number; backend: string } | { ok: false; error: string }
 > {
 	try {
-		const res = await fetch('/api/admin/capabilities', { method: 'POST', headers: headers() });
+		const res = await authFetch('/api/admin/capabilities', { method: 'POST', headers: headers() });
 		return await res.json();
 	} catch {
 		return { ok: false, error: 'network' };
@@ -285,7 +285,7 @@ export async function fetchAudit(opts: {
 	if (opts.actor) params.set('actor', opts.actor);
 	if (opts.limit) params.set('limit', String(opts.limit));
 	try {
-		const res = await fetch(`/api/admin/audit?${params}`, { headers: headers() });
+		const res = await authFetch(`/api/admin/audit?${params}`, { headers: headers() });
 		if (!res.ok) return [];
 		return (await res.json()).events ?? [];
 	} catch {
@@ -309,7 +309,7 @@ export interface AdminKeyOwner {
 
 export async function fetchAllKeys(): Promise<AdminKeyOwner[]> {
 	try {
-		const res = await fetch('/api/admin/keys', { headers: headers() });
+		const res = await authFetch('/api/admin/keys', { headers: headers() });
 		if (!res.ok) return [];
 		return (await res.json()).owners ?? [];
 	} catch {
@@ -318,7 +318,7 @@ export async function fetchAllKeys(): Promise<AdminKeyOwner[]> {
 }
 
 export async function adminRevokeKey(username: string, id: string): Promise<boolean> {
-	const res = await fetch(
+	const res = await authFetch(
 		`/api/admin/keys?username=${encodeURIComponent(username)}&id=${encodeURIComponent(id)}`,
 		{ method: 'DELETE', headers: headers() }
 	);
@@ -332,7 +332,7 @@ export interface ConnectorUser {
 
 export async function fetchConnectors(): Promise<ConnectorUser[]> {
 	try {
-		const res = await fetch('/api/admin/connectors', { headers: headers() });
+		const res = await authFetch('/api/admin/connectors', { headers: headers() });
 		if (!res.ok) return [];
 		return (await res.json()).users ?? [];
 	} catch {
@@ -375,7 +375,7 @@ export interface OrgConfig {
 
 export async function getOrg(): Promise<OrgConfig | null> {
 	try {
-		const res = await fetch('/api/admin/org', { headers: headers() });
+		const res = await authFetch('/api/admin/org', { headers: headers() });
 		if (!res.ok) return null;
 		const data = await res.json();
 		return {
@@ -393,7 +393,7 @@ export async function getOrg(): Promise<OrgConfig | null> {
 export async function saveOrg(
 	payload: Partial<Pick<OrgConfig, 'orgSystemPrompt' | 'orgKnowledge' | 'departments'>>
 ): Promise<Pick<OrgConfig, 'orgSystemPrompt' | 'orgKnowledge' | 'departments'> | null> {
-	const res = await fetch('/api/admin/org', {
+	const res = await authFetch('/api/admin/org', {
 		method: 'PUT',
 		headers: headers(),
 		body: JSON.stringify(payload)
@@ -464,7 +464,7 @@ export interface PublicEmbedKey {
 
 export async function listEmbedKeys(): Promise<PublicEmbedKey[] | null> {
 	try {
-		const res = await fetch('/api/admin/embed-keys', { headers: headers() });
+		const res = await authFetch('/api/admin/embed-keys', { headers: headers() });
 		if (!res.ok) return null;
 		return (await res.json()).keys ?? [];
 	} catch {
@@ -479,7 +479,7 @@ export async function createEmbedKey(input: {
 	allowedOrigins?: string;
 }): Promise<{ key: string; record: PublicEmbedKey } | null> {
 	try {
-		const res = await fetch('/api/admin/embed-keys', {
+		const res = await authFetch('/api/admin/embed-keys', {
 			method: 'POST',
 			headers: headers(),
 			body: JSON.stringify(input)
@@ -493,7 +493,7 @@ export async function createEmbedKey(input: {
 
 export async function revokeEmbedKey(id: string): Promise<boolean> {
 	try {
-		const res = await fetch(`/api/admin/embed-keys?id=${encodeURIComponent(id)}`, {
+		const res = await authFetch(`/api/admin/embed-keys?id=${encodeURIComponent(id)}`, {
 			method: 'DELETE',
 			headers: headers()
 		});

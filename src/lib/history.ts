@@ -1,6 +1,6 @@
 import { browser } from '$app/environment';
 import type { UIMessage } from 'ai';
-import { getToken } from '$lib/session';
+import { authFetch, getToken } from '$lib/session';
 
 /**
  * Conversation history client — conversations live SERVER-SIDE (per user,
@@ -24,7 +24,7 @@ function headers(json = false): Record<string, string> {
 
 export async function listConversations(): Promise<ConversationMeta[]> {
 	try {
-		const res = await fetch('/api/conversations', { headers: headers() });
+		const res = await authFetch('/api/conversations', { headers: headers() });
 		if (!res.ok) return [];
 		return (await res.json()).conversations;
 	} catch {
@@ -34,7 +34,7 @@ export async function listConversations(): Promise<ConversationMeta[]> {
 
 export async function loadMessages(id: string): Promise<UIMessage[]> {
 	try {
-		const res = await fetch(`/api/conversations?id=${encodeURIComponent(id)}`, {
+		const res = await authFetch(`/api/conversations?id=${encodeURIComponent(id)}`, {
 			headers: headers()
 		});
 		if (!res.ok) return [];
@@ -55,7 +55,7 @@ export async function saveConversation(
 ): Promise<ConversationMeta | null> {
 	if (messages.length === 0) return null;
 	try {
-		const res = await fetch('/api/conversations', {
+		const res = await authFetch('/api/conversations', {
 			method: 'PUT',
 			headers: headers(true),
 			body: JSON.stringify({ id, messages })
@@ -69,7 +69,7 @@ export async function saveConversation(
 }
 
 export async function renameConversation(id: string, title: string): Promise<void> {
-	await fetch('/api/conversations', {
+	await authFetch('/api/conversations', {
 		method: 'PATCH',
 		headers: headers(true),
 		body: JSON.stringify({ id, title })
@@ -77,7 +77,7 @@ export async function renameConversation(id: string, title: string): Promise<voi
 }
 
 export async function deleteConversation(id: string): Promise<void> {
-	await fetch(`/api/conversations?id=${encodeURIComponent(id)}`, {
+	await authFetch(`/api/conversations?id=${encodeURIComponent(id)}`, {
 		method: 'DELETE',
 		headers: headers()
 	}).catch(() => {});
@@ -99,7 +99,7 @@ export async function migrateLocalConversations(): Promise<boolean> {
 			const body = localStorage.getItem(LEGACY_PREFIX + meta.id);
 			if (!body) continue;
 			const messages: UIMessage[] = JSON.parse(body);
-			await fetch('/api/conversations', {
+			await authFetch('/api/conversations', {
 				method: 'PUT',
 				headers: headers(true),
 				body: JSON.stringify({ id: meta.id, messages, title: meta.title })

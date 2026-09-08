@@ -1,4 +1,4 @@
-import { getToken } from '$lib/session';
+import { authFetch, getToken } from '$lib/session';
 
 /**
  * Client for /api/keys. The plaintext key exists only in the POST response —
@@ -24,7 +24,7 @@ function headers(): Record<string, string> {
 
 export async function listKeys(): Promise<PublicApiKey[] | null> {
 	try {
-		const res = await fetch('/api/keys', { headers: headers() });
+		const res = await authFetch('/api/keys', { headers: headers() });
 		if (!res.ok) return null;
 		return (await res.json()).keys ?? [];
 	} catch {
@@ -39,7 +39,7 @@ export async function createKey(
 	scope: 'chat' | 'full' = 'chat'
 ): Promise<{ ok: true; key: string; record: PublicApiKey } | { ok: false; error: string }> {
 	try {
-		const res = await fetch('/api/keys', {
+		const res = await authFetch('/api/keys', {
 			method: 'POST',
 			headers: headers(),
 			body: JSON.stringify({ label, scope, ...(expiresInDays ? { expiresInDays } : {}) })
@@ -54,7 +54,7 @@ export async function createKey(
 
 export async function revokeKey(id: string): Promise<boolean> {
 	try {
-		const res = await fetch(`/api/keys/${encodeURIComponent(id)}`, {
+		const res = await authFetch(`/api/keys/${encodeURIComponent(id)}`, {
 			method: 'DELETE',
 			headers: headers()
 		});

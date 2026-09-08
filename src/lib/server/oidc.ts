@@ -30,6 +30,7 @@ interface Discovery {
 	authorization_endpoint: string;
 	token_endpoint: string;
 	end_session_endpoint?: string;
+	jwks_uri?: string;
 }
 
 let cached: Promise<Discovery> | null = null;
@@ -202,4 +203,11 @@ export async function endSessionUrl(
 		url.searchParams.set('post_logout_redirect_uri', postLogoutRedirectUri);
 	}
 	return url.toString();
+}
+
+/** The provider's JWKS endpoint, for validating back-channel logout tokens. */
+export async function jwksUri(): Promise<string> {
+	const doc = await discover();
+	if (!doc.jwks_uri) throw new Error('oidc: discovery document carries no jwks_uri');
+	return doc.jwks_uri;
 }
