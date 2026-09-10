@@ -114,8 +114,11 @@ const CLAUDE_MODELS: ServerModelOption[] = [
 		maxOutputTokens: 32_000
 	},
 	{
+		// Catalog id kept stable so admin grants and sticky picks survive the
+		// upstream upgrade; Foundry now serves only the 5.1 deployment.
 		id: 'claude-fable-5',
-		label: 'Fable 5',
+		upstreamModel: 'claude-fable-5-1',
+		label: 'Fable 5.1',
 		hint: 'Máxima capacidade, tarefas mais difíceis',
 		provider: 'anthropic',
 		kind: 'anthropic',
