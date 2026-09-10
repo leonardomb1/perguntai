@@ -76,7 +76,7 @@
 		});
 
 	const STATUS_STYLE: Record<AuditEvent['status'], string> = {
-		ok: 'bg-[#1baf7a]/12 text-[#0d8a5f]',
+		ok: 'bg-success/12 text-success-strong',
 		denied: 'bg-amber-100 text-amber-700',
 		error: 'bg-red-50 text-red-600'
 	};
@@ -88,11 +88,11 @@
 
 {#if !loaded}
 	<div class="grid h-40 place-items-center">
-		<span class="size-6 animate-spin rounded-full border-[3px] border-[#e3e0d5] border-t-[#d97757]"></span>
+		<span class="size-6 animate-spin rounded-full border-[3px] border-edge border-t-accent"></span>
 	</div>
 {:else}
 	<!-- API keys, fleet-wide -->
-	<div class="mb-4 rounded-xl border border-[#e3e0d5] bg-white">
+	<div class="mb-4 rounded-xl border border-edge bg-surface">
 		<div class="flex items-center gap-1.5 px-4 py-3">
 			<h3 class="text-base font-semibold text-neutral-900">{m.audit_keys_title()}</h3>
 			<HelpTip text={m.audit_keys_help()} />
@@ -103,7 +103,7 @@
 			<div class="overflow-x-auto rounded-b-xl">
 				<table class="w-full text-left">
 					<thead>
-						<tr class="border-y border-[#efede3] bg-[#faf9f5]/60 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase">
+						<tr class="border-y border-edge-soft bg-canvas/60 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase">
 							<th class="py-2 pl-4 font-semibold">{m.admin_col_user()}</th>
 							<th class="px-3 py-2 font-semibold">{m.audit_col_label()}</th>
 							<th class="px-3 py-2 font-semibold">{m.audit_col_created()}</th>
@@ -114,7 +114,7 @@
 					</thead>
 					<tbody>
 						{#each keyRows as k (k.username + k.id)}
-							<tr class="border-b border-[#efede3] last:border-b-0 {k.revokedAt ? 'opacity-50' : ''}">
+							<tr class="border-b border-edge-soft last:border-b-0 {k.revokedAt ? 'opacity-50' : ''}">
 								<td class="py-2.5 pl-4">
 									<div class="flex items-center gap-2.5">
 										<Avatar username={k.username} size={24} />
@@ -128,7 +128,7 @@
 										{#if k.hint}
 											<span class="shrink-0 font-mono text-[11px] text-neutral-400">{k.hint}</span>
 										{/if}
-										<span class="shrink-0 rounded bg-[#f0eee6] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 uppercase">
+										<span class="shrink-0 rounded bg-fill px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 uppercase">
 											{k.scope === 'chat' ? m.apikeys_scope_chat() : m.apikeys_scope_full()}
 										</span>
 										{#if k.revokedAt}
@@ -162,7 +162,7 @@
 	</div>
 
 	<!-- connector fleet -->
-	<div class="mb-4 rounded-xl border border-[#e3e0d5] bg-white">
+	<div class="mb-4 rounded-xl border border-edge bg-surface">
 		<div class="flex items-center gap-1.5 px-4 py-3">
 			<h3 class="text-base font-semibold text-neutral-900">{m.audit_connectors_title()}</h3>
 			<HelpTip text={m.audit_connectors_help()} />
@@ -172,14 +172,14 @@
 		{:else}
 			<div class="px-4 pb-3">
 				{#each connectors as c (c.username)}
-					<div class="flex flex-wrap items-center gap-2 border-b border-[#efede3] py-2.5 last:border-b-0">
+					<div class="flex flex-wrap items-center gap-2 border-b border-edge-soft py-2.5 last:border-b-0">
 						<Avatar username={c.username} size={24} />
 						<span class="max-w-44 truncate text-[15px] font-medium text-neutral-800">{c.username}</span>
 						<span class="min-w-4 flex-1"></span>
 						{#each c.mcpServers as sv (sv.name + sv.url)}
 							<span
 								class="rounded px-1.5 py-0.5 text-[11px] font-medium {sv.enabled
-									? 'bg-[#d97757]/8 text-[#bd5d3a]'
+									? 'bg-accent/8 text-accent-strong'
 									: 'bg-neutral-100 text-neutral-400 line-through'}"
 								title={sv.url}
 							>
@@ -193,7 +193,7 @@
 	</div>
 
 	<!-- audit trail -->
-	<div class="rounded-xl border border-[#e3e0d5] bg-white">
+	<div class="rounded-xl border border-edge bg-surface">
 		<div class="flex flex-wrap items-center gap-2 px-4 py-3">
 			<h3 class="flex items-center gap-1.5 text-base font-semibold text-neutral-900">
 				{m.audit_log_title()}
@@ -206,11 +206,11 @@
 				bind:value={filterActor}
 				onkeydown={(e) => e.key === 'Enter' && refreshEvents()}
 				placeholder={m.audit_actor_placeholder()}
-				class="w-44 rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-1.5 text-[13px] transition focus:border-[#d97757] focus:outline-none"
+				class="w-44 rounded-lg border border-edge bg-surface px-2.5 py-1.5 text-[13px] transition focus:border-accent focus:outline-none"
 			/>
 			<button
 				onclick={refreshEvents}
-				class="grid size-8 place-items-center rounded-lg border border-[#e3e0d5] text-neutral-500 transition hover:bg-[#faf9f5] hover:text-neutral-700"
+				class="grid size-8 place-items-center rounded-lg border border-edge text-neutral-500 transition hover:bg-canvas hover:text-neutral-700"
 				title={m.audit_refresh()}
 				aria-label={m.audit_refresh()}
 			>
@@ -223,7 +223,7 @@
 			<div class="overflow-x-auto rounded-b-xl">
 				<table class="w-full text-left">
 					<thead>
-						<tr class="border-y border-[#efede3] bg-[#faf9f5]/60 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase">
+						<tr class="border-y border-edge-soft bg-canvas/60 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase">
 							<th class="py-2 pl-4 font-semibold">{m.audit_col_time()}</th>
 							<th class="px-3 py-2 font-semibold">{m.audit_col_actor()}</th>
 							<th class="px-3 py-2 font-semibold">{m.audit_col_via()}</th>
@@ -237,7 +237,7 @@
 						{#each events as e, i (e.ts + i)}
 							{@const rowId = e.ts + i}
 							<tr
-								class="cursor-pointer border-b border-[#efede3] transition last:border-b-0 hover:bg-[#faf9f5]/70"
+								class="cursor-pointer border-b border-edge-soft transition last:border-b-0 hover:bg-canvas/70"
 								onclick={() => (expanded = expanded === rowId ? null : rowId)}
 							>
 								<td class="py-2 pl-4 text-[13px] whitespace-nowrap text-neutral-500 tabular-nums">{fmtTime(e.ts)}</td>
@@ -245,13 +245,13 @@
 								<td class="px-3 py-2">
 									{#if e.via === 'apikey'}
 										<span
-											class="inline-flex items-center gap-1 rounded bg-[#d97757]/8 px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-[#bd5d3a]"
+											class="inline-flex items-center gap-1 rounded bg-accent/8 px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-accent-strong"
 											title={e.keyLabel}
 										>
 											<Icon name="key" size={10} />{e.keyLabel ?? m.audit_via_apikey()}
 										</span>
 									{:else}
-										<span class="rounded bg-[#f0eee6] px-1.5 py-0.5 text-[11px] font-medium text-neutral-500">{m.audit_via_session()}</span>
+										<span class="rounded bg-fill px-1.5 py-0.5 text-[11px] font-medium text-neutral-500">{m.audit_via_session()}</span>
 									{/if}
 								</td>
 								<td class="px-3 py-2 font-mono text-[13px] whitespace-nowrap text-neutral-700">{e.action}</td>
@@ -262,7 +262,7 @@
 								</td>
 							</tr>
 							{#if expanded === rowId}
-								<tr class="border-b border-[#efede3] bg-[#faf9f5]/60 last:border-b-0">
+								<tr class="border-b border-edge-soft bg-canvas/60 last:border-b-0">
 									<td colspan="7" class="px-4 py-2.5">
 										<pre class="overflow-x-auto font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-neutral-600">{JSON.stringify(
 											{ ...e, detail: e.detail ?? {} },

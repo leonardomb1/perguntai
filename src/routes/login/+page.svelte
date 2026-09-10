@@ -105,10 +105,10 @@
 	<title>PerguntAI</title>
 </svelte:head>
 
-<main class="relative flex min-h-full items-center justify-center bg-[#faf9f5] px-4">
+<main class="relative flex min-h-full items-center justify-center bg-canvas px-4">
 	<button
 		onclick={() => setLocale(getLocale() === 'pt-br' ? 'en' : 'pt-br')}
-		class="absolute top-4 right-4 rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-1.5 text-xs font-semibold tracking-wide text-neutral-500 transition hover:text-neutral-800"
+		class="absolute top-4 right-4 rounded-lg border border-edge bg-surface px-2.5 py-1.5 text-xs font-semibold tracking-wide text-neutral-500 transition hover:text-neutral-800"
 		title={m.change_language()}
 		aria-label={m.change_language()}
 	>
@@ -125,10 +125,10 @@
 		{#if notAllowed}
 			<div
 				in:scale={{ start: 0.95, duration: 300 }}
-				class="rounded-2xl border border-[#e3e0d5] bg-white p-7 text-center shadow-sm"
+				class="rounded-2xl border border-edge bg-surface p-7 text-center shadow-sm"
 			>
 				<span
-					class="preview-badge mb-4 inline-block rounded-full bg-[#d97757]/10 px-3 py-1 text-xs font-semibold tracking-widest text-[#bd5d3a] uppercase"
+					class="preview-badge mb-4 inline-block rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold tracking-widest text-accent-strong uppercase"
 				>
 					Preview
 				</span>
@@ -141,13 +141,13 @@
 				<a
 					href="/login"
 					data-sveltekit-reload
-					class="mt-5 inline-block rounded-xl border border-[#e3e0d5] bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-[#faf9f5]"
+					class="mt-5 inline-block rounded-xl border border-edge bg-surface px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-canvas"
 				>
 					{m.login_preview_back()}
 				</a>
 			</div>
 		{:else}
-			<div class="space-y-4 rounded-2xl border border-[#e3e0d5] bg-white p-7 shadow-sm">
+			<div class="space-y-4 rounded-2xl border border-edge bg-surface p-7 shadow-sm">
 				<p class="text-center text-sm text-neutral-500">{m.login_subtitle()}</p>
 
 				{#if message}
@@ -161,7 +161,7 @@
 				{:else if signedOut}
 					<p
 						in:fly={{ y: -4, duration: 200 }}
-						class="rounded-xl bg-[#faf9f5] px-3.5 py-2.5 text-center text-sm text-neutral-600"
+						class="rounded-xl bg-canvas px-3.5 py-2.5 text-center text-sm text-neutral-600"
 						role="status"
 					>
 						{m.login_signed_out()}
@@ -180,7 +180,7 @@
 								autocapitalize="none"
 								spellcheck="false"
 								required
-								class="w-full rounded-xl border border-[#e3e0d5] bg-[#faf9f5] px-3.5 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-[#d97757] focus:bg-white"
+								class="w-full rounded-xl border border-edge bg-canvas px-3.5 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-accent focus:bg-surface"
 							/>
 						</label>
 						<label class="block">
@@ -191,13 +191,13 @@
 								bind:value={password}
 								autocomplete="current-password"
 								required
-								class="w-full rounded-xl border border-[#e3e0d5] bg-[#faf9f5] px-3.5 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-[#d97757] focus:bg-white"
+								class="w-full rounded-xl border border-edge bg-canvas px-3.5 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-accent focus:bg-surface"
 							/>
 						</label>
 						<button
 							type="submit"
 							disabled={loading}
-							class="block w-full rounded-xl bg-[#d97757] px-4 py-2.5 text-center text-sm font-medium text-white shadow-sm transition hover:bg-[#bd5d3a] disabled:cursor-default disabled:opacity-60"
+							class="block w-full rounded-xl bg-accent px-4 py-2.5 text-center text-sm font-medium text-white shadow-sm transition hover:bg-accent-strong disabled:cursor-default disabled:opacity-60"
 						>
 							{loading ? m.login_submitting() : m.login_submit()}
 						</button>
@@ -206,9 +206,9 @@
 
 				{#if data.methods.ldap && data.methods.oidc}
 					<div class="flex items-center gap-3 text-[11px] font-medium tracking-widest text-neutral-400 uppercase">
-						<span class="h-px flex-1 bg-[#e3e0d5]"></span>
+						<span class="h-px flex-1 bg-edge"></span>
 						{m.login_or()}
-						<span class="h-px flex-1 bg-[#e3e0d5]"></span>
+						<span class="h-px flex-1 bg-edge"></span>
 					</div>
 				{/if}
 
@@ -217,8 +217,8 @@
 						href={ssoHref}
 						data-sveltekit-reload
 						class={data.methods.ldap
-							? 'block w-full rounded-xl border border-[#e3e0d5] bg-white px-4 py-2.5 text-center text-sm font-medium text-neutral-700 transition hover:bg-[#faf9f5]'
-							: 'block w-full rounded-xl bg-[#d97757] px-4 py-2.5 text-center text-sm font-medium text-white shadow-sm transition hover:bg-[#bd5d3a]'}
+							? 'block w-full rounded-xl border border-edge bg-surface px-4 py-2.5 text-center text-sm font-medium text-neutral-700 transition hover:bg-canvas'
+							: 'block w-full rounded-xl bg-accent px-4 py-2.5 text-center text-sm font-medium text-white shadow-sm transition hover:bg-accent-strong'}
 					>
 						{data.methods.ldap ? m.login_sso() : m.login_submit()}
 					</a>

@@ -147,7 +147,7 @@
 	<div class="mx-auto w-full max-w-3xl px-4 py-6">
 		<!-- header -->
 		<div class="flex flex-wrap items-center gap-2.5">
-			<span class="grid size-9 shrink-0 place-items-center rounded-lg bg-[#d97757]/10 text-[#bd5d3a]">
+			<span class="grid size-9 shrink-0 place-items-center rounded-lg bg-accent/10 text-accent-strong">
 				<Icon name="clock" size={17} />
 			</span>
 			<div class="min-w-0 flex-1">
@@ -162,10 +162,10 @@
 				<button
 					onclick={fireNow}
 					disabled={starting}
-					class="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#e3e0d5] px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-[#d97757]/50 hover:text-[#bd5d3a] disabled:opacity-50"
+					class="flex shrink-0 items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-accent/50 hover:text-accent-strong disabled:opacity-50"
 				>
 					{#if starting}
-						<span class="size-3 animate-spin rounded-full border-2 border-[#e3e0d5] border-t-[#d97757]"></span>
+						<span class="size-3 animate-spin rounded-full border-2 border-edge border-t-accent"></span>
 						{m.sched_running()}
 					{:else}
 						<Icon name="play" size={12} />
@@ -174,7 +174,7 @@
 				</button>
 				<button
 					onclick={() => (editing = true)}
-					class="shrink-0 rounded-lg border border-[#e3e0d5] px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-[#faf9f5]"
+					class="shrink-0 rounded-lg border border-edge px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-canvas"
 				>
 					{m.settings_memory_edit()}
 				</button>
@@ -192,10 +192,10 @@
 					disabled={busy}
 					onclick={toggleEnabled}
 					class="relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40
-						{schedule.enabled ? 'bg-[#d97757]' : 'bg-[#d9d6c8]'}"
+						{schedule.enabled ? 'bg-accent' : 'bg-fill-strong'}"
 				>
 					<span
-						class="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200
+						class="absolute top-0.5 left-0.5 size-5 rounded-full bg-surface shadow-sm transition-transform duration-200
 							{schedule.enabled ? 'translate-x-5' : 'translate-x-0'}"
 					></span>
 				</button>
@@ -204,24 +204,24 @@
 
 		{#if editing}
 			<!-- edit / create form -->
-			<div class="mt-5 space-y-3 rounded-xl border border-[#e3e0d5] bg-white p-4">
+			<div class="mt-5 space-y-3 rounded-xl border border-edge bg-surface p-4">
 				<input
 					bind:value={draft.title}
 					maxlength="120"
 					placeholder={m.sched_title_ph()}
-					class="w-full rounded-lg border border-[#e3e0d5] bg-white px-3 py-2 text-sm font-medium transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+					class="w-full rounded-lg border border-edge bg-surface px-3 py-2 text-sm font-medium transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 				/>
 				<textarea
 					bind:value={draft.instructions}
 					maxlength="6000"
 					rows="7"
 					placeholder={m.sched_instructions_ph()}
-					class="w-full resize-y rounded-lg border border-[#e3e0d5] bg-white px-3 py-2 text-sm leading-relaxed transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+					class="w-full resize-y rounded-lg border border-edge bg-surface px-3 py-2 text-sm leading-relaxed transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 				></textarea>
 				<div class="flex flex-wrap items-center gap-2">
 					<select
 						bind:value={draft.frequency}
-						class="rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-2 text-sm focus:border-[#d97757] focus:outline-none"
+						class="rounded-lg border border-edge bg-surface px-2.5 py-2 text-sm focus:border-accent focus:outline-none"
 					>
 						<option value="daily">{m.sched_daily()}</option>
 						<option value="weekly">{m.sched_weekly()}</option>
@@ -230,7 +230,7 @@
 					{#if draft.frequency === 'weekly'}
 						<select
 							bind:value={draft.weekday}
-							class="rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-2 text-sm capitalize focus:border-[#d97757] focus:outline-none"
+							class="rounded-lg border border-edge bg-surface px-2.5 py-2 text-sm capitalize focus:border-accent focus:outline-none"
 						>
 							{#each weekdays as day (day.value)}
 								<option value={day.value}>{day.label}</option>
@@ -242,19 +242,19 @@
 							min="1"
 							max="28"
 							bind:value={draft.dayOfMonth}
-							class="w-20 rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-2 text-sm focus:border-[#d97757] focus:outline-none"
+							class="w-20 rounded-lg border border-edge bg-surface px-2.5 py-2 text-sm focus:border-accent focus:outline-none"
 						/>
 					{/if}
 					<input
 						type="time"
 						bind:value={draft.time}
-						class="rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-2 text-sm focus:border-[#d97757] focus:outline-none"
+						class="rounded-lg border border-edge bg-surface px-2.5 py-2 text-sm focus:border-accent focus:outline-none"
 					/>
 					<span class="min-w-0 flex-1"></span>
 					<button
 						onclick={save}
 						disabled={busy || !draft.title.trim() || !draft.instructions.trim()}
-						class="rounded-lg bg-[#d97757] px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-[#bd5d3a] disabled:opacity-50"
+						class="rounded-lg bg-accent px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-accent-strong disabled:opacity-50"
 					>
 						{m.settings_save()}
 					</button>
@@ -270,7 +270,7 @@
 			</div>
 		{:else if schedule}
 			<!-- standing instructions, folded -->
-			<details class="mt-4 rounded-xl border border-[#e9e6dd] bg-[#faf9f5]">
+			<details class="mt-4 rounded-xl border border-edge bg-canvas">
 				<summary class="cursor-pointer px-4 py-2.5 text-xs font-medium text-neutral-500 select-none">
 					{m.sched_instructions()}
 				</summary>
@@ -285,25 +285,25 @@
 			</h3>
 			{#if !runsLoaded}
 				<div class="grid place-items-center py-8">
-					<span class="size-6 animate-spin rounded-full border-[3px] border-[#e3e0d5] border-t-[#d97757]"></span>
+					<span class="size-6 animate-spin rounded-full border-[3px] border-edge border-t-accent"></span>
 				</div>
 			{:else if runs.length === 0}
-				<p class="rounded-xl border border-dashed border-[#e3e0d5] px-4 py-6 text-center text-xs text-neutral-400">
+				<p class="rounded-xl border border-dashed border-edge px-4 py-6 text-center text-xs text-neutral-400">
 					{m.sched_no_runs()}
 				</p>
 			{:else}
 				<div class="space-y-2">
 					{#each runs as run (run.id)}
-						<div class="overflow-hidden rounded-xl border border-[#e3e0d5] bg-white">
+						<div class="overflow-hidden rounded-xl border border-edge bg-surface">
 							<button
 								onclick={() =>
 									run.conversationId
 										? onOpenConversation(run.conversationId)
 										: (openRun = openRun === run.id ? null : run.id)}
-								class="flex w-full items-center gap-2.5 px-4 py-3 text-left transition hover:bg-[#faf9f5]"
+								class="flex w-full items-center gap-2.5 px-4 py-3 text-left transition hover:bg-canvas"
 							>
 								{#if run.status === 'running'}
-									<span class="size-3.5 shrink-0 animate-spin rounded-full border-2 border-[#e3e0d5] border-t-[#d97757]"></span>
+									<span class="size-3.5 shrink-0 animate-spin rounded-full border-2 border-edge border-t-accent"></span>
 								{:else}
 									<Icon
 										name="clock"
@@ -327,7 +327,7 @@
 								/>
 							</button>
 							{#if !run.conversationId && openRun === run.id}
-								<div class="border-t border-[#efede3] px-4 py-4">
+								<div class="border-t border-edge-soft px-4 py-4">
 									{#if run.tools.length}
 										<p class="mb-3 text-xs text-neutral-400">
 											{run.tools.join(', ')}

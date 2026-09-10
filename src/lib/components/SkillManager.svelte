@@ -117,10 +117,10 @@
 
 	{#if !loaded}
 		<div class="grid place-items-center py-8">
-			<span class="size-6 animate-spin rounded-full border-[3px] border-[#e3e0d5] border-t-[#d97757]"></span>
+			<span class="size-6 animate-spin rounded-full border-[3px] border-edge border-t-accent"></span>
 		</div>
 	{:else if skills.length === 0}
-		<p class="rounded-xl border border-dashed border-[#e3e0d5] px-4 py-6 text-center text-xs text-neutral-400">
+		<p class="rounded-xl border border-dashed border-edge px-4 py-6 text-center text-xs text-neutral-400">
 			{m.settings_skills_empty()}
 		</p>
 	{:else}
@@ -128,9 +128,9 @@
 			{#each skills as sk (sk.id)}
 				<button
 					onclick={() => openDetail(sk)}
-					class="flex w-full items-center gap-2.5 rounded-lg border border-[#e9e6dd] bg-[#faf9f5] px-3 py-2.5 text-left transition hover:border-[#d97757]/40 hover:bg-[#d97757]/5"
+					class="flex w-full items-center gap-2.5 rounded-lg border border-edge bg-canvas px-3 py-2.5 text-left transition hover:border-accent/40 hover:bg-accent/5"
 				>
-					<Icon name="graduation-cap" size={14} class="shrink-0 text-[#bd5d3a]" />
+					<Icon name="graduation-cap" size={14} class="shrink-0 text-accent-strong" />
 					<span class="min-w-0 flex-1">
 						<span class="block truncate text-sm font-medium text-neutral-800">{sk.name}</span>
 						{#if sk.description}
@@ -148,7 +148,7 @@
 
 	<button
 		onclick={openNew}
-		class="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#d8d4c6] px-3 py-2.5 text-sm font-medium text-neutral-500 transition hover:border-[#d97757]/50 hover:bg-[#d97757]/5 hover:text-[#bd5d3a]"
+		class="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-edge px-3 py-2.5 text-sm font-medium text-neutral-500 transition hover:border-accent/50 hover:bg-accent/5 hover:text-accent-strong"
 	>
 		<Icon name="plus" size={15} />
 		{m.settings_skills_add()}
@@ -158,7 +158,7 @@
 	<div class="mb-4 flex items-center gap-2">
 		<button
 			onclick={back}
-			class="grid size-8 shrink-0 place-items-center rounded-lg text-neutral-500 transition hover:bg-[#f0eee6] hover:text-neutral-800"
+			class="grid size-8 shrink-0 place-items-center rounded-lg text-neutral-500 transition hover:bg-fill hover:text-neutral-800"
 			aria-label={m.settings_memory_back()}
 			title={m.settings_memory_back()}
 		>
@@ -174,13 +174,13 @@
 		{#if !editing && current}
 			<button
 				onclick={openShare}
-				class="shrink-0 rounded-lg border border-[#e3e0d5] px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-[#faf9f5]"
+				class="shrink-0 rounded-lg border border-edge px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-canvas"
 			>
 				{m.settings_skills_share()}
 			</button>
 			<button
 				onclick={startEdit}
-				class="shrink-0 rounded-lg border border-[#e3e0d5] px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-[#faf9f5]"
+				class="shrink-0 rounded-lg border border-edge px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-canvas"
 			>
 				{m.settings_memory_edit()}
 			</button>
@@ -195,9 +195,9 @@
 	</div>
 
 	{#if !editing && current && (sharing || shareResult)}
-		<div class="mb-4 rounded-xl border border-[#e9e6dd] bg-[#faf9f5] px-4 py-3">
+		<div class="mb-4 rounded-xl border border-edge bg-canvas px-4 py-3">
 			{#if shareResult === 'ok'}
-				<p class="flex items-center gap-2 text-sm text-[#0d8a5f]">
+				<p class="flex items-center gap-2 text-sm text-success-strong">
 					<Icon name="check" size={14} />
 					{m.settings_skills_share_sent()}
 				</p>
@@ -207,7 +207,7 @@
 					<button
 						onclick={() => shareTo('org')}
 						disabled={busy}
-						class="rounded-lg border border-[#e3e0d5] bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-[#d97757]/40 hover:text-[#bd5d3a] disabled:opacity-50"
+						class="rounded-lg border border-edge bg-surface px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-accent/40 hover:text-accent-strong disabled:opacity-50"
 					>
 						{m.admin_skills_scope_org()}
 					</button>
@@ -215,7 +215,7 @@
 						<button
 							onclick={() => shareTo(scope.id)}
 							disabled={busy}
-							class="rounded-lg border border-[#e3e0d5] bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-[#d97757]/40 hover:text-[#bd5d3a] disabled:opacity-50"
+							class="rounded-lg border border-edge bg-surface px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-accent/40 hover:text-accent-strong disabled:opacity-50"
 						>
 							{scope.name}
 						</button>
@@ -236,26 +236,26 @@
 				bind:value={draft.name}
 				maxlength="120"
 				placeholder={m.settings_skills_name_placeholder()}
-				class="w-full rounded-lg border border-[#e3e0d5] bg-white px-3 py-2 text-sm font-medium transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+				class="w-full rounded-lg border border-edge bg-surface px-3 py-2 text-sm font-medium transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 			/>
 			<input
 				bind:value={draft.description}
 				maxlength="300"
 				placeholder={m.settings_skills_desc_placeholder()}
-				class="w-full rounded-lg border border-[#e3e0d5] bg-white px-3 py-2 text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+				class="w-full rounded-lg border border-edge bg-surface px-3 py-2 text-sm transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 			/>
 			<textarea
 				bind:value={draft.content}
 				maxlength="12000"
 				rows="12"
 				placeholder={m.settings_skills_content_placeholder()}
-				class="w-full resize-y rounded-lg border border-[#e3e0d5] bg-white px-3 py-2 font-mono text-[13px] leading-relaxed transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+				class="w-full resize-y rounded-lg border border-edge bg-surface px-3 py-2 font-mono text-[13px] leading-relaxed transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 			></textarea>
 			<div class="flex items-center gap-2">
 				<button
 					onclick={saveDraft}
 					disabled={busy}
-					class="rounded-lg bg-[#d97757] px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-[#bd5d3a] disabled:opacity-50"
+					class="rounded-lg bg-accent px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-accent-strong disabled:opacity-50"
 				>
 					{m.settings_save()}
 				</button>

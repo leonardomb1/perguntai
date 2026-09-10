@@ -52,14 +52,14 @@
 <div class="relative">
 	<button
 		onclick={() => (open = !open)}
-		class="relative grid size-9 place-items-center rounded-lg text-neutral-500 transition hover:bg-[#f0eee6] hover:text-neutral-700"
+		class="relative grid size-9 place-items-center rounded-lg text-neutral-500 transition hover:bg-fill hover:text-neutral-700"
 		title={m.files_in_chat()}
 		aria-label={m.files_in_chat()}
 	>
 		<Icon name="file" size={17} />
 		{#if docs.length > 0}
 			<span
-				class="absolute -top-0.5 -right-0.5 grid size-4 place-items-center rounded-full bg-[#d97757] text-[10px] font-semibold text-white"
+				class="absolute -top-0.5 -right-0.5 grid size-4 place-items-center rounded-full bg-accent text-[10px] font-semibold text-white"
 			>
 				{docs.length}
 			</span>
@@ -76,7 +76,7 @@
 		></button>
 
 		<div
-			class="absolute top-full right-0 z-20 mt-1.5 w-72 rounded-xl border border-[#e3e0d5] bg-white p-2 shadow-lg"
+			class="absolute top-full right-0 z-20 mt-1.5 w-72 rounded-xl border border-edge bg-surface p-2 shadow-lg"
 		>
 			<p class="px-2 py-1 text-xs font-semibold tracking-wide text-neutral-500 uppercase">
 				{m.files_in_chat()}
@@ -89,7 +89,7 @@
 				<ul class="max-h-64 space-y-0.5 overflow-y-auto">
 					{#each docs as doc (doc.id)}
 						<li
-							class="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-neutral-700 hover:bg-[#faf9f5]"
+							class="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-neutral-700 hover:bg-canvas"
 						>
 							<Icon name="file" size={14} class="shrink-0 text-neutral-400" />
 							<span class="min-w-0 flex-1">

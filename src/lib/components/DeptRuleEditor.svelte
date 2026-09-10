@@ -68,13 +68,13 @@
 	<!-- any / all -->
 	<div class="flex flex-wrap items-center gap-2 text-xs">
 		<span class="font-medium text-neutral-600">{m.org_dept_mode_label()}</span>
-		<div class="flex rounded-lg border border-[#e3e0d5] bg-white p-0.5">
+		<div class="flex rounded-lg border border-edge bg-surface p-0.5">
 			{#each [['any', m.org_dept_mode_any()], ['all', m.org_dept_mode_all()]] as [mode, label] (mode)}
 				<button
 					type="button"
 					onclick={() => setMode(mode as DeptMatch['mode'])}
 					class="rounded-md px-2.5 py-1 font-medium transition
-						{match.mode === mode ? 'bg-[#d97757]/12 text-[#bd5d3a]' : 'text-neutral-500 hover:text-neutral-800'}"
+						{match.mode === mode ? 'bg-accent/12 text-accent-strong' : 'text-neutral-500 hover:text-neutral-800'}"
 				>
 					{label}
 				</button>
@@ -88,7 +88,7 @@
 	</datalist>
 
 	{#if match.rules.length === 0}
-		<p class="rounded-lg border border-dashed border-[#e3e0d5] px-3 py-2.5 text-xs text-neutral-400">
+		<p class="rounded-lg border border-dashed border-edge px-3 py-2.5 text-xs text-neutral-400">
 			{m.org_dept_rules_empty()}
 		</p>
 	{:else}
@@ -97,7 +97,7 @@
 				{@const hit = ruleMatches(rule, you)}
 				<li class="flex items-center gap-2">
 					<span
-						class="size-1.5 shrink-0 rounded-full {hit ? 'bg-[#1baf7a]' : 'bg-neutral-300'}"
+						class="size-1.5 shrink-0 rounded-full {hit ? 'bg-success' : 'bg-neutral-300'}"
 						title={hit ? m.org_dept_matches_you() : m.org_dept_matches_you_not()}
 					></span>
 					<input
@@ -107,11 +107,11 @@
 						placeholder={m.org_dept_rule_attribute()}
 						spellcheck="false"
 						autocapitalize="none"
-						class="w-36 shrink-0 rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-1.5 font-mono text-xs transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+						class="w-36 shrink-0 rounded-lg border border-edge bg-surface px-2.5 py-1.5 font-mono text-xs transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 					/>
 					<select
 						bind:value={rule.op}
-						class="shrink-0 rounded-lg border border-[#e3e0d5] bg-white px-2 py-1.5 text-xs transition focus:border-[#d97757] focus:outline-none"
+						class="shrink-0 rounded-lg border border-edge bg-surface px-2 py-1.5 text-xs transition focus:border-accent focus:outline-none"
 					>
 						{#each RULE_OPS as op (op)}<option value={op}>{opLabel[op]()}</option>{/each}
 					</select>
@@ -124,7 +124,7 @@
 						maxlength="256"
 						placeholder={m.org_dept_rule_value()}
 						spellcheck="false"
-						class="min-w-0 flex-1 rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-1.5 text-xs transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+						class="min-w-0 flex-1 rounded-lg border border-edge bg-surface px-2.5 py-1.5 text-xs transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 					/>
 					<button
 						type="button"
@@ -143,7 +143,7 @@
 	<button
 		type="button"
 		onclick={() => addRule()}
-		class="flex items-center gap-1.5 rounded-lg border border-dashed border-[#d8d4c6] px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:border-[#d97757]/50 hover:bg-[#d97757]/5 hover:text-[#bd5d3a]"
+		class="flex items-center gap-1.5 rounded-lg border border-dashed border-edge px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:border-accent/50 hover:bg-accent/5 hover:text-accent-strong"
 	>
 		<Icon name="plus" size={13} />
 		{m.org_dept_rule_add()}
@@ -155,7 +155,7 @@
 		{#if yourClaims.length === 0}
 			<p class="text-[11px] text-neutral-400 italic">{m.org_dept_yours_empty()}</p>
 		{:else}
-			<div class="max-h-48 space-y-1.5 overflow-y-auto rounded-lg border border-[#efede3] bg-[#faf9f5] p-2">
+			<div class="max-h-48 space-y-1.5 overflow-y-auto rounded-lg border border-edge-soft bg-canvas p-2">
 				{#each yourClaims as { attribute, values } (attribute)}
 					<div class="flex flex-wrap items-baseline gap-1.5">
 						<span class="font-mono text-[10px] text-neutral-500">{attribute}</span>
@@ -167,8 +167,8 @@
 								onclick={() => addRule({ attribute, op: 'is', value: v })}
 								class="flex max-w-full items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] break-all transition
 									{used
-									? 'border-[#d97757]/30 bg-[#d97757]/10 text-[#bd5d3a]'
-									: 'border-dashed border-[#d8d4c6] text-neutral-500 hover:border-[#d97757]/50 hover:text-[#bd5d3a]'}"
+									? 'border-accent/30 bg-accent/10 text-accent-strong'
+									: 'border-dashed border-edge text-neutral-500 hover:border-accent/50 hover:text-accent-strong'}"
 							>
 								{#if !used}<Icon name="plus" size={10} />{/if}
 								{v}

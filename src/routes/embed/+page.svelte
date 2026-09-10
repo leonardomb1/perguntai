@@ -74,15 +74,15 @@
 	<title>PerguntAI</title>
 </svelte:head>
 
-<div class="flex h-dvh flex-col bg-[#faf9f5] text-neutral-800">
-	<header class="flex h-12 shrink-0 items-center gap-2.5 border-b border-[#e3e0d5] bg-white/80 px-4">
+<div class="flex h-dvh flex-col bg-canvas text-neutral-800">
+	<header class="flex h-12 shrink-0 items-center gap-2.5 border-b border-edge bg-surface/80 px-4">
 		<img src={logo} alt="" class="size-6" />
 		<span class="text-sm font-semibold text-neutral-900">PerguntAI</span>
 		<span class="min-w-0 flex-1"></span>
 		{#if chat.messages.length > 0}
 			<button
 				onclick={reset}
-				class="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-neutral-500 transition hover:bg-[#f0eee6] hover:text-neutral-800"
+				class="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-neutral-500 transition hover:bg-fill hover:text-neutral-800"
 			>
 				<Icon name="refresh" size={13} />
 				{m.embed_reset()}
@@ -117,7 +117,7 @@
 				{/key}
 				{#if chat.status === 'submitted'}
 					<span
-						class="size-4 shrink-0 animate-spin rounded-full border-2 border-[#e3e0d5] border-t-[#d97757]"
+						class="size-4 shrink-0 animate-spin rounded-full border-2 border-edge border-t-accent"
 					></span>
 				{/if}
 				{#if chat.status === 'error'}
@@ -132,19 +132,19 @@
 			<div class="mx-auto max-w-3xl">
 				{#if limitReached}
 					<div
-						class="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-[#e3e0d5] bg-white px-4 py-3"
+						class="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-edge bg-surface px-4 py-3"
 					>
 						<p class="text-sm text-neutral-600">{m.embed_limit_notice()}</p>
 						<button
 							onclick={reset}
-							class="rounded-lg bg-[#d97757] px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-[#bd5d3a]"
+							class="rounded-lg bg-accent px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-accent-strong"
 						>
 							{m.embed_reset()}
 						</button>
 					</div>
 				{:else}
 					<div
-						class="flex items-end gap-2 rounded-2xl border border-[#e3e0d5] bg-white px-3 py-2 focus-within:border-[#d97757]/50"
+						class="flex items-end gap-2 rounded-2xl border border-edge bg-surface px-3 py-2 focus-within:border-accent/50"
 					>
 						<textarea
 							bind:this={composerEl}
@@ -158,7 +158,7 @@
 							onclick={send}
 							disabled={busy || !input.trim()}
 							aria-label="Enviar"
-							class="grid size-9 shrink-0 place-items-center rounded-full bg-[#e8b4a0] text-white transition enabled:bg-[#d97757] enabled:hover:bg-[#bd5d3a] disabled:opacity-60"
+							class="grid size-9 shrink-0 place-items-center rounded-full bg-accent-soft text-white transition enabled:bg-accent enabled:hover:bg-accent-strong disabled:opacity-60"
 						>
 							<Icon name="arrow-up" size={16} />
 						</button>

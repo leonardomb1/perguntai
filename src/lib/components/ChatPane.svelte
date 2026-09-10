@@ -16,6 +16,7 @@
 	import Icon from './Icon.svelte';
 	import { MODEL_STORAGE_KEY, type Provider } from '$lib/models';
 	import { getToken, getDisplayName, clearSession } from '$lib/session';
+	import { faviconDone, faviconReset, faviconRunning } from '$lib/favicon';
 	import { saveConversation, type ConversationMeta } from '$lib/history';
 	import { imageToDataUrl } from '$lib/image';
 	import { newId } from '$lib/id';
@@ -362,6 +363,14 @@
 
 	const busy = $derived(chat.status === 'submitted' || chat.status === 'streaming');
 
+	// Tab-strip status: clock badge while the turn runs, green check when it
+	// lands (held for backgrounded tabs — see $lib/favicon).
+	$effect(() => {
+		if (chat.status === 'submitted' || chat.status === 'streaming') faviconRunning();
+		else if (chat.status === 'ready') faviconDone();
+		else faviconReset();
+	});
+
 	// While the agent waits on an askUser choice, the composer locks so the
 	// buttons are the one obvious way to answer — free typing comes back only
 	// through the card's "chat instead" escape hatch (or by answering).
@@ -548,10 +557,10 @@
 
 {#if dragging}
 	<div
-		class="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-[#faf9f5]/85 backdrop-blur-[2px]"
+		class="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-canvas/85 backdrop-blur-[2px]"
 	>
 		<div
-			class="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-[#d97757] bg-white/80 px-12 py-10 text-[#bd5d3a]"
+			class="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-accent bg-surface/80 px-12 py-10 text-accent-strong"
 		>
 			<Icon name="paperclip" size={32} />
 			<p class="text-sm font-medium">{m.drop_to_attach()}</p>
@@ -601,7 +610,7 @@
 						<span class="min-w-0 flex-1">{m.message_render_error()}</span>
 						<button
 							onclick={reset}
-							class="shrink-0 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium transition hover:bg-amber-100"
+							class="shrink-0 rounded-lg border border-amber-300 bg-surface px-2.5 py-1 text-xs font-medium transition hover:bg-amber-100"
 						>
 							{m.try_again()}
 						</button>
@@ -612,7 +621,7 @@
 
 		{#if chat.status === 'submitted'}
 			<div class="flex items-center gap-2 text-sm text-neutral-400">
-				<span class="size-2 animate-bounce rounded-full bg-[#d97757]"></span>
+				<span class="size-2 animate-bounce rounded-full bg-accent"></span>
 				Thinking…
 			</div>
 		{/if}
@@ -641,7 +650,7 @@
 				class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs
 					{uploadNote.error
 					? 'border-red-200 bg-red-50 text-red-700'
-					: 'border-[#e3e0d5] bg-white text-neutral-600'}"
+					: 'border-edge bg-surface text-neutral-600'}"
 			>
 				<Icon name={uploadNote.error ? 'x' : 'check'} size={12} />
 				{uploadNote.error ? `${uploadNote.name}: ${uploadNote.error}` : m.upload_added({ name: uploadNote.name })}
@@ -650,7 +659,7 @@
 	{/if}
 	<div
 		bind:this={composerEl}
-		class="mx-auto max-w-3xl rounded-2xl border border-[#e3e0d5] bg-white p-2 shadow-sm focus-within:border-[#d97757]/50 focus-within:ring-2 focus-within:ring-[#d97757]/15"
+		class="mx-auto max-w-3xl rounded-2xl border border-edge bg-surface p-2 shadow-sm focus-within:border-accent/50 focus-within:ring-2 focus-within:ring-accent/15"
 	>
 		{#if pendingAttachments.length > 0}
 			<div class="flex flex-wrap gap-2 px-1 pt-1 pb-2">
@@ -660,21 +669,21 @@
 							<img
 								src={att.dataUrl}
 								alt={att.name}
-								class="h-16 w-16 rounded-lg border border-[#e3e0d5] object-cover"
+								class="h-16 w-16 rounded-lg border border-edge object-cover"
 							/>
 						{:else}
 							<div
-								class="flex h-16 w-36 flex-col justify-center gap-1 rounded-lg border border-[#e3e0d5] bg-[#faf9f5] px-3"
+								class="flex h-16 w-36 flex-col justify-center gap-1 rounded-lg border border-edge bg-canvas px-3"
 							>
 								<span class="truncate text-xs font-medium text-neutral-700">{att.name}</span>
-								<span class="w-fit rounded bg-[#d97757]/10 px-1.5 text-[10px] font-semibold text-[#bd5d3a]">
+								<span class="w-fit rounded bg-accent/10 px-1.5 text-[10px] font-semibold text-accent-strong">
 									PDF
 								</span>
 							</div>
 						{/if}
 						<button
 							onclick={() => (pendingAttachments = pendingAttachments.filter((p) => p.id !== att.id))}
-							class="absolute -top-1.5 -right-1.5 grid size-5 place-items-center rounded-full bg-neutral-700 text-white opacity-0 transition group-hover:opacity-100"
+							class="absolute -top-1.5 -right-1.5 grid size-5 place-items-center rounded-full bg-chip text-white opacity-0 transition group-hover:opacity-100"
 							title={m.remove_image()}
 							aria-label={m.remove_image()}
 						>
@@ -689,7 +698,7 @@
 			type="button"
 			onclick={() => fileInput?.click()}
 			disabled={uploading}
-			class="grid size-9 shrink-0 place-items-center rounded-full text-neutral-500 transition hover:bg-[#f0eee6] hover:text-neutral-700 disabled:opacity-50"
+			class="grid size-9 shrink-0 place-items-center rounded-full text-neutral-500 transition hover:bg-fill hover:text-neutral-700 disabled:opacity-50"
 			title={m.attach_document()}
 			aria-label={m.attach_document()}
 		>
@@ -731,7 +740,7 @@
 				type="button"
 				onclick={send}
 				disabled={(!input.trim() && pendingAttachments.length === 0) || inputLocked}
-				class="grid size-9 shrink-0 place-items-center rounded-full bg-[#d97757] text-white transition hover:bg-[#bd5d3a] disabled:opacity-40"
+				class="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-white transition hover:bg-accent-strong disabled:opacity-40"
 				title={m.send_message()}
 				aria-label={m.send_message()}
 			>

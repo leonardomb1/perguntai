@@ -266,7 +266,7 @@
 	}
 
 	const actionButton =
-		'rounded-md p-1.5 text-neutral-400 transition hover:bg-[#f0eee6] hover:text-neutral-700';
+		'rounded-md p-1.5 text-neutral-400 transition hover:bg-fill hover:text-neutral-700';
 
 	// A scheduled run's opening prompt renders as a quiet "Tarefa agendada
 	// executada" marker (Claude-style) instead of a giant user bubble — the
@@ -282,7 +282,7 @@
 	<div>
 		<button
 			onclick={() => (schedOpen = !schedOpen)}
-			class="flex w-full items-center gap-2.5 rounded-xl border border-[#e3e0d5] bg-white px-4 py-3 text-left transition hover:bg-[#faf9f5]"
+			class="flex w-full items-center gap-2.5 rounded-xl border border-edge bg-surface px-4 py-3 text-left transition hover:bg-canvas"
 		>
 			<Icon name="clock" size={15} class="shrink-0 text-neutral-400" />
 			<span class="min-w-0 flex-1 truncate text-sm text-neutral-700">{m.sched_run_executed()}</span>
@@ -293,7 +293,7 @@
 			/>
 		</button>
 		{#if schedOpen}
-			<div class="mt-1.5 rounded-xl border border-[#e9e6dd] bg-[#faf9f5] px-4 py-3">
+			<div class="mt-1.5 rounded-xl border border-edge bg-canvas px-4 py-3">
 				<p class="text-sm leading-relaxed whitespace-pre-wrap text-neutral-600">
 					{scheduledPrompt.slice(SCHED_PREFIX.length).trim()}
 				</p>
@@ -310,18 +310,18 @@
 						bind:value={draft}
 						onkeydown={handleEditKeydown}
 						rows="2"
-						class="w-full resize-none rounded-2xl border border-[#d97757]/50 bg-white px-4 py-2.5 text-[15px] text-neutral-800 focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+						class="w-full resize-none rounded-2xl border border-accent/50 bg-surface px-4 py-2.5 text-[15px] text-neutral-800 focus:ring-2 focus:ring-accent/15 focus:outline-none"
 					></textarea>
 					<div class="mt-1.5 flex justify-end gap-2">
 						<button
 							onclick={() => (editing = false)}
-							class="rounded-lg border border-[#e3e0d5] bg-white px-3 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
+							class="rounded-lg border border-edge bg-surface px-3 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
 						>
 							{m.cancel()}
 						</button>
 						<button
 							onclick={submitEdit}
-							class="rounded-lg bg-[#d97757] px-3 py-1 text-xs font-medium text-white hover:bg-[#bd5d3a]"
+							class="rounded-lg bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent-strong"
 						>
 							{m.save_resend()}
 						</button>
@@ -329,7 +329,7 @@
 				</div>
 			{:else}
 				<div
-					class="max-w-[75%] rounded-2xl rounded-tr-sm border border-[#e3e0d5] bg-[#f0eee6] px-4 py-2.5 text-neutral-800"
+					class="max-w-[75%] rounded-2xl rounded-tr-sm border border-edge bg-fill px-4 py-2.5 text-neutral-800"
 				>
 					{#each message.parts as part, i (i)}
 						{#if part.type === 'file'}
@@ -337,13 +337,13 @@
 								<img
 									src={part.url}
 									alt={part.filename ?? ''}
-									class="mb-2 max-h-64 rounded-xl border border-[#e3e0d5]"
+									class="mb-2 max-h-64 rounded-xl border border-edge"
 								/>
 							{:else}
 								<div
-									class="mb-2 flex w-fit items-center gap-2 rounded-xl border border-[#e3e0d5] bg-white px-3 py-2"
+									class="mb-2 flex w-fit items-center gap-2 rounded-xl border border-edge bg-surface px-3 py-2"
 								>
-									<Icon name="file" size={15} class="shrink-0 text-[#bd5d3a]" />
+									<Icon name="file" size={15} class="shrink-0 text-accent-strong" />
 									<span class="text-sm">{part.filename ?? 'documento.pdf'}</span>
 								</div>
 							{/if}
@@ -381,9 +381,9 @@
 			{:else if item.kind === 'export'}
 				{@const viewer = exportArtifact(item.spec)}
 				<div
-					class="flex w-fit max-w-full items-center gap-3 rounded-xl border border-[#e3e0d5] bg-white px-4 py-3"
+					class="flex w-fit max-w-full items-center gap-3 rounded-xl border border-edge bg-surface px-4 py-3"
 				>
-					<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-[#1baf7a]/10 text-[#0d8a5f]">
+					<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-success/10 text-success-strong">
 						<Icon name="file" size={20} />
 					</span>
 					<span class="min-w-0">
@@ -405,7 +405,7 @@
 					{#if viewer}
 						<button
 							onclick={() => openArtifact(viewer)}
-							class="ml-2 flex shrink-0 items-center gap-1.5 rounded-lg border border-[#e3e0d5] px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-[#f0efea]"
+							class="ml-2 flex shrink-0 items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-fill"
 						>
 							<Icon name="eye" size={13} />
 							{m.artifact_view()}
@@ -413,7 +413,7 @@
 					{/if}
 					<button
 						onclick={() => handleDownload(item.spec as ExportSpec)}
-						class="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#d97757] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#bd5d3a]"
+						class="flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:bg-accent-strong"
 						class:ml-2={!viewer}
 					>
 						<Icon name="download" size={13} />

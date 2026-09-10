@@ -261,16 +261,16 @@
 	<title>{m.org_title()} — PerguntAI</title>
 </svelte:head>
 
-<div class="relative flex h-dvh overflow-hidden bg-[#faf9f5] text-neutral-800">
+<div class="relative flex h-dvh overflow-hidden bg-canvas text-neutral-800">
 	<!-- console rail — a drawer on phones, a static column from sm up -->
 	<aside
-		class="absolute inset-y-0 left-0 z-30 flex w-60 shrink-0 flex-col border-r border-[#e3e0d5] bg-[#f5f4ee] transition-transform sm:static sm:translate-x-0
+		class="absolute inset-y-0 left-0 z-30 flex w-60 shrink-0 flex-col border-r border-edge bg-fill transition-transform sm:static sm:translate-x-0
 			{railOpen ? 'translate-x-0' : '-translate-x-full'}"
 	>
-		<div class="flex h-16 items-center gap-2 border-b border-[#e3e0d5] px-4">
+		<div class="flex h-16 items-center gap-2 border-b border-edge px-4">
 			<button
 				onclick={() => goto('/')}
-				class="grid size-8 shrink-0 place-items-center rounded-lg text-neutral-500 transition hover:bg-[#d97757]/10 hover:text-[#bd5d3a]"
+				class="grid size-8 shrink-0 place-items-center rounded-lg text-neutral-500 transition hover:bg-accent/10 hover:text-accent-strong"
 				title={m.back_to_chat()}
 				aria-label={m.back_to_chat()}
 			>
@@ -282,7 +282,7 @@
 			</div>
 			<button
 				onclick={() => (railOpen = false)}
-				class="shrink-0 rounded-lg p-1.5 text-neutral-500 transition hover:bg-[#d97757]/10 sm:hidden"
+				class="shrink-0 rounded-lg p-1.5 text-neutral-500 transition hover:bg-accent/10 sm:hidden"
 				title={m.close_sidebar()}
 				aria-label={m.close_sidebar()}
 			>
@@ -297,7 +297,7 @@
 						railOpen = false;
 					}}
 					class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[15px] font-medium transition
-						{section === item.id ? 'bg-[#d97757]/10 text-[#bd5d3a]' : 'text-neutral-600 hover:bg-[#eceae1]'}"
+						{section === item.id ? 'bg-accent/10 text-accent-strong' : 'text-neutral-600 hover:bg-fill'}"
 				>
 					<Icon name={item.icon} size={16} />
 					<span class="min-w-0 flex-1 truncate">{item.label}</span>
@@ -316,10 +316,10 @@
 
 	<!-- main -->
 	<main class="flex min-w-0 flex-1 flex-col">
-		<header class="flex h-16 shrink-0 items-center gap-3 border-b border-[#e3e0d5] bg-white px-4 sm:px-6">
+		<header class="flex h-16 shrink-0 items-center gap-3 border-b border-edge bg-surface px-4 sm:px-6">
 			<button
 				onclick={() => (railOpen = true)}
-				class="-ml-1 shrink-0 rounded-lg border border-[#e3e0d5] p-2 text-neutral-600 sm:hidden"
+				class="-ml-1 shrink-0 rounded-lg border border-edge p-2 text-neutral-600 sm:hidden"
 				title={m.open_sidebar()}
 				aria-label={m.open_sidebar()}
 			>
@@ -341,7 +341,7 @@
 				<button
 					onclick={save}
 					disabled={!dirty || saving}
-					class="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#d97757] px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-[#bd5d3a] disabled:opacity-40"
+					class="flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-accent-strong disabled:opacity-40"
 				>
 					{saving ? m.org_saving() : m.settings_save()}
 				</button>
@@ -359,9 +359,9 @@
 						<SecurityPanel />
 					{:else if section === 'capabilities'}
 						<div class="space-y-5">
-						<div class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+						<div class="rounded-xl border border-edge bg-surface p-5">
 							<div class="flex flex-wrap items-start gap-3">
-								<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-[#d97757]/12 text-[#bd5d3a]">
+								<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-accent/12 text-accent-strong">
 									<Icon name="sparkle" size={18} />
 								</span>
 								<div class="min-w-0 flex-1">
@@ -379,19 +379,19 @@
 									onclick={() => toggleCapability('codeExecution')}
 									aria-label={m.cap_code_title()}
 									class="relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40
-										{capabilities?.codeExecution ? 'bg-[#d97757]' : 'bg-[#d9d6c8]'}"
+										{capabilities?.codeExecution ? 'bg-accent' : 'bg-fill-strong'}"
 								>
 									<span
-										class="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200
+										class="absolute top-0.5 left-0.5 size-5 rounded-full bg-surface shadow-sm transition-transform duration-200
 											{capabilities?.codeExecution ? 'translate-x-5' : 'translate-x-0'}"
 									></span>
 								</button>
 							</div>
-							<div class="mt-4 flex flex-wrap items-center gap-2 border-t border-[#efede3] pt-4">
+							<div class="mt-4 flex flex-wrap items-center gap-2 border-t border-edge-soft pt-4">
 								<button
 									onclick={runCapTest}
 									disabled={capTesting}
-									class="shrink-0 rounded-lg border border-[#e3e0d5] px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-[#d97757]/50 hover:text-[#bd5d3a] disabled:opacity-50"
+									class="shrink-0 rounded-lg border border-edge px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-accent/50 hover:text-accent-strong disabled:opacity-50"
 								>
 									{capTesting ? m.settings_mcp_testing() : m.cap_code_test()}
 								</button>
@@ -407,9 +407,9 @@
 							</div>
 						</div>
 
-						<div class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+						<div class="rounded-xl border border-edge bg-surface p-5">
 							<div class="flex flex-wrap items-start gap-3">
-								<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-[#3a6ea8]/12 text-[#3a6ea8]">
+								<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-info/12 text-info">
 									<Icon name="globe" size={18} />
 								</span>
 								<div class="min-w-0 flex-1">
@@ -427,15 +427,15 @@
 									onclick={() => toggleCapability('embedChat')}
 									aria-label={m.cap_embed_title()}
 									class="relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40
-										{capabilities?.embedChat ? 'bg-[#d97757]' : 'bg-[#d9d6c8]'}"
+										{capabilities?.embedChat ? 'bg-accent' : 'bg-fill-strong'}"
 								>
 									<span
-										class="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200
+										class="absolute top-0.5 left-0.5 size-5 rounded-full bg-surface shadow-sm transition-transform duration-200
 											{capabilities?.embedChat ? 'translate-x-5' : 'translate-x-0'}"
 									></span>
 								</button>
 							</div>
-							<div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[#efede3] pt-4">
+							<div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-edge-soft pt-4">
 								{#if embedInfo && !embedInfo.configured}
 									<p class="text-xs text-red-600">{m.cap_embed_not_configured()}</p>
 								{:else if embedInfo}
@@ -449,10 +449,10 @@
 								{/if}
 								<span class="min-w-0 flex-1"></span>
 								<span class="flex items-center gap-1.5">
-									<code class="rounded bg-[#faf9f5] px-2 py-1 text-xs text-neutral-600">/embed</code>
+									<code class="rounded bg-canvas px-2 py-1 text-xs text-neutral-600">/embed</code>
 									<button
 										onclick={copyEmbedUrl}
-										class="flex items-center gap-1 rounded-lg border border-[#e3e0d5] px-2.5 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-[#d97757]/50 hover:text-[#bd5d3a]"
+										class="flex items-center gap-1 rounded-lg border border-edge px-2.5 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-accent/50 hover:text-accent-strong"
 									>
 										<Icon name={embedUrlCopied ? 'check' : 'copy'} size={12} />
 										{m.cap_embed_copy()}
@@ -460,7 +460,7 @@
 								</span>
 							</div>
 
-							<div class="mt-4 border-t border-[#efede3] pt-4">
+							<div class="mt-4 border-t border-edge-soft pt-4">
 								<h4 class="flex items-center gap-2 text-sm font-semibold text-neutral-800">
 									{m.embedkey_title()}
 									<HelpTip text={m.embedkey_help()} />
@@ -470,10 +470,10 @@
 									<div class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2.5">
 										<p class="text-xs text-emerald-800">{m.embedkey_created()}</p>
 										<div class="mt-1.5 flex items-center gap-2">
-											<code class="min-w-0 flex-1 truncate rounded bg-white px-2 py-1 text-xs">{location.origin}/embed?key={ekFresh}</code>
+											<code class="min-w-0 flex-1 truncate rounded bg-surface px-2 py-1 text-xs">{location.origin}/embed?key={ekFresh}</code>
 											<button
 												onclick={copyFreshEmbed}
-												class="flex shrink-0 items-center gap-1 rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-1.5 text-xs font-medium text-neutral-600 transition hover:text-[#bd5d3a]"
+												class="flex shrink-0 items-center gap-1 rounded-lg border border-edge bg-surface px-2.5 py-1.5 text-xs font-medium text-neutral-600 transition hover:text-accent-strong"
 											>
 												<Icon name={ekFreshCopied ? 'check' : 'copy'} size={12} />
 												{m.cap_embed_copy()}
@@ -491,12 +491,12 @@
 
 								{#if embedKeys === null}
 									<div class="grid place-items-center py-4">
-										<span class="size-5 animate-spin rounded-full border-2 border-[#e3e0d5] border-t-[#d97757]"></span>
+										<span class="size-5 animate-spin rounded-full border-2 border-edge border-t-accent"></span>
 									</div>
 								{:else if embedKeys.length === 0}
 									<p class="mt-2 text-xs text-neutral-400">{m.embedkey_none()}</p>
 								{:else}
-									<div class="mt-2 divide-y divide-[#efede3] rounded-lg border border-[#e9e6dd]">
+									<div class="mt-2 divide-y divide-edge-soft rounded-lg border border-edge">
 										{#each embedKeys as ek (ek.id)}
 											<div class="flex items-center gap-3 px-3 py-2.5 {ek.revoked ? 'opacity-50' : ''}">
 												<span class="min-w-0 flex-1">
@@ -523,30 +523,30 @@
 									<input
 										bind:value={ekLabel}
 										placeholder={m.embedkey_label_ph()}
-										class="w-36 rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-1.5 text-xs transition focus:border-[#d97757] focus:outline-none"
+										class="w-36 rounded-lg border border-edge bg-surface px-2.5 py-1.5 text-xs transition focus:border-accent focus:outline-none"
 									/>
 									<input
 										bind:value={ekUser}
 										placeholder={m.embedkey_sruser_ph()}
 										autocomplete="off"
-										class="w-40 rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-1.5 text-xs transition focus:border-[#d97757] focus:outline-none"
+										class="w-40 rounded-lg border border-edge bg-surface px-2.5 py-1.5 text-xs transition focus:border-accent focus:outline-none"
 									/>
 									<input
 										bind:value={ekPass}
 										type="password"
 										placeholder={m.embedkey_srpass_ph()}
 										autocomplete="new-password"
-										class="w-40 rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-1.5 text-xs transition focus:border-[#d97757] focus:outline-none"
+										class="w-40 rounded-lg border border-edge bg-surface px-2.5 py-1.5 text-xs transition focus:border-accent focus:outline-none"
 									/>
 									<input
 										bind:value={ekOrigins}
 										placeholder={m.embedkey_origins_ph()}
-										class="w-56 min-w-0 flex-1 rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-1.5 text-xs transition focus:border-[#d97757] focus:outline-none"
+										class="w-56 min-w-0 flex-1 rounded-lg border border-edge bg-surface px-2.5 py-1.5 text-xs transition focus:border-accent focus:outline-none"
 									/>
 									<button
 										onclick={mintEmbedKey}
 										disabled={ekBusy || !ekLabel.trim() || !ekUser.trim() || !ekPass}
-										class="shrink-0 rounded-lg bg-[#d97757] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#bd5d3a] disabled:opacity-50"
+										class="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:bg-accent-strong disabled:opacity-50"
 									>
 										{m.embedkey_create()}
 									</button>
@@ -554,9 +554,9 @@
 							</div>
 						</div>
 
-						<div class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+						<div class="rounded-xl border border-edge bg-surface p-5">
 							<div class="flex flex-wrap items-start gap-3">
-								<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-[#128a5f]/12 text-[#128a5f]">
+								<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-success-strong/12 text-success-strong">
 									<Icon name="mail" size={18} />
 								</span>
 								<div class="min-w-0 flex-1">
@@ -574,15 +574,15 @@
 									onclick={() => toggleCapability('emailReports')}
 									aria-label={m.cap_email_title()}
 									class="relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40
-										{capabilities?.emailReports ? 'bg-[#d97757]' : 'bg-[#d9d6c8]'}"
+										{capabilities?.emailReports ? 'bg-accent' : 'bg-fill-strong'}"
 								>
 									<span
-										class="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200
+										class="absolute top-0.5 left-0.5 size-5 rounded-full bg-surface shadow-sm transition-transform duration-200
 											{capabilities?.emailReports ? 'translate-x-5' : 'translate-x-0'}"
 									></span>
 								</button>
 							</div>
-							<div class="mt-4 border-t border-[#efede3] pt-4">
+							<div class="mt-4 border-t border-edge-soft pt-4">
 								{#if emailInfo && !emailInfo.configured}
 									<p class="text-xs text-red-600">{m.cap_email_not_configured()}</p>
 								{:else if emailInfo}
@@ -593,9 +593,9 @@
 							</div>
 						</div>
 
-						<div class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+						<div class="rounded-xl border border-edge bg-surface p-5">
 							<div class="flex flex-wrap items-start gap-3">
-								<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-[#7c5cd6]/12 text-[#7c5cd6]">
+								<span class="grid size-10 shrink-0 place-items-center rounded-lg bg-violet/12 text-violet">
 									<Icon name="clock" size={18} />
 								</span>
 								<div class="min-w-0 flex-1">
@@ -613,10 +613,10 @@
 									onclick={() => toggleCapability('scheduledRuns')}
 									aria-label={m.cap_sched_title()}
 									class="relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40
-										{capabilities?.scheduledRuns ? 'bg-[#d97757]' : 'bg-[#d9d6c8]'}"
+										{capabilities?.scheduledRuns ? 'bg-accent' : 'bg-fill-strong'}"
 								>
 									<span
-										class="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200
+										class="absolute top-0.5 left-0.5 size-5 rounded-full bg-surface shadow-sm transition-transform duration-200
 											{capabilities?.scheduledRuns ? 'translate-x-5' : 'translate-x-0'}"
 									></span>
 								</button>
@@ -630,21 +630,21 @@
 			</div>
 		{:else if !loaded}
 			<div class="grid flex-1 place-items-center">
-				<span class="size-7 animate-spin rounded-full border-[3px] border-[#e3e0d5] border-t-[#d97757]"></span>
+				<span class="size-7 animate-spin rounded-full border-[3px] border-edge border-t-accent"></span>
 			</div>
 		{:else}
 			<!-- knowledge: scope list (org + departments) + editor. Side by side
 			     from sm up; on phones the two take turns (see `scopeDetail`). -->
 			<div class="flex min-h-0 flex-1">
 				<div
-					class="flex w-full shrink-0 flex-col border-r border-[#e3e0d5] bg-[#faf9f5] sm:w-60
+					class="flex w-full shrink-0 flex-col border-r border-edge bg-canvas sm:w-60
 						{scopeDetail ? 'max-sm:hidden' : ''}"
 				>
 					<nav class="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
 						<button
 							onclick={() => selectScope('org')}
 							class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[15px] font-medium transition
-								{selectedScope === 'org' ? 'bg-[#d97757]/10 text-[#bd5d3a]' : 'text-neutral-600 hover:bg-[#eceae1]'}"
+								{selectedScope === 'org' ? 'bg-accent/10 text-accent-strong' : 'text-neutral-600 hover:bg-fill'}"
 						>
 							<Icon name="building" size={15} />
 							<span class="min-w-0 flex-1 truncate">{m.org_scope_org()}</span>
@@ -660,14 +660,14 @@
 								<button
 									onclick={() => selectScope(dept.id)}
 									class="group flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[15px] transition
-										{selectedScope === dept.id ? 'bg-[#d97757]/10' : 'hover:bg-[#eceae1]'}"
+										{selectedScope === dept.id ? 'bg-accent/10' : 'hover:bg-fill'}"
 								>
-									<span class="size-1.5 shrink-0 rounded-full {dept.enabled ? 'bg-[#1baf7a]' : 'bg-neutral-300'}"></span>
+									<span class="size-1.5 shrink-0 rounded-full {dept.enabled ? 'bg-success' : 'bg-neutral-300'}"></span>
 									<span class="min-w-0 flex-1 truncate {dept.name.trim() ? 'font-medium' : 'text-neutral-400 italic'}">
 										{dept.name.trim() || m.org_dept_untitled()}
 									</span>
 									{#if matchesProfile(dept.match, you)}
-										<span class="shrink-0 rounded bg-[#1baf7a]/12 px-1 text-[9px] font-semibold text-[#0d8a5f]">{m.org_dept_you_badge()}</span>
+										<span class="shrink-0 rounded bg-success/12 px-1 text-[9px] font-semibold text-success-strong">{m.org_dept_you_badge()}</span>
 									{/if}
 								</button>
 							{/each}
@@ -675,7 +675,7 @@
 					</nav>
 					<button
 						onclick={addDept}
-						class="m-2 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#d8d4c6] px-3 py-2 text-sm font-medium text-neutral-500 transition hover:border-[#d97757]/50 hover:bg-[#d97757]/5 hover:text-[#bd5d3a]"
+						class="m-2 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-edge px-3 py-2 text-sm font-medium text-neutral-500 transition hover:border-accent/50 hover:bg-accent/5 hover:text-accent-strong"
 					>
 						<Icon name="plus" size={15} />
 						{m.org_dept_add()}
@@ -687,13 +687,13 @@
 						<div class="mx-auto max-w-3xl space-y-4 px-4 py-5 sm:px-6">
 							<button
 								onclick={() => (scopeDetail = false)}
-								class="flex items-center gap-1.5 text-xs font-medium text-neutral-500 transition hover:text-[#bd5d3a] sm:hidden"
+								class="flex items-center gap-1.5 text-xs font-medium text-neutral-500 transition hover:text-accent-strong sm:hidden"
 							>
 								<Icon name="arrow-right" size={13} class="rotate-180" />
 								{m.org_nav_knowledge()}
 							</button>
 
-							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+							<section class="rounded-xl border border-edge bg-surface p-5">
 								<h3 class="mb-3 flex items-center gap-1.5 text-base font-semibold text-neutral-900">
 									{m.org_general_title()}
 									<HelpTip text={m.org_general_hint()} />
@@ -703,11 +703,11 @@
 									maxlength={orgPromptMax}
 									rows="4"
 									placeholder={m.org_general_placeholder()}
-									class="w-full resize-y rounded-lg border border-[#e3e0d5] bg-[#faf9f5]/60 px-3.5 py-3 text-sm leading-relaxed transition focus:border-[#d97757] focus:bg-white focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+									class="w-full resize-y rounded-lg border border-edge bg-canvas/60 px-3.5 py-3 text-sm leading-relaxed transition focus:border-accent focus:bg-surface focus:ring-2 focus:ring-accent/15 focus:outline-none"
 								></textarea>
 							</section>
 
-							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+							<section class="rounded-xl border border-edge bg-surface p-5">
 								<div class="mb-3 flex items-end justify-between gap-3">
 									<h3 class="flex items-center gap-1.5 text-base font-semibold text-neutral-900">
 										{m.org_kb_title()}
@@ -718,7 +718,7 @@
 								<KnowledgeBlocks bind:entries />
 							</section>
 
-							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+							<section class="rounded-xl border border-edge bg-surface p-5">
 								<h3 class="mb-3 flex items-center gap-1.5 text-base font-semibold text-neutral-900">
 									{m.org_docs_title()}
 									<HelpTip text={m.org_docs_hint()} />
@@ -735,7 +735,7 @@
 						<div class="mx-auto max-w-3xl space-y-4 px-4 py-5 sm:px-6">
 							<button
 								onclick={() => (scopeDetail = false)}
-								class="flex items-center gap-1.5 text-xs font-medium text-neutral-500 transition hover:text-[#bd5d3a] sm:hidden"
+								class="flex items-center gap-1.5 text-xs font-medium text-neutral-500 transition hover:text-accent-strong sm:hidden"
 							>
 								<Icon name="arrow-right" size={13} class="rotate-180" />
 								{m.org_nav_knowledge()}
@@ -747,16 +747,16 @@
 									bind:value={departments[di].name}
 									maxlength="120"
 									placeholder={m.org_dept_name_placeholder()}
-									class="min-w-0 flex-1 rounded-lg border border-[#e3e0d5] bg-white px-3.5 py-2 text-sm font-semibold transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+									class="min-w-0 flex-1 rounded-lg border border-edge bg-surface px-3.5 py-2 text-sm font-semibold transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 								/>
 								<button
 									onclick={() => (departments[di].enabled = !departments[di].enabled)}
 									role="switch"
 									aria-checked={departments[di].enabled}
 									title={departments[di].enabled ? m.org_dept_enabled() : m.org_dept_disabled()}
-									class="relative h-5 w-9 shrink-0 rounded-full transition {departments[di].enabled ? 'bg-[#d97757]' : 'bg-neutral-300'}"
+									class="relative h-5 w-9 shrink-0 rounded-full transition {departments[di].enabled ? 'bg-accent' : 'bg-neutral-300'}"
 								>
-									<span class="absolute top-0.5 size-4 rounded-full bg-white transition-all {departments[di].enabled ? 'left-4' : 'left-0.5'}"></span>
+									<span class="absolute top-0.5 size-4 rounded-full bg-surface transition-all {departments[di].enabled ? 'left-4' : 'left-0.5'}"></span>
 								</button>
 								<button
 									onclick={() => removeDept(departments[di].id)}
@@ -769,14 +769,14 @@
 							</div>
 
 							<!-- membership rule -->
-							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+							<section class="rounded-xl border border-edge bg-surface p-5">
 								<div class="mb-2 flex items-center gap-2">
 									<h3 class="flex items-center gap-1.5 text-base font-semibold text-neutral-900">
 										{m.org_dept_rule_title()}
 										<HelpTip text={m.org_dept_rule_hint()} />
 									</h3>
 									{#if matchesProfile(departments[di].match, you)}
-										<span class="flex items-center gap-1 rounded-full bg-[#1baf7a]/12 px-2 py-0.5 text-[11px] font-medium text-[#0d8a5f]">
+										<span class="flex items-center gap-1 rounded-full bg-success/12 px-2 py-0.5 text-[11px] font-medium text-success-strong">
 											<Icon name="check" size={11} />{m.org_dept_matches_you()}
 										</span>
 									{:else}
@@ -788,7 +788,7 @@
 							</section>
 
 							<!-- department knowledge -->
-							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+							<section class="rounded-xl border border-edge bg-surface p-5">
 								<h3 class="mb-3 flex items-center gap-1.5 text-base font-semibold text-neutral-900">
 									{m.org_dept_kb_title()}
 									<HelpTip text={`${m.org_dept_kb_hint()} ${m.org_footer_note()}`} />
@@ -797,7 +797,7 @@
 							</section>
 
 							<!-- department documents (only for saved departments) -->
-							<section class="rounded-xl border border-[#e3e0d5] bg-white p-5">
+							<section class="rounded-xl border border-edge bg-surface p-5">
 								<h3 class="mb-3 flex items-center gap-1.5 text-base font-semibold text-neutral-900">
 									{m.org_docs_title()}
 									<HelpTip text={m.org_dept_docs_hint()} />
@@ -807,7 +807,7 @@
 										<DocumentLibrary scope={departments[di].id} />
 									{/key}
 								{:else}
-									<p class="rounded-lg border border-dashed border-[#e3e0d5] px-3 py-2.5 text-xs text-neutral-400">
+									<p class="rounded-lg border border-dashed border-edge px-3 py-2.5 text-xs text-neutral-400">
 										{m.org_dept_docs_save_first()}
 									</p>
 								{/if}

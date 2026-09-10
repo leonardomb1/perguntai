@@ -1,4 +1,5 @@
 import { authFetch, getToken } from '$lib/session';
+import { syncAppearance } from '$lib/theme';
 
 /**
  * Client for /api/settings. MCP tokens are write-only from the browser's
@@ -22,6 +23,7 @@ export interface PublicSettings {
 	/** Whether the deployment's provider workspace supports server-side web search. */
 	webSearchAvailable?: boolean;
 	memoryEnabled: boolean;
+	appearance: 'light' | 'dark' | 'system';
 	onboarded: boolean;
 	role: 'admin' | 'builder' | 'user';
 	/** App admin (role admin or env admin). Resolved live server-side. */
@@ -38,6 +40,7 @@ export interface SettingsPatch {
 	mcpServers?: Array<{ id?: string; name: string; url: string; token?: string | null; enabled: boolean }>;
 	webSearch?: boolean;
 	memoryEnabled?: boolean;
+	appearance?: 'light' | 'dark' | 'system';
 	onboarded?: boolean;
 }
 
@@ -49,7 +52,9 @@ export async function fetchSettings(): Promise<PublicSettings | null> {
 	try {
 		const res = await authFetch('/api/settings', { headers: headers() });
 		if (!res.ok) return null;
-		return await res.json();
+		const data = (await res.json()) as PublicSettings;
+		syncAppearance(data.appearance);
+		return data;
 	} catch {
 		return null;
 	}

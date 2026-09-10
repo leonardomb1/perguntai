@@ -15,13 +15,13 @@
 	<!-- Full-screen overlay while a page transition (load) is in flight -->
 
 	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-[#faf9f5]/80 backdrop-blur-[1px]"
+		class="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 backdrop-blur-[1px]"
 		role="status"
 		aria-label="Loading"
 	>
 		<div class="flex flex-col items-center gap-3">
 			<span
-				class="size-8 animate-spin rounded-full border-[3px] border-[#e3e0d5] border-t-[#d97757]"
+				class="size-8 animate-spin rounded-full border-[3px] border-edge border-t-accent"
 			></span>
 
 			<span class="text-sm text-neutral-500">{m.loading()}</span>

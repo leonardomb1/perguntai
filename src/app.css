@@ -11,6 +11,185 @@
 	--font-serif: 'Source Serif 4 Variable', Georgia, 'Times New Roman', serif;
 }
 
+/* ---------------------------------------------------------------------------
+   Theme tokens. Two tiers (the SAP/Primer model): raw values live on :root /
+   .dark below; @theme inline points Tailwind utilities at them, so bg-surface,
+   text-neutral-600 etc. resolve per theme with no dark: variants anywhere.
+   Light is the app's existing cream palette, verbatim. Dark follows the
+   warm-neutral ramp (Anthropic-style: olive-warm greys, never blue), layered
+   Carbon-style — the canvas is darkest and raised surfaces lighten. */
+@theme inline {
+	--color-canvas: var(--pg-canvas);
+	--color-surface: var(--pg-surface);
+	--color-fill: var(--pg-fill);
+	--color-fill-strong: var(--pg-fill-strong);
+	--color-edge: var(--pg-edge);
+	--color-edge-soft: var(--pg-edge-soft);
+	--color-accent: var(--pg-accent);
+	--color-accent-strong: var(--pg-accent-strong);
+	--color-accent-soft: var(--pg-accent-soft);
+	--color-accent-wash: var(--pg-accent-wash);
+	--color-success: var(--pg-success);
+	--color-success-strong: var(--pg-success-strong);
+	--color-success-deep: var(--pg-success-deep);
+	--color-danger: var(--pg-danger);
+	--color-danger-strong: var(--pg-danger-strong);
+	--color-info: var(--pg-info);
+	--color-violet: var(--pg-violet);
+	--color-chip: var(--pg-chip);
+	--color-chip-strong: var(--pg-chip-strong);
+
+	--color-neutral-50: var(--pg-n50);
+	--color-neutral-100: var(--pg-n100);
+	--color-neutral-200: var(--pg-n200);
+	--color-neutral-300: var(--pg-n300);
+	--color-neutral-400: var(--pg-n400);
+	--color-neutral-500: var(--pg-n500);
+	--color-neutral-600: var(--pg-n600);
+	--color-neutral-700: var(--pg-n700);
+	--color-neutral-800: var(--pg-n800);
+	--color-neutral-900: var(--pg-n900);
+
+	--color-red-50: var(--pg-red-50);
+	--color-red-100: var(--pg-red-100);
+	--color-red-200: var(--pg-red-200);
+	--color-red-300: var(--pg-red-300);
+	--color-red-400: var(--pg-red-400);
+	--color-red-500: var(--pg-red-500);
+	--color-red-600: var(--pg-red-600);
+	--color-red-700: var(--pg-red-700);
+	--color-amber-50: var(--pg-amber-50);
+	--color-amber-100: var(--pg-amber-100);
+	--color-amber-200: var(--pg-amber-200);
+	--color-amber-300: var(--pg-amber-300);
+	--color-amber-700: var(--pg-amber-700);
+	--color-amber-800: var(--pg-amber-800);
+	--color-emerald-50: var(--pg-emerald-50);
+	--color-emerald-200: var(--pg-emerald-200);
+	--color-emerald-300: var(--pg-emerald-300);
+	--color-emerald-600: var(--pg-emerald-600);
+	--color-emerald-700: var(--pg-emerald-700);
+	--color-emerald-800: var(--pg-emerald-800);
+}
+
+:root {
+	color-scheme: light;
+
+	--pg-canvas: #faf9f5;
+	--pg-surface: #ffffff;
+	--pg-fill: #f0eee6;
+	--pg-fill-strong: #d9d6c8;
+	--pg-edge: #e3e0d5;
+	--pg-edge-soft: #efede3;
+	--pg-accent: #d97757;
+	--pg-accent-strong: #bd5d3a;
+	--pg-accent-soft: #e8b4a0;
+	--pg-accent-wash: #fdf3ef;
+	--pg-success: #1baf7a;
+	--pg-success-strong: #0d8a5f;
+	--pg-success-deep: #0d6b4a;
+	--pg-danger: #dc2626;
+	--pg-danger-strong: #b91c1c;
+	--pg-info: #3a6ea8;
+	--pg-violet: #7c5cd6;
+	--pg-chip: #404040;
+	--pg-chip-strong: #262626;
+
+	--pg-n50: #fafafa;
+	--pg-n100: #f5f5f5;
+	--pg-n200: #e5e5e5;
+	--pg-n300: #d4d4d4;
+	--pg-n400: #a3a3a3;
+	--pg-n500: #737373;
+	--pg-n600: #525252;
+	--pg-n700: #404040;
+	--pg-n800: #262626;
+	--pg-n900: #171717;
+
+	--pg-red-50: #fef2f2;
+	--pg-red-100: #fee2e2;
+	--pg-red-200: #fecaca;
+	--pg-red-300: #fca5a5;
+	--pg-red-400: #f87171;
+	--pg-red-500: #ef4444;
+	--pg-red-600: #dc2626;
+	--pg-red-700: #b91c1c;
+	--pg-amber-50: #fffbeb;
+	--pg-amber-100: #fef3c7;
+	--pg-amber-200: #fde68a;
+	--pg-amber-300: #fcd34d;
+	--pg-amber-700: #b45309;
+	--pg-amber-800: #92400e;
+	--pg-emerald-50: #ecfdf5;
+	--pg-emerald-200: #a7f3d0;
+	--pg-emerald-300: #6ee7b7;
+	--pg-emerald-600: #059669;
+	--pg-emerald-700: #047857;
+	--pg-emerald-800: #065f46;
+
+	--pg-scrollbar: rgba(120, 113, 100, 0.28);
+	--pg-scrollbar-hover: rgba(120, 113, 100, 0.5);
+}
+
+.dark {
+	color-scheme: dark;
+
+	--pg-canvas: #1e1d1b;
+	--pg-surface: #262624;
+	--pg-fill: #30302e;
+	--pg-fill-strong: #3f3d38;
+	--pg-edge: #3a3835;
+	--pg-edge-soft: #33322f;
+	--pg-accent: #d97757;
+	--pg-accent-strong: #e0916f;
+	--pg-accent-soft: #8a5540;
+	--pg-accent-wash: #33261f;
+	--pg-success: #25b981;
+	--pg-success-strong: #3ecf95;
+	--pg-success-deep: #0d6b4a;
+	--pg-danger: #b3453a;
+	--pg-danger-strong: #9c3a30;
+	--pg-info: #7aa7d9;
+	--pg-violet: #a58ae8;
+	--pg-chip: #4a4842;
+	--pg-chip-strong: #55524b;
+
+	--pg-n50: #292825;
+	--pg-n100: #2f2e2b;
+	--pg-n200: #3f3d38;
+	--pg-n300: #55524b;
+	--pg-n400: #85817a;
+	--pg-n500: #94908a;
+	--pg-n600: #aaa79f;
+	--pg-n700: #c6c3ba;
+	--pg-n800: #e0ded7;
+	--pg-n900: #f0efe9;
+
+	--pg-red-50: #391f1d;
+	--pg-red-100: #46251f;
+	--pg-red-200: #5c2f28;
+	--pg-red-300: #7a3b31;
+	--pg-red-400: #f0837a;
+	--pg-red-500: #ef7566;
+	--pg-red-600: #f08a75;
+	--pg-red-700: #f4a48f;
+	--pg-amber-50: #362b12;
+	--pg-amber-100: #453413;
+	--pg-amber-200: #5c4517;
+	--pg-amber-300: #6f541c;
+	--pg-amber-700: #e0aa4b;
+	--pg-amber-800: #ecc06e;
+	--pg-emerald-50: #17352a;
+	--pg-emerald-200: #1e5540;
+	--pg-emerald-300: #276a50;
+	--pg-emerald-600: #34c08d;
+	--pg-emerald-700: #4ccc9c;
+	--pg-emerald-800: #6ad8ae;
+
+	--pg-scrollbar: rgba(158, 154, 144, 0.28);
+	--pg-scrollbar-hover: rgba(158, 154, 144, 0.5);
+}
+
 html,
 body {
 	height: 100%;
@@ -38,7 +217,7 @@ select {
    thin rounded pill, overlay-style. */
 * {
 	scrollbar-width: thin;
-	scrollbar-color: rgba(120, 113, 100, 0.32) transparent;
+	scrollbar-color: var(--pg-scrollbar) transparent;
 }
 *::-webkit-scrollbar {
 	width: 11px;
@@ -49,11 +228,11 @@ select {
 	background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-	background-color: rgba(120, 113, 100, 0.28);
+	background-color: var(--pg-scrollbar);
 	border-radius: 9999px;
 	border: 3px solid transparent;
 	background-clip: padding-box;
 }
 *::-webkit-scrollbar-thumb:hover {
-	background-color: rgba(120, 113, 100, 0.5);
+	background-color: var(--pg-scrollbar-hover);
 }

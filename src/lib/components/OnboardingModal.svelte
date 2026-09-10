@@ -42,14 +42,14 @@
 </script>
 
 <div
-	class="fixed inset-0 z-50 flex items-center justify-center bg-[#faf9f5]/95 p-4 backdrop-blur-sm"
+	class="fixed inset-0 z-50 flex items-center justify-center bg-canvas/95 p-4 backdrop-blur-sm"
 	transition:fade={{ duration: 200 }}
 >
 	<div class="w-full max-w-md">
 		{#key step}
 			<div
 				in:fly={{ x: 24, duration: 250 }}
-				class="rounded-2xl border border-[#e3e0d5] bg-white p-8 shadow-lg"
+				class="rounded-2xl border border-edge bg-surface p-8 shadow-lg"
 			>
 				{#if step === 0}
 					<img src={logo} alt="" class="mx-auto mb-4 size-14" />
@@ -60,13 +60,13 @@
 						{m.onboarding_welcome_body()}
 					</p>
 					<div class="mt-4 flex justify-center">
-						<div class="flex rounded-lg border border-[#e3e0d5] p-0.5">
+						<div class="flex rounded-lg border border-edge p-0.5">
 							{#each [{ locale: 'pt-br', label: 'Português' }, { locale: 'en', label: 'English' }] as opt (opt.locale)}
 								<button
 									onclick={() => getLocale() !== opt.locale && setLocale(opt.locale as 'pt-br' | 'en')}
 									class="rounded-md px-3 py-1.5 text-xs font-semibold transition
 										{getLocale() === opt.locale
-										? 'bg-[#d97757] text-white'
+										? 'bg-accent text-white'
 										: 'text-neutral-500 hover:text-neutral-800'}"
 								>
 									{opt.label}
@@ -76,7 +76,7 @@
 					</div>
 					<button
 						onclick={() => (step = 1)}
-						class="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#d97757] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#bd5d3a]"
+						class="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-accent-strong"
 					>
 						{m.onboarding_start()}
 						<Icon name="arrow-right" size={15} />
@@ -89,7 +89,7 @@
 						{m.onboarding_skip()}
 					</button>
 				{:else if step === 1}
-					<div class="mb-4 flex size-10 items-center justify-center rounded-xl bg-[#d97757]/10 text-[#bd5d3a]">
+					<div class="mb-4 flex size-10 items-center justify-center rounded-xl bg-accent/10 text-accent-strong">
 						<Icon name="user" size={20} />
 					</div>
 					<h2 class="font-serif text-xl font-semibold text-neutral-900">
@@ -108,7 +108,7 @@
 						maxlength="80"
 						autofocus
 						placeholder={username}
-						class="w-full rounded-xl border border-neutral-300 px-3.5 py-2.5 text-sm transition placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+						class="w-full rounded-xl border border-neutral-300 px-3.5 py-2.5 text-sm transition placeholder:text-neutral-400 focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 					/>
 
 					<label for="ob-displayname" class="mt-4 mb-1.5 block text-sm font-medium text-neutral-700">
@@ -120,18 +120,18 @@
 						bind:value={displayName}
 						maxlength="80"
 						placeholder={fullName.split(' ')[0] || username}
-						class="w-full rounded-xl border border-neutral-300 px-3.5 py-2.5 text-sm transition placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+						class="w-full rounded-xl border border-neutral-300 px-3.5 py-2.5 text-sm transition placeholder:text-neutral-400 focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 					/>
 
 					<button
 						onclick={() => (step = 2)}
-						class="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#d97757] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#bd5d3a]"
+						class="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-accent-strong"
 					>
 						{m.onboarding_next()}
 						<Icon name="arrow-right" size={15} />
 					</button>
 				{:else}
-					<div class="mb-4 flex size-10 items-center justify-center rounded-xl bg-[#d97757]/10 text-[#bd5d3a]">
+					<div class="mb-4 flex size-10 items-center justify-center rounded-xl bg-accent/10 text-accent-strong">
 						<Icon name="zap" size={20} />
 					</div>
 					<h2 class="font-serif text-xl font-semibold text-neutral-900">
@@ -144,7 +144,7 @@
 					<button
 						onclick={() => finish()}
 						disabled={saving}
-						class="mt-6 w-full rounded-xl bg-[#d97757] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#bd5d3a] disabled:opacity-50"
+						class="mt-6 w-full rounded-xl bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-accent-strong disabled:opacity-50"
 					>
 						{saving ? m.onboarding_finishing() : m.onboarding_finish()}
 					</button>
@@ -161,8 +161,8 @@
 					{#each Array(TOTAL) as _, i (i)}
 						<span
 							class="size-1.5 rounded-full transition-colors {i === step
-								? 'bg-[#d97757]'
-								: 'bg-[#e3e0d5]'}"
+								? 'bg-accent'
+								: 'bg-edge'}"
 						></span>
 					{/each}
 				</div>

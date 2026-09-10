@@ -123,9 +123,9 @@
 		}}
 		aria-haspopup="listbox"
 		aria-expanded={open}
-		class="flex items-center gap-1.5 rounded-full border bg-white py-1 pr-1.5 pl-2.5 text-xs font-medium text-neutral-600 transition hover:bg-[#faf9f5] disabled:cursor-default disabled:opacity-50 disabled:hover:bg-white {open
-			? 'border-[#d97757]/40'
-			: 'border-[#e3e0d5]'} {triggerClass}"
+		class="flex items-center gap-1.5 rounded-full border bg-surface py-1 pr-1.5 pl-2.5 text-xs font-medium text-neutral-600 transition hover:bg-canvas disabled:cursor-default disabled:opacity-50 disabled:hover:bg-surface {open
+			? 'border-accent/40'
+			: 'border-edge'} {triggerClass}"
 	>
 		{#if current}
 			{#if leading}{@render leading(current)}{/if}
@@ -150,7 +150,7 @@
 			'up'
 				? 'bottom'
 				: 'top'} {align === 'right' ? 'right' : 'left'}; visibility:{pos ? 'visible' : 'hidden'}"
-			class="z-50 overflow-y-auto rounded-2xl border border-[#e3e0d5] bg-white p-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.07)] {menuClass}"
+			class="z-50 overflow-y-auto rounded-2xl border border-edge bg-surface p-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.07)] {menuClass}"
 		>
 			{#each options as o, i (o.value)}
 				<!-- Highlight (hover/keyboard focus) is transient "where you are";
@@ -165,7 +165,7 @@
 					tabindex={-1}
 					aria-selected={o.value === value}
 					onclick={() => choose(o.value)}
-					class="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition outline-none hover:bg-[#e3e0d5]/40 focus:bg-[#e3e0d5]/40"
+					class="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition outline-none hover:bg-edge/40 focus:bg-edge/40"
 				>
 					{#if leading}{@render leading(o)}{/if}
 					<span class="min-w-0 flex-1">
@@ -177,7 +177,7 @@
 					<Icon
 						name="check"
 						size={15}
-						class="shrink-0 {o.value === value ? 'text-[#bd5d3a]' : 'invisible'}"
+						class="shrink-0 {o.value === value ? 'text-accent-strong' : 'invisible'}"
 					/>
 				</button>
 			{/each}

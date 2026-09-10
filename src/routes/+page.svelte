@@ -211,10 +211,10 @@
 	<title>PerguntAI</title>
 </svelte:head>
 
-<div class="flex h-full bg-[#faf9f5]">
+<div class="flex h-full bg-canvas">
 	<!-- Sidebar -->
 	<aside
-		class="absolute inset-y-0 left-0 z-20 flex w-72 flex-col border-r border-[#e3e0d5] bg-[#f0eee6] transition-transform sm:static sm:translate-x-0
+		class="absolute inset-y-0 left-0 z-20 flex w-72 flex-col border-r border-edge bg-fill transition-transform sm:static sm:translate-x-0
 			{sidebarOpen ? 'translate-x-0' : '-translate-x-full'}"
 	>
 		<div class="flex items-center justify-between p-3 pb-1">
@@ -222,7 +222,7 @@
 			<div class="flex items-center gap-1">
 				<button
 					onclick={newChat}
-					class="rounded-lg p-2 text-neutral-600 transition hover:bg-white/70 hover:text-[#bd5d3a]"
+					class="rounded-lg p-2 text-neutral-600 transition hover:bg-surface/70 hover:text-accent-strong"
 					title={m.new_chat()}
 					aria-label={m.new_chat()}
 				>
@@ -230,7 +230,7 @@
 				</button>
 				<button
 					onclick={() => (sidebarOpen = false)}
-					class="rounded-lg p-2 text-neutral-500 hover:bg-white/70 sm:hidden"
+					class="rounded-lg p-2 text-neutral-500 hover:bg-surface/70 sm:hidden"
 					title={m.close_sidebar()}
 					aria-label={m.close_sidebar()}
 				>
@@ -248,7 +248,7 @@
 					{#if schedulesEnabled}
 						<button
 							onclick={() => openSchedule('__new__')}
-							class="rounded p-0.5 text-neutral-400 transition hover:text-[#bd5d3a]"
+							class="rounded p-0.5 text-neutral-400 transition hover:text-accent-strong"
 							title={m.sched_new()}
 							aria-label={m.sched_new()}
 						>
@@ -264,13 +264,13 @@
 						onclick={() => openSchedule(sched.id)}
 						class="group flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition
 							{sched.id === selectedScheduleId
-							? 'bg-white text-neutral-900 shadow-sm'
-							: 'text-neutral-600 hover:bg-white/60'}"
+							? 'bg-surface text-neutral-900 shadow-sm'
+							: 'text-neutral-600 hover:bg-surface/60'}"
 					>
 						<Icon
 							name="clock"
 							size={14}
-							class="shrink-0 {sched.enabled ? 'text-[#bd5d3a]' : 'text-neutral-300'}"
+							class="shrink-0 {sched.enabled ? 'text-accent-strong' : 'text-neutral-300'}"
 						/>
 						<span class="min-w-0 flex-1 truncate">{sched.title}</span>
 					</button>
@@ -292,8 +292,8 @@
 					onkeydown={(e) => e.key === 'Enter' && openConversation(convo.id)}
 					class="group flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition
 						{convo.id === currentId && !selectedScheduleId
-						? 'bg-white text-neutral-900 shadow-sm'
-						: 'text-neutral-600 hover:bg-white/60'}"
+						? 'bg-surface text-neutral-900 shadow-sm'
+						: 'text-neutral-600 hover:bg-surface/60'}"
 				>
 					{#if renamingId === convo.id}
 						<!-- svelte-ignore a11y_autofocus -->
@@ -306,7 +306,7 @@
 							}}
 							onclick={(e) => e.stopPropagation()}
 							autofocus
-							class="min-w-0 flex-1 rounded border border-[#d97757]/50 bg-white px-1.5 py-0.5 text-sm outline-none"
+							class="min-w-0 flex-1 rounded border border-accent/50 bg-surface px-1.5 py-0.5 text-sm outline-none"
 						/>
 					{:else}
 						<span
@@ -332,12 +332,12 @@
 		</nav>
 
 
-		<div class="flex items-center gap-2.5 border-t border-[#e3e0d5] p-3">
+		<div class="flex items-center gap-2.5 border-t border-edge p-3">
 			<Avatar {username} size={32} />
 			<span class="min-w-0 flex-1 truncate text-sm text-neutral-700">{shownName}</span>
 			<button
 				onclick={() => (settingsOpen = true)}
-				class="shrink-0 rounded-lg p-2 text-neutral-500 transition hover:bg-[#d97757]/10 hover:text-[#bd5d3a]"
+				class="shrink-0 rounded-lg p-2 text-neutral-500 transition hover:bg-accent/10 hover:text-accent-strong"
 				title={m.settings_title()}
 				aria-label={m.settings_title()}
 			>
@@ -345,7 +345,7 @@
 			</button>
 			<button
 				onclick={logout}
-				class="shrink-0 rounded-lg p-2 text-neutral-500 transition hover:bg-[#d97757]/10 hover:text-[#bd5d3a]"
+				class="shrink-0 rounded-lg p-2 text-neutral-500 transition hover:bg-accent/10 hover:text-accent-strong"
 				title={m.sign_out()}
 				aria-label={m.sign_out()}
 			>
@@ -367,7 +367,7 @@
 		<div class="flex shrink-0 items-center justify-between px-4 pt-3 sm:justify-end">
 			<button
 				onclick={() => (sidebarOpen = true)}
-				class="rounded-lg border border-[#e3e0d5] bg-white p-2 text-neutral-600 sm:hidden"
+				class="rounded-lg border border-edge bg-surface p-2 text-neutral-600 sm:hidden"
 				title={m.open_sidebar()}
 				aria-label={m.open_sidebar()}
 			>
@@ -400,7 +400,7 @@
 			{:else}
 				<div class="flex flex-1 items-center justify-center">
 					<span
-						class="size-6 animate-spin rounded-full border-[3px] border-[#e3e0d5] border-t-[#d97757]"
+						class="size-6 animate-spin rounded-full border-[3px] border-edge border-t-accent"
 					></span>
 				</div>
 			{/if}

@@ -23,6 +23,8 @@ export interface UserSettings {
 	webSearch: boolean;
 	/** Agent-written personal memory — opt-in, off by default (LGPD). */
 	memoryEnabled: boolean;
+	/** Light/dark/system, persisted server-side so it follows the user. */
+	appearance: 'light' | 'dark' | 'system';
 	onboarded: boolean;
 }
 
@@ -57,6 +59,7 @@ export interface PublicSettings {
 	mcpServers: PublicMcpServer[];
 	webSearch: boolean;
 	memoryEnabled: boolean;
+	appearance: 'light' | 'dark' | 'system';
 	onboarded: boolean;
 }
 
@@ -67,6 +70,7 @@ const DEFAULTS: UserSettings = {
 	mcpServers: [],
 	webSearch: false,
 	memoryEnabled: false,
+	appearance: 'system',
 	onboarded: false
 };
 
@@ -145,6 +149,8 @@ async function readStored(username: string): Promise<StoredSettings> {
 			mcpServers: sanitizeStoredServers(parsed.mcpServers),
 			webSearch: parsed.webSearch === true,
 			memoryEnabled: parsed.memoryEnabled === true,
+			appearance:
+				parsed.appearance === 'light' || parsed.appearance === 'dark' ? parsed.appearance : 'system',
 			onboarded: parsed.onboarded === true
 		};
 	} catch {
@@ -168,6 +174,7 @@ export async function getUserSettings(username: string): Promise<UserSettings> {
 		})),
 		webSearch: stored.webSearch,
 		memoryEnabled: stored.memoryEnabled,
+		appearance: stored.appearance,
 		onboarded: stored.onboarded
 	};
 }
@@ -181,6 +188,7 @@ export async function getPublicSettings(username: string): Promise<PublicSetting
 		mcpServers: publicServers(stored.mcpServers),
 		webSearch: stored.webSearch,
 		memoryEnabled: stored.memoryEnabled,
+		appearance: stored.appearance,
 		onboarded: stored.onboarded
 	};
 }
@@ -212,6 +220,7 @@ export interface SettingsPatch {
 	mcpServers?: McpServerPatch[];
 	webSearch?: boolean;
 	memoryEnabled?: boolean;
+	appearance?: 'light' | 'dark' | 'system';
 	onboarded?: boolean;
 }
 
@@ -251,6 +260,8 @@ export async function saveUserSettings(
 		});
 	}
 	if (typeof patch.webSearch === 'boolean') stored.webSearch = patch.webSearch;
+	if (patch.appearance === 'light' || patch.appearance === 'dark' || patch.appearance === 'system')
+		stored.appearance = patch.appearance;
 	if (typeof patch.memoryEnabled === 'boolean') stored.memoryEnabled = patch.memoryEnabled;
 	if (patch.onboarded === true) stored.onboarded = true;
 
@@ -265,6 +276,7 @@ export async function saveUserSettings(
 		mcpServers: publicServers(stored.mcpServers),
 		webSearch: stored.webSearch,
 		memoryEnabled: stored.memoryEnabled,
+		appearance: stored.appearance,
 		onboarded: stored.onboarded
 	};
 }

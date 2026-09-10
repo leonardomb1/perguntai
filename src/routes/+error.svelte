@@ -18,8 +18,8 @@
 	<title>{page.status} · PerguntAI</title>
 </svelte:head>
 
-<main class="flex min-h-full flex-col items-center justify-center gap-4 bg-[#faf9f5] px-4">
-	<p class="text-7xl font-bold tracking-tight text-[#d97757]">{page.status}</p>
+<main class="flex min-h-full flex-col items-center justify-center gap-4 bg-canvas px-4">
+	<p class="text-7xl font-bold tracking-tight text-accent">{page.status}</p>
 	<div class="text-center">
 		<p class="text-lg font-medium text-neutral-800">{hint}</p>
 		{#if page.error?.message && page.error.message !== 'Not Found'}
@@ -29,13 +29,13 @@
 	<div class="mt-2 flex gap-3">
 		<a
 			href="/"
-			class="rounded-xl bg-[#d97757] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#bd5d3a]"
+			class="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-strong"
 		>
 			{m.back_to_chat()}
 		</a>
 		<button
 			onclick={() => location.reload()}
-			class="rounded-xl border border-[#e3e0d5] bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
+			class="rounded-xl border border-edge bg-surface px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
 		>
 			{m.try_again()}
 		</button>

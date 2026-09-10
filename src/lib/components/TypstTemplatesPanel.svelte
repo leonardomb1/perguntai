@@ -155,14 +155,14 @@
 
 {#if openId === null}
 	<!-- LIST -->
-	<section class="overflow-hidden rounded-xl border border-[#e3e0d5] bg-white">
-		<div class="flex items-center gap-2 border-b border-[#efede3] px-4 py-3">
+	<section class="overflow-hidden rounded-xl border border-edge bg-surface">
+		<div class="flex items-center gap-2 border-b border-edge-soft px-4 py-3">
 			<h3 class="text-sm font-semibold text-neutral-800">{m.pdft_list_title()}</h3>
 			<HelpTip text={m.pdft_help()} />
 			<span class="min-w-0 flex-1"></span>
 			<button
 				onclick={openNew}
-				class="flex items-center gap-1.5 rounded-lg bg-[#d97757] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#bd5d3a]"
+				class="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:bg-accent-strong"
 			>
 				<Icon name="plus" size={13} />
 				{m.pdft_new()}
@@ -170,15 +170,15 @@
 		</div>
 		{#if templates === null}
 			<div class="grid place-items-center py-8">
-				<span class="size-6 animate-spin rounded-full border-[3px] border-[#e3e0d5] border-t-[#d97757]"></span>
+				<span class="size-6 animate-spin rounded-full border-[3px] border-edge border-t-accent"></span>
 			</div>
 		{:else if templates.length === 0}
 			<p class="px-4 py-6 text-center text-xs text-neutral-400">{m.pdft_none()}</p>
 		{:else}
 			{#each templates as t (t.id)}
-				<div class="flex items-center gap-3 border-b border-[#efede3] px-4 py-3 last:border-b-0">
+				<div class="flex items-center gap-3 border-b border-edge-soft px-4 py-3 last:border-b-0">
 					<button onclick={() => openDetail(t)} class="flex min-w-0 flex-1 items-center gap-3 text-left">
-						<Icon name="file" size={15} class="shrink-0 {t.enabled ? 'text-[#bd5d3a]' : 'text-neutral-300'}" />
+						<Icon name="file" size={15} class="shrink-0 {t.enabled ? 'text-accent-strong' : 'text-neutral-300'}" />
 						<span class="min-w-0 flex-1">
 							<span class="block truncate text-sm font-medium text-neutral-800">{t.name}</span>
 							{#if t.description}
@@ -192,10 +192,10 @@
 						aria-label={t.name}
 						onclick={() => toggle(t)}
 						class="relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200
-							{t.enabled ? 'bg-[#d97757]' : 'bg-[#d9d6c8]'}"
+							{t.enabled ? 'bg-accent' : 'bg-fill-strong'}"
 					>
 						<span
-							class="absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow-sm transition-transform duration-200
+							class="absolute top-0.5 left-0.5 size-4 rounded-full bg-surface shadow-sm transition-transform duration-200
 								{t.enabled ? 'translate-x-4' : 'translate-x-0'}"
 						></span>
 					</button>
@@ -217,7 +217,7 @@
 		<div class="flex items-center gap-2">
 			<button
 				onclick={back}
-				class="grid size-8 shrink-0 place-items-center rounded-lg text-neutral-500 transition hover:bg-[#eceae1] hover:text-neutral-800"
+				class="grid size-8 shrink-0 place-items-center rounded-lg text-neutral-500 transition hover:bg-fill hover:text-neutral-800"
 				aria-label={m.settings_memory_back()}
 			>
 				<Icon name="arrow-right" size={16} class="rotate-180" />
@@ -228,10 +228,10 @@
 			<button
 				onclick={preview}
 				disabled={previewing}
-				class="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#e3e0d5] bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-[#d97757]/50 hover:text-[#bd5d3a] disabled:opacity-50"
+				class="flex shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-surface px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-accent/50 hover:text-accent-strong disabled:opacity-50"
 			>
 				{#if previewing}
-					<span class="size-3 animate-spin rounded-full border-2 border-[#e3e0d5] border-t-[#d97757]"></span>
+					<span class="size-3 animate-spin rounded-full border-2 border-edge border-t-accent"></span>
 				{:else}
 					<Icon name="eye" size={13} />
 				{/if}
@@ -240,7 +240,7 @@
 			<button
 				onclick={save}
 				disabled={busy || !draft.name.trim() || !draft.source.trim()}
-				class="shrink-0 rounded-lg bg-[#d97757] px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-[#bd5d3a] disabled:opacity-50"
+				class="shrink-0 rounded-lg bg-accent px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-accent-strong disabled:opacity-50"
 			>
 				{m.settings_save()}
 			</button>
@@ -256,31 +256,31 @@
 					bind:value={draft.name}
 					maxlength="80"
 					placeholder={m.pdft_name_ph()}
-					class="w-full rounded-lg border border-[#e3e0d5] bg-white px-3 py-2 text-sm font-medium transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+					class="w-full rounded-lg border border-edge bg-surface px-3 py-2 text-sm font-medium transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 				/>
 				<input
 					bind:value={draft.description}
 					maxlength="200"
 					placeholder={m.pdft_desc_ph()}
-					class="w-full rounded-lg border border-[#e3e0d5] bg-white px-3 py-2 text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+					class="w-full rounded-lg border border-edge bg-surface px-3 py-2 text-sm transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 				/>
 				<textarea
 					bind:value={draft.source}
 					rows="24"
 					spellcheck="false"
-					class="w-full resize-y rounded-lg border border-[#e3e0d5] bg-white px-3 py-2 font-mono text-[12.5px] leading-relaxed transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+					class="w-full resize-y rounded-lg border border-edge bg-surface px-3 py-2 font-mono text-[12.5px] leading-relaxed transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 				></textarea>
 				<p class="text-[11px] text-neutral-400">{m.pdft_contract()}</p>
 			</div>
 
-			<div class="min-h-0 rounded-xl border border-[#e3e0d5] bg-white p-3">
+			<div class="min-h-0 rounded-xl border border-edge bg-surface p-3">
 				{#if previewError}
 					<p class="text-xs text-red-600">✗ {previewError.message}</p>
 					{#each previewError.diagnostics ?? [] as d, i (i)}
 						<p class="mt-1 font-mono text-[11px] text-red-500">{d.severity}: {d.message} ({d.file})</p>
 					{/each}
 				{:else if previewSvg}
-					<div class="preview max-h-[70vh] overflow-auto rounded-lg border border-[#efede3] bg-[#faf9f5] p-2">
+					<div class="preview max-h-[70vh] overflow-auto rounded-lg border border-edge-soft bg-canvas p-2">
 						<!-- eslint-disable-next-line svelte/no-at-html-tags — server-compiled SVG from the admin's own source -->
 						{@html previewSvg}
 					</div>

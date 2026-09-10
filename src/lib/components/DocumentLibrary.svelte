@@ -51,8 +51,8 @@
 	{#if docs.length}
 		<div class="space-y-1.5">
 			{#each docs as doc (doc.id)}
-				<div class="flex items-start gap-2 rounded-lg border border-[#e9e6dd] bg-[#faf9f5] px-3 py-2">
-					<Icon name="file" size={14} class="mt-0.5 shrink-0 text-[#bd5d3a]" />
+				<div class="flex items-start gap-2 rounded-lg border border-edge bg-canvas px-3 py-2">
+					<Icon name="file" size={14} class="mt-0.5 shrink-0 text-accent-strong" />
 					<span class="min-w-0 flex-1">
 						<span class="block truncate text-sm font-medium text-neutral-800">{doc.name}</span>
 						{#if doc.summary}
@@ -80,7 +80,7 @@
 			bind:value={description}
 			maxlength="200"
 			placeholder={m.org_docs_desc_placeholder()}
-			class="w-full rounded-lg border border-[#e3e0d5] bg-white px-3 py-1.5 text-xs transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none sm:w-auto sm:min-w-0 sm:flex-1"
+			class="w-full rounded-lg border border-edge bg-surface px-3 py-1.5 text-xs transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none sm:w-auto sm:min-w-0 sm:flex-1"
 		/>
 		<input
 			bind:this={fileInput}
@@ -92,7 +92,7 @@
 		<button
 			onclick={() => fileInput?.click()}
 			disabled={busy}
-			class="flex shrink-0 items-center gap-1.5 rounded-lg border border-dashed border-[#d8d4c6] px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:border-[#d97757]/50 hover:bg-[#d97757]/5 hover:text-[#bd5d3a] disabled:opacity-50"
+			class="flex shrink-0 items-center gap-1.5 rounded-lg border border-dashed border-edge px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:border-accent/50 hover:bg-accent/5 hover:text-accent-strong disabled:opacity-50"
 		>
 			<Icon name={busy ? 'refresh' : 'plus'} size={14} class={busy ? 'animate-spin' : ''} />
 			{m.org_docs_add()}

@@ -16,22 +16,22 @@
 
 <div class="space-y-3">
 	{#each entries as entry, i (entry.id)}
-		<div class="rounded-xl border border-[#e3e0d5] bg-white p-3.5 transition {entry.enabled ? '' : 'opacity-60'}">
+		<div class="rounded-xl border border-edge bg-surface p-3.5 transition {entry.enabled ? '' : 'opacity-60'}">
 			<div class="flex items-center gap-2">
 				<input
 					bind:value={entry.title}
 					maxlength="120"
 					placeholder={m.org_kb_entry_title_placeholder()}
-					class="min-w-0 flex-1 rounded-lg border border-transparent bg-[#faf9f5] px-3 py-1.5 text-sm font-medium transition focus:border-[#d97757] focus:bg-white focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+					class="min-w-0 flex-1 rounded-lg border border-transparent bg-canvas px-3 py-1.5 text-sm font-medium transition focus:border-accent focus:bg-surface focus:ring-2 focus:ring-accent/15 focus:outline-none"
 				/>
 				<button
 					onclick={() => (entries[i].enabled = !entries[i].enabled)}
 					role="switch"
 					aria-checked={entry.enabled}
 					title={entry.enabled ? m.org_kb_enabled() : m.org_kb_disabled()}
-					class="relative h-5 w-9 shrink-0 rounded-full transition {entry.enabled ? 'bg-[#d97757]' : 'bg-neutral-300'}"
+					class="relative h-5 w-9 shrink-0 rounded-full transition {entry.enabled ? 'bg-accent' : 'bg-neutral-300'}"
 				>
-					<span class="absolute top-0.5 size-4 rounded-full bg-white transition-all {entry.enabled ? 'left-4' : 'left-0.5'}"></span>
+					<span class="absolute top-0.5 size-4 rounded-full bg-surface transition-all {entry.enabled ? 'left-4' : 'left-0.5'}"></span>
 				</button>
 				<button
 					onclick={() => removeEntry(entry.id)}
@@ -47,14 +47,14 @@
 				maxlength="4000"
 				rows="3"
 				placeholder={m.org_kb_entry_body_placeholder()}
-				class="mt-2 w-full resize-y rounded-lg border border-[#e3e0d5] bg-white px-3 py-2 text-sm leading-relaxed transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+				class="mt-2 w-full resize-y rounded-lg border border-edge bg-surface px-3 py-2 text-sm leading-relaxed transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 			></textarea>
 		</div>
 	{/each}
 
 	<button
 		onclick={addEntry}
-		class="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#d8d4c6] px-3 py-2.5 text-sm font-medium text-neutral-500 transition hover:border-[#d97757]/50 hover:bg-[#d97757]/5 hover:text-[#bd5d3a]"
+		class="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-edge px-3 py-2.5 text-sm font-medium text-neutral-500 transition hover:border-accent/50 hover:bg-accent/5 hover:text-accent-strong"
 	>
 		<Icon name="plus" size={15} />
 		{m.org_kb_add()}

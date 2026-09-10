@@ -7,6 +7,7 @@
 	import TokenField from './TokenField.svelte';
 	import SelectMenu from './SelectMenu.svelte';
 	import { saveSettings, type PublicSettings } from '$lib/settings';
+	import { applyAppearance, getAppearance, type Appearance } from '$lib/theme';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import MemoryManager from './MemoryManager.svelte';
@@ -200,6 +201,17 @@
 	// svelte-ignore state_referenced_locally
 	let memoryEnabled = $state(settings.memoryEnabled);
 
+	// Appearance persists immediately, like language and the memory toggle —
+	// the class flip is the feedback, a Save button would only add lag.
+	let appearance = $state(getAppearance());
+	async function setAppearance(a: Appearance) {
+		if (appearance === a) return;
+		appearance = a;
+		applyAppearance(a);
+		const updated = await saveSettings({ appearance: a });
+		if (updated) onSaved(updated);
+	}
+
 	// The memory on/off toggle lives on its own pane and persists immediately
 	// (the topic list, in MemoryManager, manages itself), so it is NOT part of
 	// the general Save flow.
@@ -273,7 +285,7 @@
 >
 	<div
 		transition:scale={{ start: 0.96, duration: 180 }}
-		class="flex h-[600px] max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[85vh] sm:flex-row"
+		class="flex h-[600px] max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl sm:max-h-[85vh] sm:flex-row"
 		role="dialog"
 		aria-modal="true"
 		aria-label={m.settings_title()}
@@ -281,9 +293,9 @@
 		<!-- Section nav — a scrollable tab strip on phones, a sidebar from sm up.
 		     The wrapper collapses (display:contents) at sm so the nav becomes a
 		     direct flex child of the dialog again. -->
-		<div class="flex shrink-0 items-center border-b border-[#e3e0d5] bg-[#f0eee6] sm:contents">
+		<div class="flex shrink-0 items-center border-b border-edge bg-fill sm:contents">
 			<nav
-				class="flex min-w-0 flex-1 gap-1 overflow-x-auto p-2 sm:w-44 sm:flex-none sm:flex-col sm:gap-0.5 sm:overflow-x-visible sm:border-r sm:border-[#e3e0d5] sm:bg-[#f0eee6] sm:p-3 md:w-52"
+				class="flex min-w-0 flex-1 gap-1 overflow-x-auto p-2 sm:w-44 sm:flex-none sm:flex-col sm:gap-0.5 sm:overflow-x-visible sm:border-r sm:border-edge sm:bg-fill sm:p-3 md:w-52"
 			>
 				<span
 					class="hidden px-2 pt-1 pb-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase sm:block"
@@ -295,8 +307,8 @@
 						onclick={() => (section = item.id as Section)}
 						class="flex shrink-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm whitespace-nowrap transition
 							{section === item.id
-							? 'bg-white font-medium text-neutral-900 shadow-sm'
-							: 'text-neutral-600 hover:bg-white/60'}"
+							? 'bg-surface font-medium text-neutral-900 shadow-sm'
+							: 'text-neutral-600 hover:bg-surface/60'}"
 					>
 						<Icon name={item.icon as 'settings' | 'sparkle' | 'zap' | 'key'} size={16} />
 						{item.label}
@@ -310,7 +322,7 @@
 							onClose();
 							goto('/organization');
 						}}
-						class="flex shrink-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm whitespace-nowrap text-neutral-600 transition hover:bg-white/60"
+						class="flex shrink-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm whitespace-nowrap text-neutral-600 transition hover:bg-surface/60"
 					>
 						<Icon name="users" size={16} />
 						<span class="min-w-0 flex-1 truncate">{m.admin_title()}</span>
@@ -320,7 +332,7 @@
 			</nav>
 			<button
 				onclick={onClose}
-				class="mr-1 shrink-0 rounded-lg p-2 text-neutral-500 transition hover:bg-white/70 hover:text-neutral-700 sm:hidden"
+				class="mr-1 shrink-0 rounded-lg p-2 text-neutral-500 transition hover:bg-surface/70 hover:text-neutral-700 sm:hidden"
 				title={m.settings_close()}
 				aria-label={m.settings_close()}
 			>
@@ -345,13 +357,13 @@
 				{#if section === 'general'}
 					<h2 class="font-serif text-xl font-semibold text-neutral-900">{m.settings_profile()}</h2>
 
-					<div class="mt-4 flex items-center justify-between border-b border-[#efede3] pb-4">
+					<div class="mt-4 flex items-center justify-between border-b border-edge-soft pb-4">
 						<span class="text-sm font-medium text-neutral-700">{m.settings_avatar()}</span>
 						<Avatar {username} size={40} />
 					</div>
 
 					<div
-						class="flex flex-col gap-2 border-b border-[#efede3] py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+						class="flex flex-col gap-2 border-b border-edge-soft py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
 					>
 						<label for="set-fullname" class="text-sm font-medium text-neutral-700">
 							{m.settings_full_name()}
@@ -361,12 +373,12 @@
 							type="text"
 							bind:value={fullName}
 							maxlength="80"
-							class="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none sm:w-56"
+							class="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none sm:w-56"
 						/>
 					</div>
 
 					<div
-						class="flex flex-col gap-2 border-b border-[#efede3] py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+						class="flex flex-col gap-2 border-b border-edge-soft py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
 					>
 						<label for="set-displayname" class="text-sm font-medium text-neutral-700">
 							{m.settings_call_you()}
@@ -376,11 +388,11 @@
 							type="text"
 							bind:value={displayName}
 							maxlength="80"
-							class="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none sm:w-56"
+							class="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none sm:w-56"
 						/>
 					</div>
 
-					<div class="border-b border-[#efede3] py-4">
+					<div class="border-b border-edge-soft py-4">
 						<label for="set-instructions" class="text-sm font-medium text-neutral-700">
 							{m.settings_instructions()}
 						</label>
@@ -391,7 +403,7 @@
 							maxlength="4000"
 							rows="4"
 							placeholder={m.settings_instructions_placeholder()}
-							class="w-full resize-none rounded-xl border border-neutral-300 px-3 py-2.5 text-sm transition placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+							class="w-full resize-none rounded-xl border border-neutral-300 px-3 py-2.5 text-sm transition placeholder:text-neutral-400 focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 						></textarea>
 					</div>
 
@@ -400,7 +412,7 @@
 					</h2>
 					{#if settings.webSearchAvailable}
 						<div
-							class="flex items-center justify-between gap-4 border-b border-[#efede3] py-4 sm:gap-6"
+							class="flex items-center justify-between gap-4 border-b border-edge-soft py-4 sm:gap-6"
 						>
 							<span class="min-w-0">
 								<span class="block text-sm font-medium text-neutral-700">{m.settings_web_search()}</span>
@@ -412,24 +424,38 @@
 								aria-label={m.settings_web_search()}
 								onclick={() => (webSearch = !webSearch)}
 								class="relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200
-									{webSearch ? 'bg-[#d97757]' : 'bg-[#d9d6c8]'}"
+									{webSearch ? 'bg-accent' : 'bg-fill-strong'}"
 							>
 								<span
-									class="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200
+									class="absolute top-0.5 left-0.5 size-5 rounded-full bg-surface shadow-sm transition-transform duration-200
 										{webSearch ? 'translate-x-5' : 'translate-x-0'}"
 								></span>
 							</button>
 						</div>
 					{/if}
+					<div class="flex items-center justify-between border-b border-edge-soft py-4">
+						<span class="text-sm font-medium text-neutral-700">{m.settings_appearance()}</span>
+						<div class="flex rounded-lg border border-edge p-0.5">
+							{#each [{ value: 'light', label: m.settings_appearance_light() }, { value: 'dark', label: m.settings_appearance_dark() }, { value: 'system', label: m.settings_appearance_system() }] as opt (opt.value)}
+								<button
+									onclick={() => setAppearance(opt.value as Appearance)}
+									class="rounded-md px-3 py-1 text-xs font-semibold transition
+										{appearance === opt.value ? 'bg-fill text-neutral-800' : 'text-neutral-500 hover:text-neutral-700'}"
+								>
+									{opt.label}
+								</button>
+							{/each}
+						</div>
+					</div>
 					<div class="flex items-center justify-between py-4">
 						<span class="text-sm font-medium text-neutral-700">{m.settings_language()}</span>
-						<div class="flex rounded-lg border border-[#e3e0d5] p-0.5">
+						<div class="flex rounded-lg border border-edge p-0.5">
 							{#each [{ locale: 'pt-br', label: 'PT' }, { locale: 'en', label: 'EN' }] as opt (opt.locale)}
 								<button
 									onclick={() => getLocale() !== opt.locale && setLocale(opt.locale as 'pt-br' | 'en')}
 									class="rounded-md px-3 py-1 text-xs font-semibold transition
 										{getLocale() === opt.locale
-										? 'bg-[#d97757] text-white'
+										? 'bg-accent text-white'
 										: 'text-neutral-500 hover:text-neutral-800'}"
 								>
 									{opt.label}
@@ -444,7 +470,7 @@
 					</p>
 
 					<div
-						class="mt-5 flex items-center justify-between gap-4 border-b border-[#efede3] pb-5 sm:gap-6"
+						class="mt-5 flex items-center justify-between gap-4 border-b border-edge-soft pb-5 sm:gap-6"
 					>
 						<span class="text-sm font-medium text-neutral-700">{m.settings_memory_toggle()}</span>
 						<button
@@ -453,10 +479,10 @@
 							aria-label={m.settings_memory_toggle()}
 							onclick={toggleMemory}
 							class="relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200
-								{memoryEnabled ? 'bg-[#d97757]' : 'bg-[#d9d6c8]'}"
+								{memoryEnabled ? 'bg-accent' : 'bg-fill-strong'}"
 						>
 							<span
-								class="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200
+								class="absolute top-0.5 left-0.5 size-5 rounded-full bg-surface shadow-sm transition-transform duration-200
 									{memoryEnabled ? 'translate-x-5' : 'translate-x-0'}"
 							></span>
 						</button>
@@ -488,7 +514,7 @@
 										placeholder={m.settings_mcp_name_placeholder()}
 										autocapitalize="none"
 										spellcheck="false"
-										class="w-32 min-w-0 rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm font-semibold transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+										class="w-32 min-w-0 rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm font-semibold transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 									/>
 									<span class="ml-auto"></span>
 									<button
@@ -496,9 +522,9 @@
 										role="switch"
 										aria-checked={row.enabled}
 										title={row.enabled ? m.settings_mcp_enabled() : m.settings_mcp_disabled()}
-										class="relative h-5 w-9 shrink-0 rounded-full transition {row.enabled ? 'bg-[#d97757]' : 'bg-neutral-300'}"
+										class="relative h-5 w-9 shrink-0 rounded-full transition {row.enabled ? 'bg-accent' : 'bg-neutral-300'}"
 									>
-										<span class="absolute top-0.5 size-4 rounded-full bg-white transition-all {row.enabled ? 'left-4' : 'left-0.5'}"></span>
+										<span class="absolute top-0.5 size-4 rounded-full bg-surface transition-all {row.enabled ? 'left-4' : 'left-0.5'}"></span>
 									</button>
 									<button
 										onclick={() => removeMcpRow(i)}
@@ -515,7 +541,7 @@
 									placeholder="https://…/mcp"
 									autocapitalize="none"
 									spellcheck="false"
-									class="mt-2 w-full rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+									class="mt-2 w-full rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 								/>
 								{#key saveGen}
 									<TokenField tokenSet={row.tokenSet} bind:value={row.token} bind:removeFlag={row.removeToken} />
@@ -524,7 +550,7 @@
 									<button
 										onclick={() => testConnector(tkey, { url: row.url.trim(), ...(row.id ? { id: row.id } : {}), ...(row.token.trim() ? { token: row.token.trim() } : {}) })}
 										disabled={tests[tkey]?.busy || !row.url.trim()}
-										class="shrink-0 rounded-lg border border-neutral-200 px-2.5 py-1 text-xs font-medium text-neutral-600 transition hover:border-[#d97757]/50 hover:text-[#bd5d3a] disabled:opacity-50"
+										class="shrink-0 rounded-lg border border-neutral-200 px-2.5 py-1 text-xs font-medium text-neutral-600 transition hover:border-accent/50 hover:text-accent-strong disabled:opacity-50"
 									>
 										{tests[tkey]?.busy ? m.settings_mcp_testing() : m.settings_mcp_test()}
 									</button>
@@ -541,7 +567,7 @@
 					{#if mcpRows.length < 5}
 						<button
 							onclick={addMcpRow}
-							class="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:border-[#d97757]/50 hover:bg-[#d97757]/5 hover:text-[#bd5d3a]"
+							class="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:border-accent/50 hover:bg-accent/5 hover:text-accent-strong"
 						>
 							<Icon name="plus" size={13} />
 							{m.settings_mcp_add()}
@@ -556,13 +582,13 @@
 
 					<p class="mt-4 text-xs text-neutral-500">{m.apikeys_usage_hint()}</p>
 					<pre
-						class="mt-1.5 overflow-x-auto rounded-xl border border-[#e9e6dd] bg-[#faf9f5] px-3 py-2.5 font-mono text-[11px] leading-relaxed text-neutral-600">{curlExample}</pre>
+						class="mt-1.5 overflow-x-auto rounded-xl border border-edge bg-canvas px-3 py-2.5 font-mono text-[11px] leading-relaxed text-neutral-600">{curlExample}</pre>
 					<pre
-						class="mt-1.5 overflow-x-auto rounded-xl border border-[#e9e6dd] bg-[#faf9f5] px-3 py-2.5 font-mono text-[11px] leading-relaxed text-neutral-600">{pythonExample}</pre>
+						class="mt-1.5 overflow-x-auto rounded-xl border border-edge bg-canvas px-3 py-2.5 font-mono text-[11px] leading-relaxed text-neutral-600">{pythonExample}</pre>
 
 					<!-- Mint form -->
 					<div
-						class="mt-5 flex flex-col gap-3 border-t border-[#efede3] pt-5 sm:flex-row sm:items-end sm:gap-2"
+						class="mt-5 flex flex-col gap-3 border-t border-edge-soft pt-5 sm:flex-row sm:items-end sm:gap-2"
 					>
 						<div class="min-w-0 flex-1">
 							<label for="set-keylabel" class="mb-1.5 block text-sm font-medium text-neutral-700">
@@ -575,7 +601,7 @@
 								onkeydown={(e) => e.key === 'Enter' && submitNewKey()}
 								maxlength="80"
 								placeholder={m.apikeys_label_placeholder()}
-								class="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm transition placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+								class="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm transition placeholder:text-neutral-400 focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 							/>
 						</div>
 						<!-- Expiry and submit share one row on phones; sm:contents folds
@@ -592,7 +618,7 @@
 							<button
 								onclick={submitNewKey}
 								disabled={creatingKey}
-								class="shrink-0 rounded-xl bg-[#d97757] px-3.5 py-2 text-sm font-medium text-white transition hover:bg-[#bd5d3a] disabled:opacity-40"
+								class="shrink-0 rounded-xl bg-accent px-3.5 py-2 text-sm font-medium text-white transition hover:bg-accent-strong disabled:opacity-40"
 							>
 								{creatingKey ? m.apikeys_creating() : m.apikeys_create()}
 							</button>
@@ -607,22 +633,22 @@
 					{#if freshKey}
 						<div
 							transition:fade={{ duration: 120 }}
-							class="mt-4 rounded-xl border border-[#d97757]/40 bg-[#fdf3ef] p-4"
+							class="mt-4 rounded-xl border border-accent/40 bg-accent-wash p-4"
 						>
 							<div class="flex items-center gap-2">
-								<Icon name="key" size={14} class="shrink-0 text-[#bd5d3a]" />
+								<Icon name="key" size={14} class="shrink-0 text-accent-strong" />
 								<span class="text-sm font-semibold text-neutral-900">{m.apikeys_new_title()}</span>
 							</div>
 							<p class="mt-1 text-xs text-neutral-600">{m.apikeys_new_hint()}</p>
 							<div class="mt-2.5 flex flex-col gap-2 sm:flex-row sm:items-center">
 								<code
-									class="min-w-0 flex-1 truncate rounded-lg border border-[#e3d3cb] bg-white px-3 py-2 font-mono text-xs text-neutral-800"
+									class="min-w-0 flex-1 truncate rounded-lg border border-edge bg-surface px-3 py-2 font-mono text-xs text-neutral-800"
 								>
 									{freshKey}
 								</code>
 								<button
 									onclick={copyFreshKey}
-									class="flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#d97757] px-3 py-2 text-xs font-medium text-white transition hover:bg-[#bd5d3a]"
+									class="flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white transition hover:bg-accent-strong"
 								>
 									<Icon name={freshCopied ? 'check' : 'copy'} size={13} />
 									{freshCopied ? m.apikeys_copied() : m.copy()}
@@ -630,7 +656,7 @@
 							</div>
 							<button
 								onclick={() => (freshKey = null)}
-								class="mt-2.5 rounded-lg px-2 py-1 text-xs font-medium text-neutral-500 transition hover:bg-white/70 hover:text-neutral-800"
+								class="mt-2.5 rounded-lg px-2 py-1 text-xs font-medium text-neutral-500 transition hover:bg-surface/70 hover:text-neutral-800"
 							>
 								{m.apikeys_done()}
 							</button>
@@ -644,11 +670,11 @@
 						{/if}
 						{#each keys as k (k.id)}
 							{@const expired = isExpired(k)}
-							<div class="flex items-center gap-3 border-b border-[#efede3] py-3">
+							<div class="flex items-center gap-3 border-b border-edge-soft py-3">
 								<span
 									class="grid size-8 shrink-0 place-items-center rounded-lg {expired
 										? 'bg-neutral-100 text-neutral-400'
-										: 'bg-[#d97757]/12 text-[#bd5d3a]'}"
+										: 'bg-accent/12 text-accent-strong'}"
 								>
 									<Icon name="key" size={14} />
 								</span>
@@ -658,7 +684,7 @@
 										{#if k.hint}
 											<span class="shrink-0 font-mono text-[11px] text-neutral-400">{k.hint}</span>
 										{/if}
-										<span class="shrink-0 rounded bg-[#f0eee6] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 uppercase">
+										<span class="shrink-0 rounded bg-fill px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 uppercase">
 											{k.scope === 'chat' ? m.apikeys_scope_chat() : m.apikeys_scope_full()}
 										</span>
 										{#if expired}
@@ -682,7 +708,7 @@
 									<button
 										onclick={() => doRevoke(k.id)}
 										title={m.apikeys_revoke_confirm()}
-										class="shrink-0 rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-red-700"
+										class="shrink-0 rounded-lg bg-danger px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-danger-strong"
 									>
 										{m.apikeys_revoke()}?
 									</button>
@@ -702,7 +728,7 @@
 
 			<!-- Footer (memory and keys apply immediately — no batch save) -->
 			<div
-				class="flex shrink-0 items-center justify-end gap-3 border-t border-[#efede3] px-4 py-3.5 sm:px-7
+				class="flex shrink-0 items-center justify-end gap-3 border-t border-edge-soft px-4 py-3.5 sm:px-7
 					{section === 'memory' || section === 'apikeys' ? 'invisible' : ''}"
 			>
 				{#if saveError}
@@ -716,7 +742,7 @@
 				<button
 					onclick={save}
 					disabled={!dirty || saving}
-					class="rounded-xl bg-[#d97757] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#bd5d3a] disabled:opacity-40"
+					class="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-accent-strong disabled:opacity-40"
 				>
 					{m.settings_save()}
 				</button>

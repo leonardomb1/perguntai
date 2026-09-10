@@ -71,7 +71,7 @@
 	</button>
 
 	{#if open}
-		<div class="mt-1.5 ml-[5px] flex flex-col border-l-2 border-[#e8e5da] pl-3.5">
+		<div class="mt-1.5 ml-[5px] flex flex-col border-l-2 border-edge pl-3.5">
 			{#each parts as part, i (i)}
 				{#if part.type === 'reasoning'}
 					<ToolCall reasoning={part.text} />
@@ -85,7 +85,7 @@
 
 <style>
 	.shimmer {
-		background: linear-gradient(90deg, #8f8d84 30%, #d3d0c4 50%, #8f8d84 70%);
+		background: linear-gradient(90deg, var(--pg-n400) 30%, var(--pg-n300) 50%, var(--pg-n400) 70%);
 		background-size: 200% 100%;
 		-webkit-background-clip: text;
 		background-clip: text;
@@ -100,7 +100,7 @@
 	@media (prefers-reduced-motion: reduce) {
 		.shimmer {
 			animation: none;
-			color: #8f8d84;
+			color: var(--pg-n400);
 			background: none;
 		}
 	}

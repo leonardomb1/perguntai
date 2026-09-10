@@ -139,7 +139,7 @@
 		font-family: var(--font-serif);
 		font-size: 16px;
 		line-height: 1.75;
-		color: #262624;
+		color: var(--pg-n800);
 		/* Never push the page wider — long unbroken tokens wrap, wide surfaces
 		   (pre, table-card) scroll internally. */
 		max-width: 100%;
@@ -156,7 +156,7 @@
 	.prose-chat :global(h3),
 	.prose-chat :global(h4) {
 		font-weight: 600;
-		color: #171716;
+		color: var(--pg-n900);
 		line-height: 1.3;
 		margin-top: 1.4em;
 	}
@@ -190,32 +190,32 @@
 
 	.prose-chat :global(strong) {
 		font-weight: 600;
-		color: #171716;
+		color: var(--pg-n900);
 	}
 
 	.prose-chat :global(a) {
-		color: #bd5d3a;
+		color: var(--pg-accent-strong);
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}
 
 	.prose-chat :global(blockquote) {
-		border-left: 3px solid #e3e0d5;
+		border-left: 3px solid var(--pg-edge);
 		padding-left: 1em;
-		color: #52514e;
+		color: var(--pg-n600);
 	}
 
 	.prose-chat :global(hr) {
 		border: none;
-		border-top: 1px solid #e3e0d5;
+		border-top: 1px solid var(--pg-edge);
 	}
 
 	/* --- code --- */
 	.prose-chat :global(code) {
 		font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 		font-size: 0.86em;
-		background: #f0eee6;
-		border: 1px solid #e3e0d5;
+		background: var(--pg-fill);
+		border: 1px solid var(--pg-edge);
 		border-radius: 5px;
 		padding: 0.1em 0.35em;
 	}
@@ -324,9 +324,9 @@
 		width: fit-content;
 		min-width: min(28rem, 100%);
 		overflow-x: auto;
-		border: 1px solid #e3e0d5;
+		border: 1px solid var(--pg-edge);
 		border-radius: 12px;
-		background: #fcfcfb;
+		background: var(--pg-surface);
 	}
 
 	.prose-chat :global(table) {
@@ -341,7 +341,7 @@
 	.prose-chat :global(td) {
 		padding: 0.55em 1em;
 		text-align: left;
-		border-bottom: 1px solid #eceade;
+		border-bottom: 1px solid var(--pg-edge-soft);
 		white-space: nowrap;
 	}
 
@@ -354,14 +354,14 @@
 
 	.prose-chat :global(thead th) {
 		font-weight: 600;
-		color: #52514e;
+		color: var(--pg-n600);
 		font-size: 0.9em;
-		background: #f0eee6;
-		border-bottom: 1px solid #d9d6c8;
+		background: var(--pg-fill);
+		border-bottom: 1px solid var(--pg-fill-strong);
 	}
 
 	.prose-chat :global(tbody tr:hover) {
-		background: #faf9f5;
+		background: var(--pg-canvas);
 	}
 	.prose-chat :global(tbody tr:last-child td) {
 		border-bottom: none;

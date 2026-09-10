@@ -78,19 +78,19 @@
 		return null;
 	});
 
-	const block = 'overflow-x-auto rounded bg-[#faf9f5] p-2 text-xs whitespace-pre-wrap';
+	const block = 'overflow-x-auto rounded bg-canvas p-2 text-xs whitespace-pre-wrap';
 	const caption = 'mb-1 text-xs font-medium tracking-wide text-neutral-400 uppercase';
 </script>
 
 <div>
 	<button
 		onclick={() => (open = !open)}
-		class="group flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-sm transition hover:bg-white/80
+		class="group flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-sm transition hover:bg-surface/80
 			{failed ? 'text-red-600' : 'text-neutral-600'}"
 	>
 		{#if running}
 			<span
-				class="size-3.5 shrink-0 animate-spin rounded-full border-2 border-[#e3e0d5] border-t-[#d97757]"
+				class="size-3.5 shrink-0 animate-spin rounded-full border-2 border-edge border-t-accent"
 				aria-hidden="true"
 			></span>
 		{:else if reasoning !== undefined}
@@ -137,7 +137,7 @@
 	</button>
 
 	{#if open}
-		<div class="mt-0.5 mb-1.5 ml-7 space-y-2 rounded-lg border border-[#e3e0d5] bg-white p-2.5">
+		<div class="mt-0.5 mb-1.5 ml-7 space-y-2 rounded-lg border border-edge bg-surface p-2.5">
 			{#if reasoning !== undefined}
 				<p class="text-xs leading-relaxed whitespace-pre-wrap text-neutral-500">{reasoning}</p>
 			{:else if part}
@@ -190,7 +190,7 @@
 											href={result.url}
 											target="_blank"
 											rel="noopener noreferrer"
-											class="text-[#bd5d3a] hover:underline"
+											class="text-accent-strong hover:underline"
 										>
 											{result.title || result.url}
 										</a>

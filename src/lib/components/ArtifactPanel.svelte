@@ -123,8 +123,8 @@
 		flex-direction: column;
 		width: min(46vw, 760px);
 		min-width: 380px;
-		border-left: 1px solid #e3e0d5;
-		background: #fff;
+		border-left: 1px solid var(--pg-edge);
+		background: var(--pg-surface);
 		animation: panel-in 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 	}
 	@keyframes panel-in {
@@ -162,7 +162,7 @@
 		justify-content: space-between;
 		gap: 10px;
 		padding: 10px 14px;
-		border-bottom: 1px solid #e3e0d5;
+		border-bottom: 1px solid var(--pg-edge);
 	}
 	.head-main {
 		display: flex;
@@ -176,17 +176,17 @@
 		white-space: nowrap;
 		font-size: 14px;
 		font-weight: 600;
-		color: #262624;
+		color: var(--pg-n800);
 	}
 	.badge {
 		flex: none;
 		padding: 1px 7px;
-		border: 1px solid #e3e0d5;
+		border: 1px solid var(--pg-edge);
 		border-radius: 999px;
 		font-size: 10.5px;
 		font-weight: 600;
 		letter-spacing: 0.04em;
-		color: #73726c;
+		color: var(--pg-n500);
 	}
 	.head-actions {
 		display: flex;
@@ -197,9 +197,9 @@
 		display: flex;
 		margin-right: 4px;
 		padding: 2px;
-		border: 1px solid #e3e0d5;
+		border: 1px solid var(--pg-edge);
 		border-radius: 8px;
-		background: #f5f4ee;
+		background: var(--pg-fill);
 	}
 	.seg-btn {
 		padding: 2px 10px;
@@ -208,17 +208,17 @@
 		background: none;
 		font-size: 12px;
 		font-weight: 500;
-		color: #73726c;
+		color: var(--pg-n500);
 		cursor: pointer;
 	}
 	.seg-btn.on {
-		background: #fff;
-		color: #262624;
+		background: var(--pg-surface);
+		color: var(--pg-n800);
 		box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
 	}
 	.dl-error {
 		font-size: 11px;
-		color: #b3261e;
+		color: var(--pg-danger);
 	}
 	.act {
 		display: grid;
@@ -228,12 +228,12 @@
 		border: 0;
 		border-radius: 8px;
 		background: none;
-		color: #73726c;
+		color: var(--pg-n500);
 		cursor: pointer;
 	}
 	.act:hover {
-		background: #f0efea;
-		color: #262624;
+		background: var(--pg-fill);
+		color: var(--pg-n800);
 	}
 
 	.body {
@@ -249,7 +249,7 @@
 		width: 100%;
 		height: 100%;
 		border: 0;
-		background: #fff;
+		background: var(--pg-surface);
 	}
 	pre {
 		margin: 0;
@@ -266,8 +266,8 @@
 	.spinner {
 		width: 24px;
 		height: 24px;
-		border: 3px solid #e3e0d5;
-		border-top-color: #d97757;
+		border: 3px solid var(--pg-edge);
+		border-top-color: var(--pg-accent);
 		border-radius: 50%;
 		animation: spin 0.8s linear infinite;
 	}
@@ -279,6 +279,6 @@
 	.error {
 		margin: 20px;
 		font-size: 13px;
-		color: #b3261e;
+		color: var(--pg-danger);
 	}
 </style>

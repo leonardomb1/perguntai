@@ -1,4 +1,5 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
+import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { extractReasoningMiddleware, wrapLanguageModel, type LanguageModel } from 'ai';
 import { env } from '$env/dynamic/private';
@@ -13,6 +14,10 @@ import type { ModelOption } from '$lib/models';
  *                           Foundry). Keeps the Claude-only optimizations:
  *                           prompt-cache breakpoints, adaptive thinking, and
  *                           server tools (web_search).
+ *  - 'openai-responses'   — OpenAI's Responses API (direct or Azure /openai/v1).
+ *                           Required for GPT-6-generation reasoning models,
+ *                           whose tool calling exists ONLY on this surface;
+ *                           reasoning summaries stream as reasoning parts.
  *  - 'openai-compatible'  — any /v1 chat-completions endpoint: Ollama, OpenAI,
  *                           Groq, vLLM, OpenRouter, Gemini's compat endpoint…
  *                           Reasoning models that emit <think> tags (Qwen,
@@ -25,8 +30,8 @@ import type { ModelOption } from '$lib/models';
  */
 export interface ServerModelOption extends ModelOption {
 	/** Which execution path serves this model. */
-	kind: 'anthropic' | 'openai-compatible';
-	/** Endpoint for openai-compatible entries (must end in /v1). */
+	kind: 'anthropic' | 'openai-compatible' | 'openai-responses';
+	/** Endpoint for openai-compatible/openai-responses entries (must end in /v1). */
 	baseUrl?: string;
 	/** API key for the endpoint (Ollama ignores it; a placeholder is sent). */
 	apiKey?: string;
@@ -69,8 +74,10 @@ const foundryServerToolGap = Boolean(env.ANTHROPIC_FOUNDRY_BASE_URL);
 export const anthropic = env.ANTHROPIC_FOUNDRY_BASE_URL
 	? createAnthropic({
 			baseURL: env.ANTHROPIC_FOUNDRY_BASE_URL,
-			apiKey: env.ANTHROPIC_FOUNDRY_API_KEY,
-			headers: { 'api-key': env.ANTHROPIC_FOUNDRY_API_KEY ?? '' }
+			// FOUNDRY_API_KEY is the RESOURCE key — the same one authenticates every
+			// model surface on the Foundry resource (Anthropic and OpenAI alike).
+			apiKey: env.FOUNDRY_API_KEY,
+			headers: { 'api-key': env.FOUNDRY_API_KEY ?? '' }
 		})
 	: createAnthropic({
 			apiKey: env.ANTHROPIC_API_KEY
@@ -136,7 +143,7 @@ interface ExtraModelConfig {
 	hint?: string;
 	/** Display/logo family shown in the picker (qwen, openai, google, ollama…). */
 	provider?: string;
-	kind?: 'anthropic' | 'openai-compatible';
+	kind?: 'anthropic' | 'openai-compatible' | 'openai-responses';
 	baseUrl?: string;
 	apiKey?: string;
 	/** Name of the env var holding the key — keeps secrets out of the JSON. */
@@ -167,7 +174,7 @@ function parseExtraModels(): ServerModelOption[] {
 			continue;
 		}
 		const kind = entry.kind ?? (entry.provider === 'anthropic' ? 'anthropic' : 'openai-compatible');
-		if (kind === 'openai-compatible' && !entry.baseUrl) {
+		if (kind !== 'anthropic' && !entry.baseUrl) {
 			console.error(`[models] MODELS_EXTRA "${entry.id}" needs baseUrl — skipped`);
 			continue;
 		}
@@ -179,7 +186,8 @@ function parseExtraModels(): ServerModelOption[] {
 			id: entry.id,
 			label: entry.label,
 			hint: entry.hint ?? '',
-			provider: entry.provider ?? (kind === 'anthropic' ? 'anthropic' : 'ollama'),
+			provider:
+				entry.provider ?? (kind === 'anthropic' ? 'anthropic' : kind === 'openai-responses' ? 'openai' : 'ollama'),
 			kind,
 			baseUrl: entry.baseUrl,
 			apiKey: entry.apiKeyEnv ? env[entry.apiKeyEnv] : entry.apiKey,
@@ -192,9 +200,10 @@ function parseExtraModels(): ServerModelOption[] {
 			maxOutputTokens:
 				typeof entry.maxOutputTokens === 'number' && entry.maxOutputTokens > 0
 					? entry.maxOutputTokens
-					: kind === 'anthropic'
-						? 32_000
-						: 8_192
+					// Reasoning models bill thinking as output; 8k would starve them.
+					: kind === 'openai-compatible'
+						? 8_192
+						: 32_000
 		});
 	}
 	return out;
@@ -237,6 +246,11 @@ export function modelSupportsServerTools(id: string): boolean {
 	return entryOf(id)?.serverTools ?? false;
 }
 
+/** Execution kind for provider-specific request options. */
+export function modelKind(id: string): ServerModelOption['kind'] {
+	return entryOf(id)?.kind ?? 'anthropic';
+}
+
 /** Whether Anthropic prompt-cache breakpoints apply to this model. */
 export function modelPromptCache(id: string): boolean {
 	return entryOf(id)?.promptCache ?? false;
@@ -274,6 +288,19 @@ export function clientModels(): ModelOption[] {
 
 /** One provider instance per distinct endpoint, reused across requests. */
 const compatProviders = new Map<string, ReturnType<typeof createOpenAICompatible>>();
+const responsesProviders = new Map<string, ReturnType<typeof createOpenAI>>();
+
+/** Responses-API provider. Azure's /openai/v1 surface accepts the same bearer
+ *  auth as OpenAI proper, so one construction covers both. */
+function responsesProvider(entry: ServerModelOption) {
+	const key = `${entry.baseUrl}|${entry.apiKey ?? ''}`;
+	let provider = responsesProviders.get(key);
+	if (!provider) {
+		provider = createOpenAI({ baseURL: entry.baseUrl!, apiKey: entry.apiKey || 'unused' });
+		responsesProviders.set(key, provider);
+	}
+	return provider;
+}
 
 function compatProvider(entry: ServerModelOption) {
 	const key = `${entry.baseUrl}|${entry.apiKey ?? ''}`;
@@ -295,6 +322,8 @@ function compatProvider(entry: ServerModelOption) {
 export function resolveLanguageModel(id: string): LanguageModel {
 	const entry = entryOf(id) ?? entryOf(DEFAULT_MODEL)!;
 	if (entry.kind === 'anthropic') return anthropic(entry.upstreamModel ?? entry.id);
+	if (entry.kind === 'openai-responses')
+		return responsesProvider(entry).responses(entry.upstreamModel ?? entry.id);
 	const base = compatProvider(entry)(entry.upstreamModel ?? entry.id);
 	// Reasoning models on plain /v1 endpoints inline their thinking as
 	// <think>…</think> text — extract it so the UI shows it as reasoning

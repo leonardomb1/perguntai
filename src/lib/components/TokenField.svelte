@@ -54,7 +54,7 @@
 		/>
 		<button
 			onclick={startReplace}
-			class="shrink-0 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-[#d97757]/50 hover:text-[#bd5d3a]"
+			class="shrink-0 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-accent/50 hover:text-accent-strong"
 		>
 			{m.settings_mcp_token_replace()}
 		</button>
@@ -73,7 +73,7 @@
 			maxlength="200"
 			autocomplete="off"
 			placeholder={m.settings_mcp_token_placeholder()}
-			class="min-w-0 flex-1 rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition placeholder:font-sans placeholder:text-neutral-400 focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+			class="min-w-0 flex-1 rounded-lg border border-neutral-300 px-2.5 py-1.5 font-mono text-xs transition placeholder:font-sans placeholder:text-neutral-400 focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 		/>
 		{#if tokenSet}
 			<button

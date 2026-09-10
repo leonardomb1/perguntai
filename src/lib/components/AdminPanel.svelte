@@ -266,25 +266,25 @@
 	<!-- KPI tiles -->
 	<div class="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
 		{#each [{ label: m.admin_stats_today(), s: usageStats.todaySplit, w: usageStats.totalToday, api: usageStats.todayApi }, { label: m.admin_stats_month(), s: usageStats.monthSplit, w: usageStats.totalMonth, api: usageStats.monthApi }] as card (card.label)}
-			<div class="rounded-xl border border-[#e9e6dd] bg-white px-4 py-3">
+			<div class="rounded-xl border border-edge bg-surface px-4 py-3">
 				<div class="text-[13px] text-neutral-400">{card.label}</div>
 				<div class="font-serif text-3xl font-semibold text-neutral-900">
 					{formatTokens(card.s.total)}
 				</div>
 				<!-- cached vs uncached split of the raw tokens -->
-				<div class="mt-2 flex h-1.5 w-full gap-0.5 overflow-hidden rounded-full bg-[#f0eee6]">
+				<div class="mt-2 flex h-1.5 w-full gap-0.5 overflow-hidden rounded-full bg-fill">
 					<div
-						class="h-full rounded-full bg-[#1baf7a]"
+						class="h-full rounded-full bg-success"
 						style="width:{Math.round((card.s.cached / Math.max(1, card.s.total)) * 100)}%"
 					></div>
 				</div>
 				<div class="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-neutral-500">
 					<span
-						><span class="inline-block size-2 rounded-full bg-[#1baf7a] align-middle"></span>
+						><span class="inline-block size-2 rounded-full bg-success align-middle"></span>
 						{m.admin_stats_cached()} {formatTokens(card.s.cached)}</span
 					>
 					<span
-						><span class="inline-block size-2 rounded-full bg-[#d9d6c8] align-middle"></span>
+						><span class="inline-block size-2 rounded-full bg-fill-strong align-middle"></span>
 						{m.admin_stats_uncached()} {formatTokens(card.s.uncached)}</span
 					>
 				</div>
@@ -295,12 +295,12 @@
 				</div>
 			</div>
 		{/each}
-		<div class="rounded-xl border border-[#e9e6dd] bg-white px-4 py-3">
+		<div class="rounded-xl border border-edge bg-surface px-4 py-3">
 			<div class="text-[13px] text-neutral-400">{m.admin_stats_active()}</div>
 			<div class="font-serif text-3xl font-semibold text-neutral-900 tabular-nums">{activeMonth}</div>
 			<div class="mt-1 text-[11px] text-neutral-400">{m.admin_stats_active_today({ n: activeToday })}</div>
 		</div>
-		<div class="rounded-xl border border-[#e9e6dd] bg-white px-4 py-3">
+		<div class="rounded-xl border border-edge bg-surface px-4 py-3">
 			<div class="text-[13px] text-neutral-400">{m.admin_stats_cache_rate()}</div>
 			<div class="font-serif text-3xl font-semibold text-neutral-900 tabular-nums">{cachePct}%</div>
 			<div class="mt-1 text-[11px] text-neutral-400">
@@ -310,14 +310,14 @@
 	</div>
 
 	<!-- daily usage, last 30 days -->
-	<div class="mb-4 rounded-xl border border-[#e9e6dd] bg-white px-4 py-3">
+	<div class="mb-4 rounded-xl border border-edge bg-surface px-4 py-3">
 		<div class="mb-3 text-[13px] text-neutral-400">{m.admin_stats_daily()}</div>
 		<div class="flex h-28 items-end gap-[3px]">
 			{#each daily as d (d.day)}
 				<div
 					class="flex-1 rounded-t-[3px] transition-colors {d.weighted > 0
-						? 'bg-[#d97757] hover:bg-[#bd5d3a]'
-						: 'bg-[#efede3]'}"
+						? 'bg-accent hover:bg-accent-strong'
+						: 'bg-edge-soft'}"
 					style="height:{d.weighted > 0 ? Math.max(4, Math.round((d.weighted / dailyMax) * 112)) : 2}px"
 					title="{shortDay(d.day)} — {formatTokens(d.weighted)} tokens"
 				></div>
@@ -333,7 +333,7 @@
 		<div class="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
 			{#if deptUsage.length > 0}
 				<!-- department share of the month, as the requested donut -->
-				<div class="rounded-xl border border-[#e9e6dd] bg-white px-4 py-3">
+				<div class="rounded-xl border border-edge bg-surface px-4 py-3">
 					<div class="mb-2 flex items-center gap-1.5 text-[13px] text-neutral-400">
 						{m.admin_stats_by_dept()}
 						<HelpTip text={m.admin_stats_multi_note()} />
@@ -378,7 +378,7 @@
 			{/if}
 			{#if policyUsage.length > 0}
 				{@const polMax = Math.max(1, ...policyUsage.map((p) => p.month))}
-				<div class="rounded-xl border border-[#e9e6dd] bg-white px-4 py-3">
+				<div class="rounded-xl border border-edge bg-surface px-4 py-3">
 					<div class="mb-2 text-[13px] text-neutral-400">{m.admin_stats_by_policy()}</div>
 					<div class="space-y-2">
 						{#each policyUsage as p (p.id)}
@@ -387,9 +387,9 @@
 									<span class="truncate text-[15px] font-medium text-neutral-800">{p.name}</span>
 									<span class="shrink-0 text-[13px] text-neutral-500">{formatTokens(p.month)}</span>
 								</div>
-								<div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[#f0eee6]">
+								<div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-fill">
 									<div
-										class="h-full rounded-full bg-[#d97757]"
+										class="h-full rounded-full bg-accent"
 										style="width:{Math.round((p.month / polMax) * 100)}%"
 									></div>
 								</div>
@@ -412,7 +412,7 @@
 						<div class="flex items-baseline gap-2">
 							<span class="truncate text-[15px] font-medium text-neutral-800">{u.username}</span>
 							{#each u.policyNames ?? [] as pn (pn)}
-								<span class="hidden shrink-0 rounded bg-[#d97757]/8 px-1.5 py-0.5 text-[10px] font-medium text-[#bd5d3a] sm:inline">
+								<span class="hidden shrink-0 rounded bg-accent/8 px-1.5 py-0.5 text-[10px] font-medium text-accent-strong sm:inline">
 									{pn}
 								</span>
 							{/each}
@@ -424,9 +424,9 @@
 								})}
 							</span>
 						</div>
-						<div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[#f0eee6]">
+						<div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-fill">
 							<div
-								class="h-full rounded-full bg-[#d97757]"
+								class="h-full rounded-full bg-accent"
 								style="width:{Math.round((u.usage.month / usageStats.maxMonth) * 100)}%"
 							></div>
 						</div>
@@ -439,7 +439,7 @@
 	<!-- Rule-based grants: the same claim rules departments use, granting
 	     role/models/writes/limits. Grants compose most-permissively with the
 	     per-user list below; a per-user block always wins. -->
-	<div class="mb-4 rounded-xl border border-[#e3e0d5] bg-white p-5">
+	<div class="mb-4 rounded-xl border border-edge bg-surface p-5">
 		<div class="mb-3 flex items-center justify-between gap-3">
 			<h3 class="flex items-center gap-1.5 text-base font-semibold text-neutral-900">
 				{m.org_policies_title()}
@@ -453,7 +453,7 @@
 				<button
 					onclick={submitPolicies}
 					disabled={savingPolicies}
-					class="shrink-0 rounded-lg bg-[#d97757] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#bd5d3a] disabled:opacity-40"
+					class="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:bg-accent-strong disabled:opacity-40"
 				>
 					{savingPolicies ? m.org_saving() : m.org_policies_save()}
 				</button>
@@ -466,25 +466,25 @@
 
 		<div class="space-y-3">
 			{#each policies as p, pi (p.id)}
-				<div class="rounded-lg border border-[#e9e6dd] bg-[#faf9f5]/60 p-3.5">
+				<div class="rounded-lg border border-edge bg-canvas/60 p-3.5">
 					<div class="flex items-center gap-2">
 						<input
 							bind:value={policies[pi].name}
 							maxlength="120"
 							placeholder={m.org_policy_name_placeholder()}
-							class="min-w-0 flex-1 rounded-lg border border-[#e3e0d5] bg-white px-3 py-1.5 text-sm font-medium transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+							class="min-w-0 flex-1 rounded-lg border border-edge bg-surface px-3 py-1.5 text-sm font-medium transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 						/>
 						{#if matchesProfile(p.match, you)}
-							<span class="shrink-0 rounded bg-[#1baf7a]/12 px-1.5 py-0.5 text-[10px] font-semibold text-[#0d8a5f]">{m.org_dept_you_badge()}</span>
+							<span class="shrink-0 rounded bg-success/12 px-1.5 py-0.5 text-[10px] font-semibold text-success-strong">{m.org_dept_you_badge()}</span>
 						{/if}
 						<button
 							onclick={() => (policies[pi].enabled = !policies[pi].enabled)}
 							role="switch"
 							aria-checked={policies[pi].enabled}
 							title={policies[pi].enabled ? m.org_dept_enabled() : m.org_dept_disabled()}
-							class="relative h-5 w-9 shrink-0 rounded-full transition {policies[pi].enabled ? 'bg-[#d97757]' : 'bg-neutral-300'}"
+							class="relative h-5 w-9 shrink-0 rounded-full transition {policies[pi].enabled ? 'bg-accent' : 'bg-neutral-300'}"
 						>
-							<span class="absolute top-0.5 size-4 rounded-full bg-white transition-all {policies[pi].enabled ? 'left-4' : 'left-0.5'}"></span>
+							<span class="absolute top-0.5 size-4 rounded-full bg-surface transition-all {policies[pi].enabled ? 'left-4' : 'left-0.5'}"></span>
 						</button>
 						<button
 							onclick={() => (policies = policies.filter((x) => x.id !== p.id))}
@@ -501,7 +501,7 @@
 					</div>
 
 					<!-- grants: role, extra models, write flags, daily limit -->
-					<div class="mt-3 flex flex-wrap items-center gap-2 border-t border-[#efede3] pt-3">
+					<div class="mt-3 flex flex-wrap items-center gap-2 border-t border-edge-soft pt-3">
 						<SelectMenu
 							options={roleOptions}
 							bind:value={policies[pi].role}
@@ -513,8 +513,8 @@
 								type="button"
 								onclick={() => togglePolicyModel(policies[pi], mo.id)}
 								class="flex shrink-0 items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-medium transition {on
-									? 'border-[#d97757]/40 bg-[#fdf3ef] text-[#bd5d3a]'
-									: 'border-[#e3e0d5] bg-white text-neutral-400 hover:bg-[#faf9f5]'}"
+									? 'border-accent/40 bg-accent-wash text-accent-strong'
+									: 'border-edge bg-surface text-neutral-400 hover:bg-canvas'}"
 							>
 								<img src={providerLogo(mo.provider)} alt="" class="size-3.5 {on ? '' : 'opacity-30 grayscale'}" />
 								{mo.label}
@@ -528,8 +528,8 @@
 							title={m.admin_sqlwrite_title()}
 							aria-label={m.admin_sqlwrite_badge()}
 							class="flex shrink-0 items-center rounded-lg border px-2 py-1 transition {p.sqlWrite
-								? 'border-[#d97757]/40 bg-[#fdf3ef] text-[#bd5d3a]'
-								: 'border-[#e3e0d5] bg-white text-neutral-400 hover:bg-[#faf9f5]'}"
+								? 'border-accent/40 bg-accent-wash text-accent-strong'
+								: 'border-edge bg-surface text-neutral-400 hover:bg-canvas'}"
 						>
 							<Icon name="square-pen" size={12} />
 						</button>
@@ -551,7 +551,7 @@
 								el.value = formatLimit(parsed);
 								policies[pi].maxDailyTokens = parsed;
 							}}
-							class="w-24 shrink-0 rounded-lg border border-[#e3e0d5] bg-white px-2 py-1 text-right text-xs text-neutral-600 transition focus:border-[#d97757] focus:outline-none"
+							class="w-24 shrink-0 rounded-lg border border-edge bg-surface px-2 py-1 text-right text-xs text-neutral-600 transition focus:border-accent focus:outline-none"
 						/>
 					</div>
 				</div>
@@ -560,7 +560,7 @@
 
 		<button
 			onclick={addPolicy}
-			class="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#d8d4c6] px-3 py-2 text-sm font-medium text-neutral-500 transition hover:border-[#d97757]/50 hover:bg-[#d97757]/5 hover:text-[#bd5d3a]"
+			class="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-edge px-3 py-2 text-sm font-medium text-neutral-500 transition hover:border-accent/50 hover:bg-accent/5 hover:text-accent-strong"
 		>
 			<Icon name="plus" size={15} />
 			{m.org_policy_add()}
@@ -571,19 +571,19 @@
 	     dense list with an Origem column separating explicit records from
 	     policy-admitted users. Policy rows are read-only (their grants come
 	     from the matching policies); "Criar exceção" promotes them. -->
-	<div class="rounded-xl border border-[#e3e0d5] bg-white">
+	<div class="rounded-xl border border-edge bg-surface">
 		<div class="flex flex-wrap items-center gap-2 px-4 py-3">
 			<input
 				type="text"
 				bind:value={newUsername}
 				onkeydown={(e) => e.key === 'Enter' && submitNewUser()}
 				placeholder={m.admin_add_placeholder()}
-				class="w-64 min-w-0 rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-[15px] transition focus:border-[#d97757] focus:ring-2 focus:ring-[#d97757]/15 focus:outline-none"
+				class="w-64 min-w-0 rounded-lg border border-neutral-300 bg-surface px-3 py-1.5 text-[15px] transition focus:border-accent focus:ring-2 focus:ring-accent/15 focus:outline-none"
 			/>
 			<button
 				onclick={submitNewUser}
 				disabled={!newUsername.trim()}
-				class="shrink-0 rounded-lg bg-[#d97757] px-3 py-1.5 text-sm font-medium text-white transition hover:bg-[#bd5d3a] disabled:opacity-40"
+				class="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white transition hover:bg-accent-strong disabled:opacity-40"
 			>
 				{m.admin_add()}
 			</button>
@@ -603,7 +603,7 @@
 			<div class="overflow-x-auto rounded-b-xl">
 				<table class="w-full text-left">
 					<thead>
-						<tr class="border-y border-[#efede3] bg-[#faf9f5]/60 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase">
+						<tr class="border-y border-edge-soft bg-canvas/60 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase">
 							<th class="py-2 pl-4 font-semibold">{m.admin_col_user()}</th>
 							<th class="px-3 py-2 font-semibold">{m.admin_col_source()}</th>
 							<th class="px-3 py-2 font-semibold">{m.admin_col_role()}</th>
@@ -617,14 +617,14 @@
 					</thead>
 					<tbody>
 						{#each adminUsers as u (u.username)}
-							<tr class="border-b border-[#efede3] last:border-b-0">
+							<tr class="border-b border-edge-soft last:border-b-0">
 								<td class="py-2.5 pl-4">
 									<div class="flex items-center gap-2.5">
 										<Avatar username={u.username} size={26} />
 										<span class="max-w-44 truncate text-[15px] font-medium text-neutral-800">{u.username}</span>
 										{#if u.envAdmin}
 											<span
-												class="shrink-0 rounded bg-[#f0eee6] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 uppercase"
+												class="shrink-0 rounded bg-fill px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 uppercase"
 												title={m.admin_env_badge_hint()}
 											>
 												{m.admin_env_badge()}
@@ -641,11 +641,11 @@
 									{#if u.unlisted}
 										<div class="flex max-w-48 flex-wrap gap-1">
 											{#each u.policyNames?.length ? u.policyNames : [m.admin_source_policy()] as pn (pn)}
-												<span class="rounded bg-[#d97757]/8 px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-[#bd5d3a]">{pn}</span>
+												<span class="rounded bg-accent/8 px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-accent-strong">{pn}</span>
 											{/each}
 										</div>
 									{:else}
-										<span class="rounded bg-[#f0eee6] px-1.5 py-0.5 text-[11px] font-medium text-neutral-500">{m.admin_source_record()}</span>
+										<span class="rounded bg-fill px-1.5 py-0.5 text-[11px] font-medium text-neutral-500">{m.admin_source_record()}</span>
 									{/if}
 								</td>
 								{#if u.unlisted}
@@ -685,12 +685,12 @@
 												title={m.admin_models_title()}
 												aria-haspopup="true"
 												aria-expanded={openModelsFor === u.username}
-												class="flex items-center gap-1.5 rounded-lg border bg-white px-2 py-1 text-xs font-medium text-neutral-600 transition hover:bg-[#faf9f5] {openModelsFor ===
+												class="flex items-center gap-1.5 rounded-lg border bg-surface px-2 py-1 text-xs font-medium text-neutral-600 transition hover:bg-canvas {openModelsFor ===
 												u.username
-													? 'border-[#d97757]/40'
-													: 'border-[#e3e0d5]'}"
+													? 'border-accent/40'
+													: 'border-edge'}"
 											>
-												<Icon name="sparkle" size={12} class="text-[#bd5d3a]" />
+												<Icon name="sparkle" size={12} class="text-accent-strong" />
 												{allModels.filter((mo) => modelsGranted(u, mo.id)).length}
 												<Icon
 													name="chevron-down"
@@ -708,7 +708,7 @@
 														0}px; min-width:{modelsPos?.minWidth ?? 240}px; transform-origin:top right; visibility:{modelsPos
 														? 'visible'
 														: 'hidden'}"
-													class="z-50 overflow-hidden rounded-2xl border border-[#e3e0d5] bg-white p-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.07)]"
+													class="z-50 overflow-hidden rounded-2xl border border-edge bg-surface p-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.07)]"
 												>
 													{#each allModels as mo (mo.id)}
 														{@const locked = mo.id === defaultModel || u.role === 'admin' || u.envAdmin}
@@ -719,7 +719,7 @@
 															onclick={() => toggleModel(u, mo.id)}
 															class="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition {locked
 																? 'cursor-default'
-																: 'hover:bg-[#faf9f5]'}"
+																: 'hover:bg-canvas'}"
 														>
 															<img
 																src={providerLogo(mo.provider)}
@@ -736,8 +736,8 @@
 															{/if}
 															<span
 																class="grid size-4 shrink-0 place-items-center rounded-md border transition {on
-																	? 'border-[#d97757] bg-[#d97757] text-white'
-																	: 'border-[#d9d6c8] bg-white'}"
+																	? 'border-accent bg-accent text-white'
+																	: 'border-edge bg-surface'}"
 															>
 																{#if on}<Icon name="check" size={11} />{/if}
 															</span>
@@ -757,8 +757,8 @@
 												title={m.admin_sqlwrite_title()}
 												aria-label={m.admin_sqlwrite_badge()}
 												class="flex shrink-0 items-center rounded-lg border px-2 py-1 transition {u.sqlWrite
-													? 'border-[#d97757]/40 bg-[#fdf3ef] text-[#bd5d3a]'
-													: 'border-[#e3e0d5] bg-white text-neutral-400 hover:bg-[#faf9f5]'}"
+													? 'border-accent/40 bg-accent-wash text-accent-strong'
+													: 'border-edge bg-surface text-neutral-400 hover:bg-canvas'}"
 											>
 												<Icon name="square-pen" size={12} />
 											</button>
@@ -783,7 +783,7 @@
 												el.value = formatLimit(parsed);
 												runAdmin(() => patchUser(u.username, { maxDailyTokens: parsed }));
 											}}
-											class="w-24 shrink-0 rounded-lg border border-[#e3e0d5] bg-white px-2 py-1 text-right text-xs text-neutral-600 transition focus:border-[#d97757] focus:outline-none"
+											class="w-24 shrink-0 rounded-lg border border-edge bg-surface px-2 py-1 text-right text-xs text-neutral-600 transition focus:border-accent focus:outline-none"
 										/>
 									</td>
 								{/if}
@@ -804,10 +804,10 @@
 											onclick={() => runAdmin(() => patchUser(u.username, { blocked: !u.blocked }))}
 											title={u.blocked ? m.admin_unblock() : m.admin_block()}
 											class="relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40
-												{u.blocked ? 'bg-[#d9d6c8]' : 'bg-[#1baf7a]'}"
+												{u.blocked ? 'bg-fill-strong' : 'bg-success'}"
 										>
 											<span
-												class="absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow-sm transition-transform duration-200
+												class="absolute top-0.5 left-0.5 size-4 rounded-full bg-surface shadow-sm transition-transform duration-200
 													{u.blocked ? 'translate-x-0' : 'translate-x-4'}"
 											></span>
 										</button>
@@ -817,7 +817,7 @@
 									{#if u.unlisted}
 										<button
 											onclick={() => runAdmin(() => addUser(u.username))}
-											class="rounded-lg border border-[#e3e0d5] bg-white px-2.5 py-1 text-xs font-medium whitespace-nowrap text-neutral-600 transition hover:border-[#d97757]/40 hover:bg-[#faf9f5] hover:text-[#bd5d3a]"
+											class="rounded-lg border border-edge bg-surface px-2.5 py-1 text-xs font-medium whitespace-nowrap text-neutral-600 transition hover:border-accent/40 hover:bg-canvas hover:text-accent-strong"
 										>
 											{m.admin_add_exception()}
 										</button>

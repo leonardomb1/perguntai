@@ -21,7 +21,7 @@
 		<Icon name="info" size={14} />
 	</span>
 	<span
-		class="pointer-events-none absolute top-full z-40 mt-1.5 w-72 rounded-lg bg-neutral-800 px-3 py-2 text-xs leading-relaxed font-normal text-white normal-case opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-within:opacity-100 {align ===
+		class="pointer-events-none absolute top-full z-40 mt-1.5 w-72 rounded-lg bg-chip-strong px-3 py-2 text-xs leading-relaxed font-normal text-white normal-case opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-within:opacity-100 {align ===
 		'right'
 			? 'right-0'
 			: 'left-1/2 -translate-x-1/2'}"

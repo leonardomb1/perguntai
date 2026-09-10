@@ -51,7 +51,8 @@ export function pngFilename(title: string): string {
 export function chartToPng(
 	source: HTMLCanvasElement,
 	title: string,
-	background: string
+	background: string,
+	titleColor = '#262624'
 ): Promise<Blob | null> {
 	const dpr = Math.max(1, window.devicePixelRatio || 1);
 	const pad = 20 * dpr;
@@ -64,7 +65,7 @@ export function chartToPng(
 	ctx.fillStyle = background;
 	ctx.fillRect(0, 0, out.width, out.height);
 	if (title) {
-		ctx.fillStyle = '#262624';
+		ctx.fillStyle = titleColor;
 		ctx.font = `600 ${14 * dpr}px 'DM Sans Variable', ui-sans-serif, system-ui, sans-serif`;
 		ctx.textBaseline = 'top';
 		ctx.fillText(title, pad, pad);

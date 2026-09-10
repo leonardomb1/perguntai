@@ -3,7 +3,8 @@
 	import { fade } from 'svelte/transition';
 	import { m } from '$lib/paraglide/messages.js';
 	import { browser } from '$app/environment';
-	import { INK } from '$lib/palette';
+	import { chartInk } from '$lib/palette';
+	import { darkTheme } from '$lib/theme';
 	import Icon from './Icon.svelte';
 	import { canCopyImage, copyImage, downloadBlob, pngFilename, svgToPng } from '$lib/image-export';
 
@@ -56,11 +57,11 @@
 	let imageCopied = $state(false);
 
 	async function downloadPng() {
-		const blob = svg && (await svgToPng(svg, INK.surface));
+		const blob = svg && (await svgToPng(svg, ink.surface));
 		if (blob) downloadBlob(blob, pngFilename(title));
 	}
 	async function copyPng() {
-		const blob = svg && (await svgToPng(svg, INK.surface));
+		const blob = svg && (await svgToPng(svg, ink.surface));
 		if (blob && (await copyImage(blob))) {
 			imageCopied = true;
 			setTimeout(() => (imageCopied = false), 1500);
@@ -69,8 +70,11 @@
 
 	let counter = 0;
 
+	const ink = $derived(chartInk($darkTheme));
+
 	$effect(() => {
 		if (!browser || !code) return;
+		const dark = $darkTheme;
 		let cancelled = false;
 
 		(async () => {
@@ -87,15 +91,25 @@
 					// (true) shadows it.
 					htmlLabels: false,
 					fontFamily: "'DM Sans Variable', ui-sans-serif, system-ui, sans-serif",
-					themeVariables: {
-						primaryColor: '#f0eee6',
-						primaryTextColor: '#262624',
-						primaryBorderColor: '#c3c2b7',
-						lineColor: '#898781',
-						secondaryColor: '#fcfcfb',
-						tertiaryColor: '#faf9f5',
-						fontSize: '14px'
-					}
+					themeVariables: dark
+						? {
+								primaryColor: '#30302e',
+								primaryTextColor: '#f0efe9',
+								primaryBorderColor: '#55524b',
+								lineColor: '#94908a',
+								secondaryColor: '#262624',
+								tertiaryColor: '#1e1d1b',
+								fontSize: '14px'
+							}
+						: {
+								primaryColor: '#f0eee6',
+								primaryTextColor: '#262624',
+								primaryBorderColor: '#c3c2b7',
+								lineColor: '#898781',
+								secondaryColor: '#fcfcfb',
+								tertiaryColor: '#faf9f5',
+								fontSize: '14px'
+							}
 				});
 				// Parse first for a clean error instead of a broken render.
 				await mermaid.parse(code);
@@ -122,12 +136,12 @@
 
 <figure
 	class="rounded-xl border border-neutral-200 p-4"
-	style:background-color={INK.surface}
+	style:background-color={ink.surface}
 	aria-label={title}
 >
 	<figcaption
 		class="mb-3 flex items-center justify-between gap-2 text-sm font-semibold"
-		style:color={INK.primary}
+		style:color={ink.primary}
 	>
 		{title}
 		{#if svg}
@@ -135,7 +149,7 @@
 				{#if copySupported}
 					<button
 						onclick={copyPng}
-						class="rounded-lg p-1.5 text-neutral-400 transition hover:bg-white hover:text-neutral-700"
+						class="rounded-lg p-1.5 text-neutral-400 transition hover:bg-surface hover:text-neutral-700"
 						title={m.copy_image()}
 						aria-label={m.copy_image()}
 					>
@@ -144,7 +158,7 @@
 				{/if}
 				<button
 					onclick={downloadPng}
-					class="rounded-lg p-1.5 text-neutral-400 transition hover:bg-white hover:text-neutral-700"
+					class="rounded-lg p-1.5 text-neutral-400 transition hover:bg-surface hover:text-neutral-700"
 					title={m.download_image()}
 					aria-label={m.download_image()}
 				>
@@ -152,7 +166,7 @@
 				</button>
 				<button
 					onclick={openExpanded}
-					class="rounded-lg p-1.5 text-neutral-400 transition hover:bg-white hover:text-neutral-700"
+					class="rounded-lg p-1.5 text-neutral-400 transition hover:bg-surface hover:text-neutral-700"
 					title={m.diagram_expand()}
 					aria-label={m.diagram_expand()}
 				>
@@ -164,7 +178,7 @@
 
 	{#if error}
 		<p class="mb-2 text-sm text-red-600">{m.diagram_failed({ error })}</p>
-		<pre class="overflow-x-auto rounded bg-[#faf9f5] p-2 text-xs">{code}</pre>
+		<pre class="overflow-x-auto rounded bg-canvas p-2 text-xs">{code}</pre>
 	{:else if svg}
 		<!-- SVG is generated locally by mermaid from the diagram source. -->
 		<button
@@ -184,7 +198,7 @@
 {#if expanded && svg}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 	<div
-		class="fixed inset-0 z-50 flex flex-col bg-[#faf9f5]/97 p-4 backdrop-blur-sm sm:p-8"
+		class="fixed inset-0 z-50 flex flex-col bg-canvas/97 p-4 backdrop-blur-sm sm:p-8"
 		transition:fade={{ duration: 150 }}
 		onclick={(e) => e.target === e.currentTarget && (expanded = false)}
 		role="dialog"
@@ -198,7 +212,7 @@
 				{#if copySupported}
 					<button
 						onclick={copyPng}
-						class="rounded-lg border border-[#e3e0d5] bg-white p-2 text-neutral-500 transition hover:text-neutral-800"
+						class="rounded-lg border border-edge bg-surface p-2 text-neutral-500 transition hover:text-neutral-800"
 						title={m.copy_image()}
 						aria-label={m.copy_image()}
 					>
@@ -207,7 +221,7 @@
 				{/if}
 				<button
 					onclick={downloadPng}
-					class="mr-2 rounded-lg border border-[#e3e0d5] bg-white p-2 text-neutral-500 transition hover:text-neutral-800"
+					class="mr-2 rounded-lg border border-edge bg-surface p-2 text-neutral-500 transition hover:text-neutral-800"
 					title={m.download_image()}
 					aria-label={m.download_image()}
 				>
@@ -216,7 +230,7 @@
 				<button
 					onclick={() => zoomTo(zoom / ZOOM_STEP)}
 					disabled={zoom <= 1}
-					class="rounded-lg border border-[#e3e0d5] bg-white p-2 text-neutral-500 transition hover:text-neutral-800 disabled:opacity-40"
+					class="rounded-lg border border-edge bg-surface p-2 text-neutral-500 transition hover:text-neutral-800 disabled:opacity-40"
 					title={m.zoom_out()}
 					aria-label={m.zoom_out()}
 				>
@@ -228,7 +242,7 @@
 				<button
 					onclick={() => zoomTo(zoom * ZOOM_STEP)}
 					disabled={zoom >= ZOOM_MAX}
-					class="rounded-lg border border-[#e3e0d5] bg-white p-2 text-neutral-500 transition hover:text-neutral-800 disabled:opacity-40"
+					class="rounded-lg border border-edge bg-surface p-2 text-neutral-500 transition hover:text-neutral-800 disabled:opacity-40"
 					title={m.zoom_in()}
 					aria-label={m.zoom_in()}
 				>
@@ -236,7 +250,7 @@
 				</button>
 				<button
 					onclick={() => (expanded = false)}
-					class="ml-2 rounded-lg border border-[#e3e0d5] bg-white p-2 text-neutral-500 transition hover:text-neutral-800"
+					class="ml-2 rounded-lg border border-edge bg-surface p-2 text-neutral-500 transition hover:text-neutral-800"
 					title={m.settings_close()}
 					aria-label={m.settings_close()}
 				>
@@ -249,7 +263,7 @@
 		     as a magnifier — zoom in anchored on the clicked point, reset at max. -->
 		<div
 			bind:this={zoomPane}
-			class="min-h-0 flex-1 overflow-auto rounded-xl border border-[#e3e0d5] bg-white"
+			class="min-h-0 flex-1 overflow-auto rounded-xl border border-edge bg-surface"
 		>
 			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 			<div

@@ -10,6 +10,14 @@
 		/>
 
 		<meta name="text-scale" content="scale" />
+		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+		<script>
+			try {
+				var t = localStorage.getItem('perguntai_theme');
+				if (t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches))
+					document.documentElement.classList.add('dark');
+			} catch (e) {}
+		</script>
 		%sveltekit.head%
 	</head>
 

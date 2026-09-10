@@ -32,7 +32,8 @@
 	import ChartJS from 'chart.js/auto';
 	import { MatrixController, MatrixElement } from 'chartjs-chart-matrix';
 	import { m } from '$lib/paraglide/messages.js';
-	import { INK, seriesColor } from '$lib/palette';
+	import { chartInk, seriesColor } from '$lib/palette';
+	import { darkTheme } from '$lib/theme';
 	import Icon from './Icon.svelte';
 	import { canCopyImage, chartToPng, copyImage, downloadBlob, pngFilename } from '$lib/image-export';
 
@@ -43,12 +44,14 @@
 
 	let canvas = $state<HTMLCanvasElement | null>(null);
 
+	const ink = $derived(chartInk($darkTheme));
+
 	// --- export as image ---
 	const copySupported = canCopyImage();
 	let imageCopied = $state(false);
 
 	async function toPng(): Promise<Blob | null> {
-		return canvas ? await chartToPng(canvas, rawSpec.title, INK.surface) : null;
+		return canvas ? await chartToPng(canvas, rawSpec.title, ink.surface, ink.primary) : null;
 	}
 	async function downloadPng() {
 		const blob = await toPng();
@@ -74,11 +77,18 @@
 	 * (never a rainbow). Stops come from the palette's blue ramp.
 	 */
 	function heatColor(t: number): string {
-		const stops: [number, number, number][] = [
-			[0xcd, 0xe2, 0xfb], // blue-100
-			[0x2a, 0x78, 0xd6], // blue-450
-			[0x0d, 0x36, 0x6b] // blue-700
-		];
+		// Anchor flips in dark: low values recede into the surface, high glow.
+		const stops: [number, number, number][] = $darkTheme
+			? [
+					[0x1b, 0x2a, 0x3e], // near-surface blue
+					[0x39, 0x87, 0xe5], // blue-400
+					[0xcb, 0xe1, 0xfa] // blue-100
+				]
+			: [
+					[0xcd, 0xe2, 0xfb], // blue-100
+					[0x2a, 0x78, 0xd6], // blue-450
+					[0x0d, 0x36, 0x6b] // blue-700
+				];
 		const clamped = Math.max(0, Math.min(1, t));
 		const seg = clamped <= 0.5 ? 0 : 1;
 		const local = (clamped - seg * 0.5) * 2;
@@ -124,7 +134,7 @@
 							data: cells as never[],
 							backgroundColor: (ctx) =>
 								heatColor((((ctx.raw as { v: number })?.v ?? min) - min) / span),
-							borderColor: INK.surface,
+							borderColor: ink.surface,
 							borderWidth: 1,
 							width: (ctx) => (ctx.chart.chartArea?.width ?? 0) / cols.length - 2,
 							height: (ctx) => (ctx.chart.chartArea?.height ?? 0) / rows.length - 2
@@ -153,7 +163,7 @@
 							offset: true,
 							grid: { display: false },
 							border: { display: false },
-							ticks: { color: INK.muted }
+							ticks: { color: ink.muted }
 						},
 						y: {
 							type: 'category',
@@ -161,7 +171,7 @@
 							offset: true,
 							grid: { display: false },
 							border: { display: false },
-							ticks: { color: INK.muted }
+							ticks: { color: ink.muted }
 						}
 					}
 				}
@@ -177,7 +187,7 @@
 					: spec.type;
 
 		const datasets = spec.datasets.map((ds, i) => {
-			const color = seriesColor(i);
+			const color = seriesColor(i, $darkTheme);
 			switch (spec.type) {
 				case 'bubble':
 					return {
@@ -192,8 +202,8 @@
 					// Circular charts color per-slice, in fixed categorical order.
 					return {
 						...ds,
-						backgroundColor: (spec.labels ?? []).map((_, j) => seriesColor(j)),
-						borderColor: INK.surface,
+						backgroundColor: (spec.labels ?? []).map((_, j) => seriesColor(j, $darkTheme)),
+						borderColor: ink.surface,
 						borderWidth: 2 // 2px surface gap between adjacent fills
 					};
 				case 'line':
@@ -237,7 +247,7 @@
 						borderRadius: radius,
 						borderSkipped: 'start' as const,
 						maxBarThickness: 48,
-						borderColor: INK.surface,
+						borderColor: ink.surface,
 						borderWidth: spec.stacked ? 1 : 0 // surface gap between stacked segments
 					};
 				}
@@ -247,18 +257,18 @@
 		const categoryAxis = {
 			stacked: spec.stacked ?? false,
 			grid: { display: false },
-			border: { color: INK.baseline },
-			ticks: { color: INK.muted }
+			border: { color: ink.baseline },
+			ticks: { color: ink.muted }
 		};
 		const valueAxis = {
 			stacked: spec.stacked ?? false,
 			beginAtZero: true,
-			grid: { color: INK.gridline },
+			grid: { color: ink.gridline },
 			border: { display: false },
-			ticks: { color: INK.muted }
+			ticks: { color: ink.muted }
 		};
 		const withTitle = (axis: object, label?: string) =>
-			label ? { ...axis, title: { display: true, text: label, color: INK.secondary } } : axis;
+			label ? { ...axis, title: { display: true, text: label, color: ink.secondary } } : axis;
 
 		let scales: Record<string, object> | undefined;
 		if (spec.type === 'pie' || spec.type === 'doughnut') {
@@ -267,23 +277,23 @@
 			scales = {
 				r: {
 					beginAtZero: true,
-					grid: { color: INK.gridline },
-					ticks: { color: INK.muted, backdropColor: 'transparent' }
+					grid: { color: ink.gridline },
+					ticks: { color: ink.muted, backdropColor: 'transparent' }
 				}
 			};
 		} else if (spec.type === 'radar') {
 			scales = {
 				r: {
 					beginAtZero: true,
-					grid: { color: INK.gridline },
-					angleLines: { color: INK.gridline },
-					pointLabels: { color: INK.secondary },
-					ticks: { color: INK.muted, backdropColor: 'transparent' }
+					grid: { color: ink.gridline },
+					angleLines: { color: ink.gridline },
+					pointLabels: { color: ink.secondary },
+					ticks: { color: ink.muted, backdropColor: 'transparent' }
 				}
 			};
 		} else if (spec.type === 'scatter' || spec.type === 'bubble') {
 			scales = {
-				x: withTitle({ ...valueAxis, grid: { color: INK.gridline } }, spec.xLabel),
+				x: withTitle({ ...valueAxis, grid: { color: ink.gridline } }, spec.xLabel),
 				y: withTitle(valueAxis, spec.yLabel)
 			};
 		} else if (horizontal) {
@@ -310,7 +320,7 @@
 						// A single series needs no legend — the title names it.
 						display: isCircular || spec.datasets.length > 1,
 						position: 'bottom',
-						labels: { color: INK.secondary, boxWidth: 10, boxHeight: 10, usePointStyle: true }
+						labels: { color: ink.secondary, boxWidth: 10, boxHeight: 10, usePointStyle: true }
 					},
 					tooltip: { enabled: true }
 				},
@@ -324,19 +334,19 @@
 
 <figure
 	class="rounded-xl border border-neutral-200 p-4"
-	style:background-color={INK.surface}
+	style:background-color={ink.surface}
 	aria-label={rawSpec.title}
 >
 	<figcaption
 		class="mb-3 flex items-center justify-between gap-2 text-sm font-semibold"
-		style:color={INK.primary}
+		style:color={ink.primary}
 	>
 		{rawSpec.title}
 		<span class="flex shrink-0 items-center gap-0.5">
 			{#if copySupported}
 				<button
 					onclick={copyPng}
-					class="rounded-lg p-1.5 text-neutral-400 transition hover:bg-white hover:text-neutral-700"
+					class="rounded-lg p-1.5 text-neutral-400 transition hover:bg-surface hover:text-neutral-700"
 					title={m.copy_image()}
 					aria-label={m.copy_image()}
 				>
@@ -345,7 +355,7 @@
 			{/if}
 			<button
 				onclick={downloadPng}
-				class="rounded-lg p-1.5 text-neutral-400 transition hover:bg-white hover:text-neutral-700"
+				class="rounded-lg p-1.5 text-neutral-400 transition hover:bg-surface hover:text-neutral-700"
 				title={m.download_image()}
 				aria-label={m.download_image()}
 			>

@@ -31,6 +31,7 @@ import {
 	anthropic,
 	DEFAULT_MODEL,
 	modelMaxOutputTokens,
+	modelKind,
 	modelPromptCache,
 	modelSupportsServerTools,
 	modelThinking,
@@ -294,6 +295,11 @@ export async function buildAgent(
 	// namespace anyway, but gating keeps the requests clean).
 	const promptCache = modelPromptCache(model);
 	const thinking = modelThinking(model);
+	// Responses-API reasoning models (GPT-6 family): stream reasoning summaries
+	// so the UI shows them, and key Azure's prompt cache per user — the shared
+	// system+tools prefix is identical across users, but the per-prefix+key
+	// rate cap (~15 req/min) makes one key per user the safe sharding.
+	const openaiResponses = modelKind(model) === 'openai-responses';
 
 	return new ToolLoopAgent({
 		model: resolveLanguageModel(model),
@@ -432,7 +438,16 @@ export async function buildAgent(
 						}
 					}
 				}
-			: {})
+			: openaiResponses
+				? {
+						providerOptions: {
+							openai: {
+								reasoningSummary: 'auto',
+								promptCacheKey: `pg-${user.username}`
+							}
+						}
+					}
+				: {})
 	});
 }
 

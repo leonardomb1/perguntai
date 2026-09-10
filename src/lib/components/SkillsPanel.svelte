@@ -84,7 +84,7 @@
 </script>
 
 {#snippet skillRow(row: Row, actions: 'pending' | 'active')}
-	<div class="border-b border-[#efede3] last:border-b-0">
+	<div class="border-b border-edge-soft last:border-b-0">
 		<div class="flex items-center gap-3 px-4 py-3">
 			<button
 				onclick={() => (openId = openId === row.skill.id ? null : row.skill.id)}
@@ -100,7 +100,7 @@
 					<span class="block truncate text-xs text-neutral-500">{row.skill.description}</span>
 				</span>
 			</button>
-			<span class="hidden shrink-0 rounded-full border border-[#e3e0d5] px-2 py-0.5 text-[11px] text-neutral-500 sm:block">
+			<span class="hidden shrink-0 rounded-full border border-edge px-2 py-0.5 text-[11px] text-neutral-500 sm:block">
 				{row.scopeLabel}
 			</span>
 			{#if row.skill.proposedBy}
@@ -118,7 +118,7 @@
 					<button
 						onclick={() => setEnabled(row, true)}
 						disabled={busyId === row.skill.id}
-						class="rounded-lg bg-[#128a5f] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#0d6b4a] disabled:opacity-50"
+						class="rounded-lg bg-success-strong px-3 py-1.5 text-xs font-medium text-white transition hover:bg-success-deep disabled:opacity-50"
 					>
 						{m.admin_skills_approve()}
 					</button>
@@ -133,7 +133,7 @@
 					<button
 						onclick={() => setEnabled(row, false)}
 						disabled={busyId === row.skill.id}
-						class="rounded-lg border border-[#e3e0d5] px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:bg-[#faf9f5] disabled:opacity-50"
+						class="rounded-lg border border-edge px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:bg-canvas disabled:opacity-50"
 					>
 						{m.admin_skills_suspend()}
 					</button>
@@ -148,7 +148,7 @@
 			</span>
 		</div>
 		{#if openId === row.skill.id}
-			<div class="skill-body mx-4 mb-3 rounded-lg border border-[#e9e6dd] bg-[#faf9f5] px-4 py-3">
+			<div class="skill-body mx-4 mb-3 rounded-lg border border-edge bg-canvas px-4 py-3">
 				<Markdown content={row.skill.content} />
 			</div>
 		{/if}
@@ -156,19 +156,19 @@
 {/snippet}
 
 <div class="space-y-5">
-	<section class="overflow-hidden rounded-xl border border-[#e3e0d5] bg-white">
-		<div class="flex items-center gap-2 border-b border-[#efede3] px-4 py-3">
+	<section class="overflow-hidden rounded-xl border border-edge bg-surface">
+		<div class="flex items-center gap-2 border-b border-edge-soft px-4 py-3">
 			<h3 class="text-sm font-semibold text-neutral-800">{m.admin_skills_pending()}</h3>
 			<HelpTip text={m.admin_skills_pending_help()} />
 			{#if pending.length}
-				<span class="rounded-full bg-[#d97757]/10 px-2 py-0.5 text-[11px] font-semibold text-[#bd5d3a]">
+				<span class="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent-strong">
 					{pending.length}
 				</span>
 			{/if}
 		</div>
 		{#if !loaded}
 			<div class="grid place-items-center py-8">
-				<span class="size-6 animate-spin rounded-full border-[3px] border-[#e3e0d5] border-t-[#d97757]"></span>
+				<span class="size-6 animate-spin rounded-full border-[3px] border-edge border-t-accent"></span>
 			</div>
 		{:else if pending.length === 0}
 			<p class="px-4 py-6 text-center text-xs text-neutral-400">{m.admin_skills_none_pending()}</p>
@@ -179,14 +179,14 @@
 		{/if}
 	</section>
 
-	<section class="overflow-hidden rounded-xl border border-[#e3e0d5] bg-white">
-		<div class="flex items-center gap-2 border-b border-[#efede3] px-4 py-3">
+	<section class="overflow-hidden rounded-xl border border-edge bg-surface">
+		<div class="flex items-center gap-2 border-b border-edge-soft px-4 py-3">
 			<h3 class="text-sm font-semibold text-neutral-800">{m.admin_skills_active()}</h3>
 			<HelpTip text={m.admin_skills_active_help()} />
 		</div>
 		{#if !loaded}
 			<div class="grid place-items-center py-8">
-				<span class="size-6 animate-spin rounded-full border-[3px] border-[#e3e0d5] border-t-[#d97757]"></span>
+				<span class="size-6 animate-spin rounded-full border-[3px] border-edge border-t-accent"></span>
 			</div>
 		{:else if active.length === 0}
 			<p class="px-4 py-6 text-center text-xs text-neutral-400">{m.admin_skills_none_active()}</p>
