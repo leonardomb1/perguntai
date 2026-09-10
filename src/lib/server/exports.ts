@@ -1,8 +1,6 @@
-import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { store } from './store';
 import { randomUUID } from 'node:crypto';
 import * as XLSX from 'xlsx';
-import { env } from '$env/dynamic/private';
 
 /**
  * Generated files (.xlsx reports, .md/.txt/.csv documents), stored per-user
@@ -33,7 +31,7 @@ export interface ExportSheet {
 
 function userDir(username: string): string {
 	const safe = username.replace(/[^a-zA-Z0-9._-]/g, '_');
-	return join(env.DATA_DIR ?? 'data', 'exports', safe);
+	return `exports/${safe}`;
 }
 
 export async function createExcelExport(
@@ -52,9 +50,8 @@ export async function createExcelExport(
 	const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
 
 	const dir = userDir(username);
-	await mkdir(dir, { recursive: true });
 	const id = randomUUID();
-	await writeFile(join(dir, `${id}.xlsx`), buffer);
+	await store().write(`${dir}/${id}.xlsx`, buffer);
 
 	void pruneOldExports(dir);
 	return { id, bytes: buffer.length };
@@ -76,9 +73,8 @@ export async function createFileExport(
 	ext: ExportExt
 ): Promise<{ id: string; bytes: number }> {
 	const dir = userDir(username);
-	await mkdir(dir, { recursive: true });
 	const id = randomUUID();
-	await writeFile(join(dir, `${id}.${ext}`), buffer);
+	await store().write(`${dir}/${id}.${ext}`, buffer);
 
 	void pruneOldExports(dir);
 	return { id, bytes: buffer.length };
@@ -91,7 +87,7 @@ export async function readExport(
 	if (!/^[a-f0-9-]{36}$/.test(id)) return null;
 	for (const ext of Object.keys(EXPORT_TYPES) as ExportExt[]) {
 		try {
-			return { buffer: await readFile(join(userDir(username), `${id}.${ext}`)), ext };
+			return { buffer: Buffer.from(await store().readBinary(`${userDir(username)}/${id}.${ext}`)), ext };
 		} catch {
 			/* try next extension */
 		}
@@ -102,10 +98,9 @@ export async function readExport(
 async function pruneOldExports(dir: string): Promise<void> {
 	try {
 		const cutoff = Date.now() - RETENTION_MS;
-		for (const file of await readdir(dir)) {
-			const path = join(dir, file);
-			const info = await stat(path);
-			if (info.mtimeMs < cutoff) await unlink(path).catch(() => {});
+		for (const key of await store().list(`${dir}/`)) {
+			const info = await store().stat(key);
+			if (info && info.lastModified.getTime() < cutoff) await store().remove(key).catch(() => {});
 		}
 	} catch {
 		/* best-effort cleanup */

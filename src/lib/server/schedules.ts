@@ -1,6 +1,4 @@
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { env } from '$env/dynamic/private';
+import { store } from './store';
 
 /**
  * Scheduled runs ("Programado"): standing instructions the agent executes on a
@@ -60,10 +58,10 @@ function safe(username: string): string {
 	return username.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 function schedulesPath(username: string): string {
-	return join(env.DATA_DIR ?? 'data', 'schedules', `${safe(username)}.json`);
+	return `schedules/${safe(username)}.json`;
 }
 function runsPath(username: string, scheduleId: string): string {
-	return join(env.DATA_DIR ?? 'data', 'schedules', `${safe(username)}-runs`, `${scheduleId}.json`);
+	return `schedules/${safe(username)}-runs/${scheduleId}.json`;
 }
 
 function normalize(s: Record<string, unknown>): Schedule {
@@ -90,7 +88,7 @@ function normalize(s: Record<string, unknown>): Schedule {
 
 async function readSchedules(username: string): Promise<Schedule[]> {
 	try {
-		const parsed = JSON.parse(await readFile(schedulesPath(username), 'utf8'));
+		const parsed = JSON.parse(await store().readText(schedulesPath(username)));
 		const list: unknown[] = Array.isArray(parsed?.schedules) ? parsed.schedules : [];
 		return list
 			.filter((s): s is Record<string, unknown> => typeof s === 'object' && s !== null)
@@ -102,9 +100,7 @@ async function readSchedules(username: string): Promise<Schedule[]> {
 }
 
 async function writeSchedules(username: string, schedules: Schedule[]): Promise<void> {
-	const path = schedulesPath(username);
-	await mkdir(join(path, '..'), { recursive: true });
-	await writeFile(path, JSON.stringify({ schedules }));
+	await store().write(schedulesPath(username), JSON.stringify({ schedules }));
 }
 
 export async function listSchedules(username: string): Promise<Schedule[]> {
@@ -114,7 +110,10 @@ export async function listSchedules(username: string): Promise<Schedule[]> {
 /** Every user that has a schedules file — what the runner sweeps. */
 export async function scheduleOwners(): Promise<string[]> {
 	try {
-		const entries = await readdir(join(env.DATA_DIR ?? 'data', 'schedules'));
+		// Depth-1 only: run history lives under '<user>-runs/' subkeys.
+		const entries = (await store().list('schedules/'))
+			.map((k) => k.slice('schedules/'.length))
+			.filter((e) => !e.includes('/'));
 		return entries.filter((e) => e.endsWith('.json')).map((e) => e.slice(0, -5));
 	} catch {
 		return [];
@@ -167,7 +166,7 @@ export async function removeSchedule(username: string, id: string): Promise<bool
 	const next = schedules.filter((s) => s.id !== id);
 	if (next.length === schedules.length) return false;
 	await writeSchedules(username, next);
-	await rm(runsPath(username, id), { force: true }).catch(() => {});
+	await store().remove(runsPath(username, id)).catch(() => {});
 	return true;
 }
 
@@ -183,7 +182,7 @@ export async function markRan(username: string, id: string, at: string): Promise
 
 export async function listRuns(username: string, scheduleId: string): Promise<ScheduleRun[]> {
 	try {
-		const parsed = JSON.parse(await readFile(runsPath(username, scheduleId), 'utf8'));
+		const parsed = JSON.parse(await store().readText(runsPath(username, scheduleId)));
 		return Array.isArray(parsed?.runs) ? (parsed.runs as ScheduleRun[]) : [];
 	} catch {
 		return [];
@@ -201,8 +200,7 @@ export async function updateRun(
 	const run = runs.find((r) => r.id === runId);
 	if (!run) return;
 	Object.assign(run, patch);
-	await mkdir(join(path, '..'), { recursive: true });
-	await writeFile(path, JSON.stringify({ runs }));
+	await store().write(path, JSON.stringify({ runs }));
 }
 
 export async function appendRun(
@@ -213,8 +211,7 @@ export async function appendRun(
 	const path = runsPath(username, scheduleId);
 	const runs = await listRuns(username, scheduleId);
 	runs.unshift(run);
-	await mkdir(join(path, '..'), { recursive: true });
-	await writeFile(path, JSON.stringify({ runs: runs.slice(0, MAX_RUNS_KEPT) }));
+	await store().write(path, JSON.stringify({ runs: runs.slice(0, MAX_RUNS_KEPT) }));
 }
 
 /**

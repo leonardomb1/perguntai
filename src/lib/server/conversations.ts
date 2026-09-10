@@ -1,6 +1,4 @@
-import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
-import { env } from '$env/dynamic/private';
+import { store } from './store';
 import type { UIMessage } from 'ai';
 import { removeDocsForConversation } from './rag';
 import { removeConversationSandbox } from './sandbox';
@@ -27,21 +25,19 @@ export function isValidConversationId(id: unknown): id is string {
 
 function userDir(username: string): string {
 	const safe = username.replace(/[^a-zA-Z0-9._-]/g, '_');
-	return join(env.DATA_DIR ?? 'data', 'conversations', safe);
+	return `conversations/${safe}`;
 }
 
 async function readIndex(username: string): Promise<ConversationMeta[]> {
 	try {
-		return JSON.parse(await readFile(join(userDir(username), 'index.json'), 'utf8'));
+		return JSON.parse(await store().readText(`${userDir(username)}/index.json`));
 	} catch {
 		return [];
 	}
 }
 
 async function writeIndex(username: string, index: ConversationMeta[]): Promise<void> {
-	const dir = userDir(username);
-	await mkdir(dir, { recursive: true });
-	await writeFile(join(dir, 'index.json'), JSON.stringify(index));
+	await store().write(`${userDir(username)}/index.json`, JSON.stringify(index));
 }
 
 /** Newest first. */
@@ -51,7 +47,7 @@ export async function listConversations(username: string): Promise<ConversationM
 
 export async function loadMessages(username: string, id: string): Promise<UIMessage[]> {
 	try {
-		return JSON.parse(await readFile(join(userDir(username), `${id}.json`), 'utf8'));
+		return JSON.parse(await store().readText(`${userDir(username)}/${id}.json`));
 	} catch {
 		return [];
 	}
@@ -66,16 +62,15 @@ export async function saveConversation(
 ): Promise<ConversationMeta | null> {
 	if (messages.length === 0) return null;
 	const dir = userDir(username);
-	const path = join(dir, `${id}.json`);
+	const path = `${dir}/${id}.json`;
 	const body = JSON.stringify(messages);
 
 	// Identical content → no-op, so merely viewing a chat never bumps its
 	// position in the list.
-	const existing = await readFile(path, 'utf8').catch(() => null);
+	const existing = await store().readText(path).catch(() => null);
 	if (existing === body) return null;
 
-	await mkdir(dir, { recursive: true });
-	await writeFile(path, body);
+	await store().write(path, body);
 
 	const index = await readIndex(username);
 	const current = index.find((c) => c.id === id);
@@ -97,7 +92,7 @@ export async function saveConversation(
 	// Evict the oldest beyond the cap, including their files, documents and
 	// sandbox workspaces.
 	for (const evicted of next.slice(MAX_CONVERSATIONS)) {
-		await rm(join(dir, `${evicted.id}.json`), { force: true }).catch(() => {});
+		await store().remove(`${dir}/${evicted.id}.json`).catch(() => {});
 		await removeDocsForConversation(username, evicted.id).catch(() => {});
 		await removeConversationSandbox(username, evicted.id).catch(() => {});
 	}
@@ -121,7 +116,7 @@ export async function renameConversation(
 
 /** Deletes the conversation, its documents, and its sandbox workspace. */
 export async function deleteConversation(username: string, id: string): Promise<void> {
-	await rm(join(userDir(username), `${id}.json`), { force: true }).catch(() => {});
+	await store().remove(`${userDir(username)}/${id}.json`).catch(() => {});
 	await writeIndex(username, (await readIndex(username)).filter((c) => c.id !== id));
 	await removeDocsForConversation(username, id);
 	await removeConversationSandbox(username, id).catch(() => {});

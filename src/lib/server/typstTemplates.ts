@@ -1,6 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { env } from '$env/dynamic/private';
+import { store } from './store';
 
 /**
  * Admin-curated Typst templates for generatePdf: the template is the MAIN
@@ -25,7 +23,7 @@ const MAX_SOURCE = 60_000;
 export const TEMPLATE_CONTENT_FILE = 'content.typ';
 
 function storePath(): string {
-	return join(env.DATA_DIR ?? 'data', 'typst-templates.json');
+	return 'typst-templates.json';
 }
 
 function normalize(t: Record<string, unknown>): TypstTemplate {
@@ -41,7 +39,7 @@ function normalize(t: Record<string, unknown>): TypstTemplate {
 
 async function readAll(): Promise<TypstTemplate[]> {
 	try {
-		const parsed = JSON.parse(await readFile(storePath(), 'utf8'));
+		const parsed = JSON.parse(await store().readText(storePath()));
 		const list: unknown[] = Array.isArray(parsed?.templates) ? parsed.templates : [];
 		return list
 			.filter((t): t is Record<string, unknown> => typeof t === 'object' && t !== null)
@@ -54,8 +52,7 @@ async function readAll(): Promise<TypstTemplate[]> {
 
 async function writeAll(templates: TypstTemplate[]): Promise<void> {
 	const path = storePath();
-	await mkdir(join(path, '..'), { recursive: true });
-	await writeFile(path, JSON.stringify({ templates }));
+	await store().write(path, JSON.stringify({ templates }));
 }
 
 export async function listTemplates({ includeDisabled = false } = {}): Promise<TypstTemplate[]> {

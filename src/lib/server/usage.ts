@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { store } from './store';
 import { env } from '$env/dynamic/private';
 
 /**
@@ -78,7 +77,7 @@ function normDay(v: DayUsage | number | undefined): DayUsage {
 
 function usagePath(username: string): string {
 	const safe = username.replace(/[^a-zA-Z0-9._-]/g, '_');
-	return join(env.DATA_DIR ?? 'data', 'usage', `${safe}.json`);
+	return `usage/${safe}.json`;
 }
 
 function today(): string {
@@ -87,7 +86,7 @@ function today(): string {
 
 async function read(username: string): Promise<UsageFile> {
 	try {
-		const parsed = JSON.parse(await readFile(usagePath(username), 'utf8'));
+		const parsed = JSON.parse(await store().readText(usagePath(username)));
 		return { days: typeof parsed.days === 'object' && parsed.days ? parsed.days : {} };
 	} catch {
 		return { days: {} };
@@ -131,9 +130,7 @@ export function addUsage(
 		const cutoff = new Date(Date.now() - RETENTION_DAYS * 86_400_000).toISOString().slice(0, 10);
 		for (const k of Object.keys(data.days)) if (k < cutoff) delete data.days[k];
 
-		const path = usagePath(username);
-		await mkdir(join(path, '..'), { recursive: true });
-		await writeFile(path, JSON.stringify(data));
+		await store().write(usagePath(username), JSON.stringify(data));
 	});
 	queues.set(
 		username,
@@ -226,8 +223,7 @@ export async function usageSummary(username: string): Promise<UsageSummary> {
  */
 export async function listUsageUsers(): Promise<string[]> {
 	try {
-		const { readdir } = await import('node:fs/promises');
-		const files = await readdir(join(env.DATA_DIR ?? 'data', 'usage'));
+		const files = (await store().list('usage/')).map((k) => k.split('/').pop()!);
 		return files.filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5));
 	} catch {
 		return [];

@@ -34,6 +34,8 @@
 		"@ai-sdk/openai": "^4.0.65",
 		"@ai-sdk/openai-compatible": "^3.0.25",
 		"@ai-sdk/svelte": "^5.0.11",
+		"@aws-sdk/client-s3": "^3.1129.0",
+		"@azure/storage-blob": "^12.33.0",
 		"@dagrejs/dagre": "^3.0.0",
 		"@fontsource-variable/dm-sans": "^5.2.8",
 		"@fontsource-variable/source-serif-4": "^5.2.9",

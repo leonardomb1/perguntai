@@ -1,5 +1,4 @@
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { store } from './store';
 import { env } from '$env/dynamic/private';
 import { DEFAULT_MODEL, MODEL_IDS } from './models';
 import type { UserProfile } from './auth';
@@ -210,7 +209,7 @@ function blockText(entry: OrgKnowledgeEntry, deptName?: string): string {
 }
 
 function accessPath(): string {
-	return join(env.DATA_DIR ?? 'data', 'access.json');
+	return 'access.json';
 }
 
 function envAdmins(): string[] {
@@ -224,14 +223,22 @@ export function isEnvAdmin(username: string): boolean {
 	return envAdmins().includes(username.toLowerCase());
 }
 
-let cache: { mtime: number; data: AccessFile } | null = null;
+let cache: { etag: string; data: AccessFile; checkedAt: number } | null = null;
+/** How long a cached read is trusted before re-checking the etag — keeps
+ *  remote backends to at most one stat per interval instead of per request. */
+const CACHE_RECHECK_MS = 3000;
 
 async function load(): Promise<AccessFile> {
 	const path = accessPath();
+	if (cache && Date.now() - cache.checkedAt < CACHE_RECHECK_MS) return cache.data;
 	try {
-		const s = await stat(path);
-		if (cache && cache.mtime === s.mtimeMs) return cache.data;
-		const parsed = JSON.parse(await readFile(path, 'utf8'));
+		const s = await store().stat(path);
+		if (!s) throw new Error('missing');
+		if (cache && cache.etag === s.etag) {
+			cache.checkedAt = Date.now();
+			return cache.data;
+		}
+		const parsed = JSON.parse(await store().readText(path));
 		const data: AccessFile = {
 			users: typeof parsed.users === 'object' && parsed.users ? parsed.users : {},
 			capabilities: {
@@ -245,7 +252,7 @@ async function load(): Promise<AccessFile> {
 			orgKnowledge: sanitizeKnowledge(parsed.orgKnowledge),
 			departments: sanitizeDepartments(parsed.departments)
 		};
-		cache = { mtime: s.mtimeMs, data };
+		cache = { etag: s.etag, data, checkedAt: Date.now() };
 		return data;
 	} catch {
 		// First run — seed from the legacy env allowlist, then persist.
@@ -281,10 +288,8 @@ async function load(): Promise<AccessFile> {
 }
 
 async function save(data: AccessFile): Promise<void> {
-	const path = accessPath();
-	await mkdir(join(path, '..'), { recursive: true });
-	await writeFile(path, JSON.stringify(data, null, '\t'));
-	cache = null; // next read picks up the new mtime
+	await store().write(accessPath(), JSON.stringify(data, null, '\t'));
+	cache = null; // next read picks up the new etag
 }
 
 /** Enabled policies whose rule matches this profile's claims (none without a profile). */

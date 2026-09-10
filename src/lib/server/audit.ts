@@ -1,5 +1,4 @@
-import { appendFile, mkdir, readFile, readdir, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { store } from './store';
 import { env } from '$env/dynamic/private';
 
 /**
@@ -40,9 +39,7 @@ export interface AuditEvent {
 
 const RETENTION_MONTHS = 6;
 
-function auditDir(): string {
-	return join(env.DATA_DIR ?? 'data', 'audit');
-}
+const AUDIT_PREFIX = 'audit/';
 
 const monthFile = (d: Date) => `${d.toISOString().slice(0, 7)}.jsonl`;
 
@@ -62,9 +59,7 @@ export function logAudit(event: Omit<AuditEvent, 'ts'>): void {
 	const full: AuditEvent = { ts: new Date().toISOString(), ...event };
 	queue = queue
 		.then(async () => {
-			const dir = auditDir();
-			await mkdir(dir, { recursive: true });
-			await appendFile(join(dir, monthFile(new Date())), JSON.stringify(full) + '\n');
+			await store().append(AUDIT_PREFIX + monthFile(new Date()), JSON.stringify(full) + '\n');
 		})
 		.catch((e) => console.warn('audit write failed:', e));
 }
@@ -82,7 +77,7 @@ export async function readAudit(opts: {
 	const events: AuditEvent[] = [];
 	for (const file of months) {
 		try {
-			const raw = await readFile(join(auditDir(), file), 'utf8');
+			const raw = await store().readText(AUDIT_PREFIX + file);
 			for (const line of raw.split('\n')) {
 				if (!line.trim()) continue;
 				try {
@@ -110,8 +105,9 @@ export async function pruneAudit(): Promise<void> {
 		const cutoff = new Date();
 		cutoff.setMonth(cutoff.getMonth() - RETENTION_MONTHS);
 		const floor = monthFile(cutoff);
-		for (const f of await readdir(auditDir())) {
-			if (f.endsWith('.jsonl') && f < floor) await rm(join(auditDir(), f), { force: true });
+		for (const key of await store().list(AUDIT_PREFIX)) {
+			const f = key.split('/').pop()!;
+			if (f.endsWith('.jsonl') && f < floor) await store().remove(key);
 		}
 	} catch {
 		// Best effort.

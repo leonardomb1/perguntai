@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { store } from './store';
 import { env } from '$env/dynamic/private';
 
 /**
@@ -50,12 +49,12 @@ export const deptSkillScope = (deptId: string) => `dept-${deptId}`;
 
 function userPath(username: string): string {
 	const safe = username.replace(/[^a-zA-Z0-9._-]/g, '_');
-	return join(env.DATA_DIR ?? 'data', 'skills', `${safe}.json`);
+	return `skills/${safe}.json`;
 }
 
 function sharedPath(scope: string): string {
 	const safe = scope.replace(/[^a-zA-Z0-9._-]/g, '_');
-	return join(env.DATA_DIR ?? 'data', 'skills', '_shared', `${safe}.json`);
+	return `skills/_shared/${safe}.json`;
 }
 
 function nowIso(): string {
@@ -80,7 +79,7 @@ function normalize(s: Record<string, unknown>): Skill {
 
 async function readStore(path: string): Promise<Skill[]> {
 	try {
-		const parsed = JSON.parse(await readFile(path, 'utf8'));
+		const parsed = JSON.parse(await store().readText(path));
 		const list: unknown[] = Array.isArray(parsed?.skills) ? parsed.skills : [];
 		return list
 			.filter((s): s is Record<string, unknown> => typeof s === 'object' && s !== null)
@@ -92,8 +91,7 @@ async function readStore(path: string): Promise<Skill[]> {
 }
 
 async function writeStore(path: string, skills: Skill[]): Promise<void> {
-	await mkdir(join(path, '..'), { recursive: true });
-	await writeFile(path, JSON.stringify({ skills }));
+	await store().write(path, JSON.stringify({ skills }));
 }
 
 export async function listSkills(username: string): Promise<Skill[]> {

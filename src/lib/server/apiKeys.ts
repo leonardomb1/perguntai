@@ -1,7 +1,5 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { store } from './store';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { env } from '$env/dynamic/private';
 
 /**
  * Per-user API keys, so PerguntAI's agent, guardrails and warehouse tooling can
@@ -53,7 +51,7 @@ export interface PublicApiKey {
 
 function pathFor(username: string): string {
 	const safe = username.toLowerCase().replace(/[^a-z0-9._-]/g, '_');
-	return join(env.DATA_DIR ?? 'data', 'apikeys', `${safe}.json`);
+	return `apikeys/${safe}.json`;
 }
 
 function hash(key: string): string {
@@ -62,16 +60,14 @@ function hash(key: string): string {
 
 async function read(username: string): Promise<ApiKeyRecord[]> {
 	try {
-		return JSON.parse(await readFile(pathFor(username), 'utf8')) as ApiKeyRecord[];
+		return JSON.parse(await store().readText(pathFor(username))) as ApiKeyRecord[];
 	} catch {
 		return [];
 	}
 }
 
 async function write(username: string, keys: ApiKeyRecord[]): Promise<void> {
-	const file = pathFor(username);
-	await mkdir(join(file, '..'), { recursive: true });
-	await writeFile(file, JSON.stringify(keys, null, 2), 'utf8');
+	await store().write(pathFor(username), JSON.stringify(keys, null, 2));
 }
 
 export function publicView(key: ApiKeyRecord): PublicApiKey {
@@ -146,11 +142,11 @@ export async function resolveKeyOwner(
 ): Promise<{ username: string; keyId: string; keyLabel: string; scope: ApiKeyScope } | null> {
 	if (!looksLikeApiKey(rawKey)) return null;
 
-	const dir = join(env.DATA_DIR ?? 'data', 'apikeys');
 	let files: string[];
 	try {
-		const { readdir } = await import('node:fs/promises');
-		files = (await readdir(dir)).filter((f) => f.endsWith('.json'));
+		files = (await store().list('apikeys/'))
+			.map((k) => k.split('/').pop()!)
+			.filter((f) => f.endsWith('.json'));
 	} catch {
 		return null;
 	}
@@ -181,11 +177,11 @@ export async function resolveKeyOwner(
 export async function listAllKeys(): Promise<
 	{ username: string; keys: (PublicApiKey & { revokedAt: string | null })[] }[]
 > {
-	const dir = join(env.DATA_DIR ?? 'data', 'apikeys');
 	let files: string[];
 	try {
-		const { readdir } = await import('node:fs/promises');
-		files = (await readdir(dir)).filter((f) => f.endsWith('.json'));
+		files = (await store().list('apikeys/'))
+			.map((k) => k.split('/').pop()!)
+			.filter((f) => f.endsWith('.json'));
 	} catch {
 		return [];
 	}

@@ -1,6 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { env } from '$env/dynamic/private';
+import { store } from './store';
 
 /**
  * Sessions revoked by OIDC back-channel logout, by the IdP's `sub` and/or
@@ -8,12 +6,18 @@ import { env } from '$env/dynamic/private';
  * cryptographically — instead authenticateRequest refuses any session whose
  * captured sub/sid appears here, the same live-check pattern as access.json.
  *
+ * Replica-safe: the in-memory cache is trusted only briefly and re-validated
+ * against the store's etag, so a revocation processed by one replica reaches
+ * the others within CACHE_RECHECK_MS.
+ *
  * Entries outlive the longest possible session (MAX_SESSION_MS in ./auth):
  * after that no JWE minted before the revocation can still verify, so the
  * entry has nothing left to block and is pruned.
  */
 
+const KEY = 'logout-denylist.json';
 const ENTRY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const CACHE_RECHECK_MS = 3000;
 
 interface Entry {
 	sub?: string;
@@ -21,22 +25,29 @@ interface Entry {
 	at: number;
 }
 
-function storePath(): string {
-	return join(env.DATA_DIR ?? 'data', 'logout-denylist.json');
-}
-
-let cache: Entry[] | null = null;
+let cache: { etag: string; entries: Entry[]; checkedAt: number } | null = null;
 let queue: Promise<void> = Promise.resolve();
 
 async function load(): Promise<Entry[]> {
-	if (cache) return cache;
-	try {
-		const raw = JSON.parse(await readFile(storePath(), 'utf8')) as { entries?: Entry[] };
-		cache = Array.isArray(raw.entries) ? raw.entries : [];
-	} catch {
-		cache = [];
+	if (cache && Date.now() - cache.checkedAt < CACHE_RECHECK_MS) return cache.entries;
+	const s = await store().stat(KEY).catch(() => null);
+	if (!s) {
+		cache = { etag: '', entries: [], checkedAt: Date.now() };
+		return cache.entries;
 	}
-	return cache;
+	if (cache && cache.etag === s.etag) {
+		cache.checkedAt = Date.now();
+		return cache.entries;
+	}
+	let entries: Entry[] = [];
+	try {
+		const raw = JSON.parse(await store().readText(KEY)) as { entries?: Entry[] };
+		entries = Array.isArray(raw.entries) ? raw.entries : [];
+	} catch {
+		entries = [];
+	}
+	cache = { etag: s.etag, entries, checkedAt: Date.now() };
+	return entries;
 }
 
 function prune(entries: Entry[]): Entry[] {
@@ -48,12 +59,9 @@ export async function revokeSessions(ref: { sub?: string; sid?: string }): Promi
 	if (!ref.sub && !ref.sid) return;
 	const entries = prune(await load());
 	entries.push({ ...(ref.sub ? { sub: ref.sub } : {}), ...(ref.sid ? { sid: ref.sid } : {}), at: Date.now() });
-	cache = entries;
+	cache = null; // re-stat after the write lands
 	queue = queue
-		.then(async () => {
-			await mkdir(dirname(storePath()), { recursive: true });
-			await writeFile(storePath(), JSON.stringify({ entries }, null, '\t'));
-		})
+		.then(() => store().write(KEY, JSON.stringify({ entries }, null, '\t')))
 		.catch((e) => console.warn('logout denylist write failed:', e));
 	await queue;
 }

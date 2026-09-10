@@ -1,5 +1,4 @@
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { store } from './store';
 import { createHash, createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { env } from '$env/dynamic/private';
 import { refresh, type TokenSet } from './oidc';
@@ -44,7 +43,7 @@ export function decrypt(blob: string): string | null {
 
 function pathFor(username: string): string {
 	const safe = username.toLowerCase().replace(/[^a-z0-9._-]/g, '_');
-	return join(env.DATA_DIR ?? 'data', 'oidc', `${safe}.json`);
+	return `oidc/${safe}.json`;
 }
 
 interface StoredTokens {
@@ -57,7 +56,7 @@ interface StoredTokens {
 
 async function read(username: string): Promise<StoredTokens | null> {
 	try {
-		const raw = await readFile(pathFor(username), 'utf8');
+		const raw = await store().readText(pathFor(username));
 		const file = JSON.parse(raw) as { blob?: string };
 		if (!file.blob) return null;
 		const plain = decrypt(file.blob);
@@ -68,9 +67,7 @@ async function read(username: string): Promise<StoredTokens | null> {
 }
 
 async function write(username: string, tokens: StoredTokens): Promise<void> {
-	const file = pathFor(username);
-	await mkdir(join(file, '..'), { recursive: true });
-	await writeFile(file, JSON.stringify({ blob: encrypt(JSON.stringify(tokens)) }), 'utf8');
+	await store().write(pathFor(username), JSON.stringify({ blob: encrypt(JSON.stringify(tokens)) }));
 }
 
 /** Persists what the token endpoint returned. Called on login and after each refresh. */
@@ -119,7 +116,7 @@ export async function currentIdToken(username: string): Promise<string | null> {
 
 export async function forgetTokens(username: string): Promise<void> {
 	try {
-		await unlink(pathFor(username));
+		await store().remove(pathFor(username));
 	} catch {
 		// already gone
 	}

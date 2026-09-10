@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { store } from './store';
 import { randomUUID } from 'node:crypto';
 import { env } from '$env/dynamic/private';
 import {
@@ -56,21 +55,19 @@ export interface StoredDoc {
 function storePath(username: string): string {
 	// Usernames come from LDAP — sanitize before touching the filesystem.
 	const safe = username.replace(/[^a-zA-Z0-9._-]/g, '_');
-	return join(env.DATA_DIR ?? 'data', 'rag', `${safe}.json`);
+	return `rag/${safe}.json`;
 }
 
 async function readStore(username: string): Promise<StoredDoc[]> {
 	try {
-		return JSON.parse(await readFile(storePath(username), 'utf8'));
+		return JSON.parse(await store().readText(storePath(username)));
 	} catch {
 		return [];
 	}
 }
 
 async function writeStore(username: string, docs: StoredDoc[]): Promise<void> {
-	const path = storePath(username);
-	await mkdir(join(path, '..'), { recursive: true });
-	await writeFile(path, JSON.stringify(docs));
+	await store().write(storePath(username), JSON.stringify(docs));
 }
 
 /**
@@ -83,19 +80,17 @@ const MAX_SHARED_DOCS = 100;
 
 function sharedStorePath(scope: string): string {
 	const safe = scope.replace(/[^a-zA-Z0-9._-]/g, '_');
-	return join(env.DATA_DIR ?? 'data', 'rag', '_shared', `${safe}.json`);
+	return `rag/_shared/${safe}.json`;
 }
 async function readSharedStore(scope: string): Promise<StoredDoc[]> {
 	try {
-		return JSON.parse(await readFile(sharedStorePath(scope), 'utf8'));
+		return JSON.parse(await store().readText(sharedStorePath(scope)));
 	} catch {
 		return [];
 	}
 }
 async function writeSharedStore(scope: string, docs: StoredDoc[]): Promise<void> {
-	const path = sharedStorePath(scope);
-	await mkdir(join(path, '..'), { recursive: true });
-	await writeFile(path, JSON.stringify(docs));
+	await store().write(sharedStorePath(scope), JSON.stringify(docs));
 }
 
 export const orgScope = 'org';

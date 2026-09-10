@@ -1,0 +1,23 @@
+# Load balancer for the multi-app overlay (docker-compose.multi.yml).
+#
+# - Cookie stickiness: chat streams buffer in the replica that served them, so
+#   a reconnecting client must land on the same one. New browsers get a
+#   replica on first contact; failover happens only when theirs is down.
+# - flush_interval -1 disables response buffering — chat is SSE-style
+#   streaming and buffering would hold tokens back.
+# - Caddy sets X-Forwarded-For/Proto/Host automatically; the app reads them
+#   via the adapter-node envs set in the overlay.
+:80 {
+	encode gzip
+
+	reverse_proxy perguntai:3000 perguntai2:3000 {
+		lb_policy cookie perguntai_lb
+		lb_try_duration 5s
+
+		health_uri /login
+		health_interval 15s
+		health_timeout 5s
+
+		flush_interval -1
+	}
+}

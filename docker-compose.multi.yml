@@ -1,0 +1,54 @@
+# Multi-app overlay: a second replica plus a Caddy load balancer in front.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.multi.yml up -d
+#
+# Traffic enters through caddy (which claims the host port); the app services
+# lose their published ports. Sticky sessions (cookie) keep a browser on one
+# replica so mid-stream chat reconnects find their in-memory resume buffer;
+# everything durable goes through the shared store (STORAGE env — the shared
+# volume for one host, azure/s3 across hosts). The scheduler elects a single
+# sweeper via a store lease, so replicas never double-fire schedules.
+#
+# The app trusts Caddy's forwarding headers via the adapter-node envs below —
+# without them, audit IPs would show Caddy's address and origin checks would
+# see the internal host.
+
+services:
+  perguntai:
+    ports: !override []
+    environment:
+      - PROTOCOL_HEADER=x-forwarded-proto
+      - HOST_HEADER=x-forwarded-host
+      - ADDRESS_HEADER=x-forwarded-for
+      - XFF_DEPTH=1
+
+  perguntai2:
+    image: ghcr.io/your-org/perguntai:latest
+    env_file: .env
+    environment:
+      - PROTOCOL_HEADER=x-forwarded-proto
+      - HOST_HEADER=x-forwarded-host
+      - ADDRESS_HEADER=x-forwarded-for
+      - XFF_DEPTH=1
+    volumes:
+      - perguntai-data:/app/data
+      - msbcache2:/home/node/.microsandbox
+    devices:
+      - /dev/kvm
+    group_add:
+      - "993"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports:
+      - '3000:80'
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - perguntai
+      - perguntai2
+    restart: unless-stopped
+
+volumes:
+  msbcache2:

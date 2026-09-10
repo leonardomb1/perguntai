@@ -1,6 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { env } from '$env/dynamic/private';
+import { store } from './store';
 
 /**
  * Per-user memory: durable, self-scoped knowledge the assistant keeps about a
@@ -38,7 +36,7 @@ export const MEMORY_LIMITS = { maxMemories: MAX_MEMORIES, maxDetails: MAX_DETAIL
 
 function memoryPath(username: string): string {
 	const safe = username.replace(/[^a-zA-Z0-9._-]/g, '_');
-	return join(env.DATA_DIR ?? 'data', 'memory', `${safe}.json`);
+	return `memory/${safe}.json`;
 }
 
 function nowIso(): string {
@@ -63,7 +61,7 @@ function normalize(m: Record<string, unknown>): UserMemory {
 
 async function readAll(username: string): Promise<UserMemory[]> {
 	try {
-		const parsed = JSON.parse(await readFile(memoryPath(username), 'utf8'));
+		const parsed = JSON.parse(await store().readText(memoryPath(username)));
 		const list: unknown[] = Array.isArray(parsed?.memories) ? parsed.memories : [];
 		return list
 			.filter((m): m is Record<string, unknown> => typeof m === 'object' && m !== null)
@@ -75,9 +73,7 @@ async function readAll(username: string): Promise<UserMemory[]> {
 }
 
 async function writeAll(username: string, memories: UserMemory[]): Promise<void> {
-	const path = memoryPath(username);
-	await mkdir(join(path, '..'), { recursive: true });
-	await writeFile(path, JSON.stringify({ memories }));
+	await store().write(memoryPath(username), JSON.stringify({ memories }));
 }
 
 export async function listMemories(username: string): Promise<UserMemory[]> {

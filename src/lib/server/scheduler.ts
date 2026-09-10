@@ -18,10 +18,12 @@ import {
 	type ScheduleRun
 } from './schedules';
 import type { AuthUser } from './auth';
+import { store } from './store';
 
 /**
- * The Programado runner: a single in-process sweep (this deployment is one
- * container — no distributed locking needed) that fires due schedules as
+ * The Programado runner: a per-instance interval whose sweeps are serialized
+ * ACROSS replicas by a store lease, so a multi-app deployment fires each due
+ * schedule exactly once. It fires due schedules as
  * HEADLESS agent runs. The owner is not logged in: warehouse access rides on
  * the stored credential (credentialStore/oidcStore — the same path API keys
  * use), runs are charged against the owner's daily token budget, capped in
@@ -54,6 +56,15 @@ export function startScheduler(): void {
 async function sweep(): Promise<void> {
 	if (sweeping) return;
 	sweeping = true;
+	// One sweeper across all replicas: whoever holds the lease sweeps, the
+	// rest skip this tick and try again next interval.
+	const lease = await store()
+		.acquireLease('locks/scheduler', SWEEP_MS * 2)
+		.catch(() => null);
+	if (!lease) {
+		sweeping = false;
+		return;
+	}
 	try {
 		if (!(await getCapabilities()).scheduledRuns) return;
 		const now = new Date();
@@ -75,6 +86,7 @@ async function sweep(): Promise<void> {
 		console.error('scheduler sweep failed:', error);
 	} finally {
 		sweeping = false;
+		await lease.release().catch(() => {});
 	}
 }
 

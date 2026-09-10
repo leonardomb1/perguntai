@@ -1,7 +1,5 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { store } from './store';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { env } from '$env/dynamic/private';
 import { decrypt, encrypt } from './oidcStore';
 
 /**
@@ -54,7 +52,7 @@ export interface PublicEmbedKey {
 }
 
 function storePath(): string {
-	return join(env.DATA_DIR ?? 'data', 'embed-keys.json');
+	return 'embed-keys.json';
 }
 
 function hashKey(key: string): string {
@@ -63,7 +61,7 @@ function hashKey(key: string): string {
 
 async function readAll(): Promise<EmbedKeyRecord[]> {
 	try {
-		const parsed = JSON.parse(await readFile(storePath(), 'utf8'));
+		const parsed = JSON.parse(await store().readText(storePath()));
 		return Array.isArray(parsed?.keys) ? (parsed.keys as EmbedKeyRecord[]) : [];
 	} catch {
 		return [];
@@ -71,9 +69,7 @@ async function readAll(): Promise<EmbedKeyRecord[]> {
 }
 
 async function writeAll(keys: EmbedKeyRecord[]): Promise<void> {
-	const path = storePath();
-	await mkdir(join(path, '..'), { recursive: true });
-	await writeFile(path, JSON.stringify({ keys }));
+	await store().write(storePath(), JSON.stringify({ keys }));
 }
 
 export function publicEmbedKey(key: EmbedKeyRecord): PublicEmbedKey {

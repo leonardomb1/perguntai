@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { store } from './store';
 import { createHash, createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { env } from '$env/dynamic/private';
 
@@ -83,7 +82,7 @@ const MAX_MCP_URL = 300;
 
 function settingsPath(username: string): string {
 	const safe = username.replace(/[^a-zA-Z0-9._-]/g, '_');
-	return join(env.DATA_DIR ?? 'data', 'settings', `${safe}.json`);
+	return `settings/${safe}.json`;
 }
 
 function key(): Buffer {
@@ -141,7 +140,7 @@ interface StoredSettings extends Omit<UserSettings, 'mcpServers'> {
 
 async function readStored(username: string): Promise<StoredSettings> {
 	try {
-		const parsed = JSON.parse(await readFile(settingsPath(username), 'utf8'));
+		const parsed = JSON.parse(await store().readText(settingsPath(username)));
 		return {
 			fullName: typeof parsed.fullName === 'string' ? parsed.fullName : '',
 			displayName: typeof parsed.displayName === 'string' ? parsed.displayName : '',
@@ -265,9 +264,7 @@ export async function saveUserSettings(
 	if (typeof patch.memoryEnabled === 'boolean') stored.memoryEnabled = patch.memoryEnabled;
 	if (patch.onboarded === true) stored.onboarded = true;
 
-	const path = settingsPath(username);
-	await mkdir(join(path, '..'), { recursive: true });
-	await writeFile(path, JSON.stringify(stored));
+	await store().write(settingsPath(username), JSON.stringify(stored));
 
 	return {
 		fullName: stored.fullName,
