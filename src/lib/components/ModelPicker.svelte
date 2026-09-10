@@ -1,6 +1,6 @@
 <script lang="ts">
 	import SelectMenu from './SelectMenu.svelte';
-	import { providerLogo } from '$lib/providers';
+	import { providerLogo, providerLogoClass } from '$lib/providers';
 	import type { Provider } from '$lib/models';
 
 	type Model = { id: string; label: string; hint?: string; provider: Provider };
@@ -26,7 +26,7 @@
 </script>
 
 {#snippet logo(o: { provider: Provider })}
-	<img src={providerLogo(o.provider)} alt="" class="size-4 shrink-0" />
+	<img src={providerLogo(o.provider)} alt="" class="size-4 shrink-0 {providerLogoClass(o.provider)}" />
 {/snippet}
 
 <SelectMenu

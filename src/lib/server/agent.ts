@@ -33,6 +33,7 @@ import {
 	modelMaxOutputTokens,
 	modelKind,
 	modelPromptCache,
+	modelReasoningEffort,
 	modelSupportsServerTools,
 	modelThinking,
 	resolveLanguageModel
@@ -442,6 +443,10 @@ export async function buildAgent(
 				? {
 						providerOptions: {
 							openai: {
+								// Low effort by default: the tool loop's steps are mostly
+								// mechanical (pick a tool, write SQL) and per-step latency
+								// dominates — deep reasoning per step buys little here.
+								reasoningEffort: modelReasoningEffort(model),
 								reasoningSummary: 'auto',
 								promptCacheKey: `pg-${user.username}`
 							}

@@ -25,7 +25,7 @@
 	import { EMPTY_MATCH } from '$lib/dept-rules';
 	import type { ModelOption } from '$lib/models';
 	import { authFetch, getToken } from '$lib/session';
-	import { providerLogo } from '$lib/providers';
+	import { providerLogo, providerLogoClass } from '$lib/providers';
 	import { clickOutside } from '$lib/actions/clickOutside';
 	import { placeMenu } from '$lib/floating';
 
@@ -516,7 +516,7 @@
 									? 'border-accent/40 bg-accent-wash text-accent-strong'
 									: 'border-edge bg-surface text-neutral-400 hover:bg-canvas'}"
 							>
-								<img src={providerLogo(mo.provider)} alt="" class="size-3.5 {on ? '' : 'opacity-30 grayscale'}" />
+								<img src={providerLogo(mo.provider)} alt="" class="size-3.5 {providerLogoClass(mo.provider)} {on ? '' : 'opacity-30 grayscale'}" />
 								{mo.label}
 							</button>
 						{/each}
@@ -724,7 +724,7 @@
 															<img
 																src={providerLogo(mo.provider)}
 																alt=""
-																class="size-4 shrink-0 {on ? '' : 'opacity-30 grayscale'}"
+																class="size-4 shrink-0 {providerLogoClass(mo.provider)} {on ? '' : 'opacity-30 grayscale'}"
 															/>
 															<span class="flex-1 text-sm font-medium {on ? 'text-neutral-800' : 'text-neutral-400'}">
 																{mo.label}

@@ -15,14 +15,20 @@ import type { Provider } from '$lib/models';
  * Ollama/Qwen via simple-icons, Google's multicolor "G"); anything else falls
  * back to the generic sparkle.
  */
-export const PROVIDERS: Record<string, { name: string; logo: string }> = {
+export const PROVIDERS: Record<string, { name: string; logo: string; mono?: boolean }> = {
 	anthropic: { name: 'Anthropic', logo: anthropicLogo },
-	openai: { name: 'OpenAI', logo: openaiLogo },
+	// mono: black-ink marks that need inverting on the dark theme.
+	openai: { name: 'OpenAI', logo: openaiLogo, mono: true },
 	google: { name: 'Google', logo: googleLogo },
 	qwen: { name: 'Qwen', logo: qwenLogo },
-	ollama: { name: 'Ollama', logo: ollamaLogo }
+	ollama: { name: 'Ollama', logo: ollamaLogo, mono: true }
 };
 
 export function providerLogo(provider: Provider): string {
 	return PROVIDERS[provider]?.logo ?? genericLogo;
+}
+
+/** Extra classes for a provider logo <img>: monochrome marks invert in dark. */
+export function providerLogoClass(provider: Provider): string {
+	return PROVIDERS[provider]?.mono ? 'dark:invert' : '';
 }

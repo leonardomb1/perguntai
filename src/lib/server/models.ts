@@ -39,6 +39,8 @@ export interface ServerModelOption extends ModelOption {
 	upstreamModel?: string;
 	/** Reasoning tag emitted by the model ("think" → <think>…</think>). */
 	reasoningTag?: string;
+	/** Reasoning effort for openai-responses models (low/medium/high; default low). */
+	reasoningEffort?: string;
 	/** Anthropic prompt-cache breakpoints apply to this model. */
 	promptCache: boolean;
 	/** Anthropic adaptive thinking applies to this model. */
@@ -150,6 +152,8 @@ interface ExtraModelConfig {
 	apiKeyEnv?: string;
 	model?: string;
 	reasoningTag?: string;
+	/** openai-responses only: low | medium | high (default low). */
+	reasoningEffort?: string;
 	maxOutputTokens?: number;
 }
 
@@ -193,6 +197,7 @@ function parseExtraModels(): ServerModelOption[] {
 			apiKey: entry.apiKeyEnv ? env[entry.apiKeyEnv] : entry.apiKey,
 			upstreamModel: entry.model,
 			reasoningTag: entry.reasoningTag,
+			reasoningEffort: entry.reasoningEffort,
 			// Anthropic-only features follow the execution kind.
 			serverTools: false,
 			promptCache: kind === 'anthropic',
@@ -249,6 +254,11 @@ export function modelSupportsServerTools(id: string): boolean {
 /** Execution kind for provider-specific request options. */
 export function modelKind(id: string): ServerModelOption['kind'] {
 	return entryOf(id)?.kind ?? 'anthropic';
+}
+
+/** Reasoning effort for openai-responses models; the tool loop favors speed. */
+export function modelReasoningEffort(id: string): string {
+	return entryOf(id)?.reasoningEffort ?? 'low';
 }
 
 /** Whether Anthropic prompt-cache breakpoints apply to this model. */

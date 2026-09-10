@@ -4,6 +4,8 @@
 @import '@fontsource-variable/source-serif-4';
 @import 'tailwindcss';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
 	/* UI face — DM Sans tracks Google Sans (Gemini); the serif is used for
 	   assistant prose in Markdown.svelte, echoing Claude's Tiempos. */
