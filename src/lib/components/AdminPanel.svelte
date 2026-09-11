@@ -814,16 +814,20 @@
 									{/if}
 								</td>
 								<td class="py-2.5 pr-4 text-right">
-									{#if u.unlisted}
+									<div class="flex items-center justify-end gap-1">
+										{#if u.unlisted}
+											<button
+												onclick={() => runAdmin(() => addUser(u.username))}
+												class="rounded-lg border border-edge bg-surface px-2.5 py-1 text-xs font-medium whitespace-nowrap text-neutral-600 transition hover:border-accent/40 hover:bg-canvas hover:text-accent-strong"
+											>
+												{m.admin_add_exception()}
+											</button>
+										{/if}
 										<button
-											onclick={() => runAdmin(() => addUser(u.username))}
-											class="rounded-lg border border-edge bg-surface px-2.5 py-1 text-xs font-medium whitespace-nowrap text-neutral-600 transition hover:border-accent/40 hover:bg-canvas hover:text-accent-strong"
-										>
-											{m.admin_add_exception()}
-										</button>
-									{:else}
-										<button
-											onclick={() => runAdmin(() => removeUser(u.username))}
+											onclick={() => {
+												if (confirm(m.admin_remove_confirm({ username: u.username })))
+													runAdmin(() => removeUser(u.username));
+											}}
 											disabled={u.envAdmin}
 											class="rounded p-1 text-neutral-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
 											title={m.admin_remove()}
@@ -831,7 +835,7 @@
 										>
 											<Icon name="trash" size={14} />
 										</button>
-									{/if}
+									</div>
 								</td>
 							</tr>
 						{/each}

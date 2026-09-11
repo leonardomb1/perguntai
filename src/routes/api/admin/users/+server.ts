@@ -12,7 +12,7 @@ import {
 	setPolicies,
 	upsertAccessUser
 } from '$lib/server/access';
-import { listUsageUsers, usageSummary } from '$lib/server/usage';
+import { deleteUsage, listUsageUsers, usageSummary } from '$lib/server/usage';
 import { logAudit, requestMeta } from '$lib/server/audit';
 import type { RequestHandler } from './$types';
 import type { AuthUser } from '$lib/server/auth';
@@ -209,6 +209,9 @@ export const DELETE: RequestHandler = async ({ request, url }) => {
 	} catch (e) {
 		return json({ error: e instanceof Error ? e.message : 'cannot remove' }, { status: 400 });
 	}
+	// The listing is access records ∪ usage files — without this the usage file
+	// re-lists the user forever, so "remove" means erasing their history too.
+	await deleteUsage(username.trim());
 	logAudit({
 		actor: admin.username,
 		via: 'session',

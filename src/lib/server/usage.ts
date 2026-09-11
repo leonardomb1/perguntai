@@ -221,6 +221,15 @@ export async function usageSummary(username: string): Promise<UsageSummary> {
  * used the app". Policy-admitted users have no access.json record, so the
  * stats panel enumerates THIS, not the user list.
  */
+/**
+ * Erase a user's usage history. Removing an access record alone is not enough
+ * to make a stale user disappear — the usage file re-lists them forever.
+ */
+export async function deleteUsage(username: string): Promise<void> {
+	queues.delete(username);
+	await store().remove(usagePath(username));
+}
+
 export async function listUsageUsers(): Promise<string[]> {
 	try {
 		const files = (await store().list('usage/')).map((k) => k.split('/').pop()!);

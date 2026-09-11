@@ -98,5 +98,5 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		action: 'login.password',
 		status: 'ok'
 	});
-	return json({ token: session.token, displayName: session.displayName });
+	return json({ token: session.token, displayName: session.displayName, username: session.username });
 };

@@ -90,8 +90,12 @@
 				formError = rejectionMessage(body.code, res.status);
 				return;
 			}
-			const { token, displayName } = body as { token: string; displayName: string | null };
-			saveSession(token, displayName);
+			const { token, displayName, username: canonical } = body as {
+				token: string;
+				displayName: string | null;
+				username?: string;
+			};
+			saveSession(token, displayName, canonical ?? username);
 			await goto('/');
 		} catch {
 			formError = m.login_unreachable();

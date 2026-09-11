@@ -14,7 +14,16 @@
 	import ConversationDocs from '$lib/components/ConversationDocs.svelte';
 	import SettingsModal from '$lib/components/SettingsModal.svelte';
 	import OnboardingModal from '$lib/components/OnboardingModal.svelte';
-	import { authFetch, getDisplayName, getToken, clearSession, hasSession } from '$lib/session';
+	import {
+		authFetch,
+		getDisplayName,
+		getToken,
+		getUsername,
+		saveUsername,
+		clearSession,
+		hasSession
+	} from '$lib/session';
+	import { createPanelWidth } from '$lib/resizable.svelte';
 	import { fetchSettings, type PublicSettings } from '$lib/settings';
 	import { newId } from '$lib/id';
 	import type { UIMessage } from 'ai';
@@ -33,7 +42,17 @@
 		if (browser && !hasSession()) goto('/login');
 	});
 	onMount(() => {
-		if (hasSession()) void authFetch('/api/me');
+		// The probe also backfills the login username for sessions from before
+		// it was stored — the avatar must seed from it, not the display name.
+		if (hasSession())
+			void authFetch('/api/me').then(async (res) => {
+				if (!res.ok) return;
+				const me = (await res.json().catch(() => null)) as { username?: string } | null;
+				if (me?.username) {
+					saveUsername(me.username);
+					loginUsername = me.username;
+				}
+			});
 	});
 
 	let conversations = $state<ConversationMeta[]>([]);
@@ -47,6 +66,11 @@
 	let paneRef = $state<{ markDeleted: () => void } | null>(null);
 
 	const username = $derived(browser ? (getDisplayName() ?? 'user') : 'user');
+	// The identicon in the admin lists is seeded by the LOGIN username; seed
+	// the sidebar's with the same key or the two never match.
+	let loginUsername = $state(browser ? getUsername() : null);
+
+	const sidebarW = createPanelWidth('perguntai_sidebar_w', 288);
 
 	// Per-user settings drive the shown name and gate first-login onboarding.
 	// `?settings=1` deep-links straight into the settings modal.
@@ -214,7 +238,8 @@
 <div class="flex h-full bg-canvas">
 	<!-- Sidebar -->
 	<aside
-		class="absolute inset-y-0 left-0 z-20 flex w-72 flex-col border-r border-edge bg-fill transition-transform sm:static sm:translate-x-0
+		style:width="{sidebarW.width}px"
+		class="absolute inset-y-0 left-0 z-20 flex max-w-[85vw] flex-col border-r border-edge bg-fill transition-transform sm:relative sm:translate-x-0
 			{sidebarOpen ? 'translate-x-0' : '-translate-x-full'}"
 	>
 		<div class="flex items-center justify-between p-3 pb-1">
@@ -333,7 +358,7 @@
 
 
 		<div class="flex items-center gap-2.5 border-t border-edge p-3">
-			<Avatar {username} size={32} />
+			<Avatar username={loginUsername ?? username} size={32} />
 			<span class="min-w-0 flex-1 truncate text-sm text-neutral-700">{shownName}</span>
 			<button
 				onclick={() => (settingsOpen = true)}
@@ -352,6 +377,15 @@
 				<Icon name="log-out" size={16} />
 			</button>
 		</div>
+
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			role="separator"
+			aria-orientation="vertical"
+			class="absolute inset-y-0 -right-1 z-10 hidden w-2 cursor-col-resize transition-colors hover:bg-accent/20 active:bg-accent/30 sm:block"
+			onpointerdown={sidebarW.startDrag}
+			ondblclick={() => sidebarW.reset()}
+		></div>
 	</aside>
 
 	{#if sidebarOpen}

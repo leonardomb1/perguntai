@@ -3,6 +3,7 @@ import { goto } from '$app/navigation';
 
 const TOKEN_KEY = 'perguntai_token';
 const NAME_KEY = 'perguntai_display_name';
+const USERNAME_KEY = 'perguntai_username';
 
 export function getToken(): string | null {
 	return browser ? localStorage.getItem(TOKEN_KEY) : null;
@@ -12,14 +13,25 @@ export function getDisplayName(): string | null {
 	return browser ? localStorage.getItem(NAME_KEY) : null;
 }
 
-export function saveSession(token: string, displayName: string | null) {
+/** Login username (canonical id) — what avatars and admin views key on. */
+export function getUsername(): string | null {
+	return browser ? localStorage.getItem(USERNAME_KEY) : null;
+}
+
+export function saveUsername(username: string) {
+	if (browser) localStorage.setItem(USERNAME_KEY, username);
+}
+
+export function saveSession(token: string, displayName: string | null, username?: string | null) {
 	localStorage.setItem(TOKEN_KEY, token);
 	if (displayName) localStorage.setItem(NAME_KEY, displayName);
+	if (username) localStorage.setItem(USERNAME_KEY, username);
 }
 
 export function clearSession() {
 	localStorage.removeItem(TOKEN_KEY);
 	localStorage.removeItem(NAME_KEY);
+	localStorage.removeItem(USERNAME_KEY);
 }
 
 /**

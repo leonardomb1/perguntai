@@ -13,6 +13,7 @@
 	import SkillsPanel from '$lib/components/SkillsPanel.svelte';
 	import TypstTemplatesPanel from '$lib/components/TypstTemplatesPanel.svelte';
 	import { authFetch, hasSession } from '$lib/session';
+	import { createPanelWidth } from '$lib/resizable.svelte';
 	import { fetchSettings } from '$lib/settings';
 	import { copyText } from '$lib/clipboard';
 	import { newId } from '$lib/id';
@@ -144,6 +145,8 @@
 
 	/** Mobile only: the console rail is a drawer, closed by default. */
 	let railOpen = $state(false);
+	const railW = createPanelWidth('perguntai_admin_rail_w', 240);
+	const scopeW = createPanelWidth('perguntai_admin_scope_w', 240, 200, 420);
 	/** Mobile only: the knowledge pane shows either the scope list or the editor. */
 	let scopeDetail = $state(false);
 
@@ -264,7 +267,8 @@
 <div class="relative flex h-dvh overflow-hidden bg-canvas text-neutral-800">
 	<!-- console rail — a drawer on phones, a static column from sm up -->
 	<aside
-		class="absolute inset-y-0 left-0 z-30 flex w-60 shrink-0 flex-col border-r border-edge bg-fill transition-transform sm:static sm:translate-x-0
+		style:width="{railW.width}px"
+		class="absolute inset-y-0 left-0 z-30 flex max-w-[85vw] shrink-0 flex-col border-r border-edge bg-fill transition-transform sm:relative sm:translate-x-0
 			{railOpen ? 'translate-x-0' : '-translate-x-full'}"
 	>
 		<div class="flex h-16 items-center gap-2 border-b border-edge px-4">
@@ -304,6 +308,15 @@
 				</button>
 			{/each}
 		</nav>
+
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			role="separator"
+			aria-orientation="vertical"
+			class="absolute inset-y-0 -right-1 z-10 hidden w-2 cursor-col-resize transition-colors hover:bg-accent/20 active:bg-accent/30 sm:block"
+			onpointerdown={railW.startDrag}
+			ondblclick={() => railW.reset()}
+		></div>
 	</aside>
 
 	{#if railOpen}
@@ -637,7 +650,8 @@
 			     from sm up; on phones the two take turns (see `scopeDetail`). -->
 			<div class="flex min-h-0 flex-1">
 				<div
-					class="flex w-full shrink-0 flex-col border-r border-edge bg-canvas sm:w-60
+					style="--scope-w: {scopeW.width}px"
+					class="relative flex w-full shrink-0 flex-col border-r border-edge bg-canvas sm:w-[var(--scope-w)]
 						{scopeDetail ? 'max-sm:hidden' : ''}"
 				>
 					<nav class="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
@@ -680,6 +694,15 @@
 						<Icon name="plus" size={15} />
 						{m.org_dept_add()}
 					</button>
+
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div
+						role="separator"
+						aria-orientation="vertical"
+						class="absolute inset-y-0 -right-1 z-10 hidden w-2 cursor-col-resize transition-colors hover:bg-accent/20 active:bg-accent/30 sm:block"
+						onpointerdown={scopeW.startDrag}
+						ondblclick={() => scopeW.reset()}
+					></div>
 				</div>
 
 				<div class="min-h-0 flex-1 overflow-y-auto {scopeDetail ? '' : 'max-sm:hidden'}">

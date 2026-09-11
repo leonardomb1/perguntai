@@ -15,7 +15,12 @@ import { saveTokens } from '$lib/server/oidcStore';
  * rewriting ~10 components (and re-opening the CSRF question that
  * `csrf.trustedOrigins: ['*']` currently leaves alone).
  */
-function handoffPage(token: string, displayName: string | null, redirectTo: string): Response {
+function handoffPage(
+	token: string,
+	displayName: string | null,
+	username: string,
+	redirectTo: string
+): Response {
 	// Values are embedded as JSON literals; `<` is escaped so a claim can never
 	// close the script tag.
 	const literal = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c');
@@ -29,6 +34,7 @@ function handoffPage(token: string, displayName: string | null, redirectTo: stri
 try {
   localStorage.setItem('perguntai_token', ${literal(token)});
   ${displayName ? `localStorage.setItem('perguntai_display_name', ${literal(displayName)});` : ''}
+  localStorage.setItem('perguntai_username', ${literal(username)});
 } catch (e) {}
 location.replace(${literal(redirectTo)});
 </script>
@@ -103,5 +109,5 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 		console.error('oidc: could not persist tokens', err)
 	);
 
-	return handoffPage(session.token, session.displayName, flow.redirectTo);
+	return handoffPage(session.token, session.displayName, session.username, flow.redirectTo);
 };
