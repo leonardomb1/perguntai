@@ -72,6 +72,18 @@
 
 	const sidebarW = createPanelWidth('perguntai_sidebar_w', 288);
 
+	// Desktop collapse (mobile already has the drawer + X); persisted so the
+	// choice survives reloads.
+	let sidebarCollapsed = $state(browser && localStorage.getItem('perguntai_sidebar_collapsed') === '1');
+	function toggleSidebarCollapsed() {
+		sidebarCollapsed = !sidebarCollapsed;
+		try {
+			localStorage.setItem('perguntai_sidebar_collapsed', sidebarCollapsed ? '1' : '0');
+		} catch {
+			// private mode
+		}
+	}
+
 	// Per-user settings drive the shown name and gate first-login onboarding.
 	// `?settings=1` deep-links straight into the settings modal.
 	let settings = $state<PublicSettings | null>(null);
@@ -240,7 +252,7 @@
 	<aside
 		style:width="{sidebarW.width}px"
 		class="absolute inset-y-0 left-0 z-20 flex max-w-[85vw] flex-col border-r border-edge bg-fill transition-transform sm:relative sm:translate-x-0
-			{sidebarOpen ? 'translate-x-0' : '-translate-x-full'}"
+			{sidebarOpen ? 'translate-x-0' : '-translate-x-full'} {sidebarCollapsed ? 'sm:hidden' : ''}"
 	>
 		<div class="flex items-center justify-between p-3 pb-1">
 			<span class="px-1 text-lg font-semibold tracking-tight text-neutral-800">PerguntAI</span>
@@ -252,6 +264,14 @@
 					aria-label={m.new_chat()}
 				>
 					<Icon name="square-pen" size={18} />
+				</button>
+				<button
+					onclick={toggleSidebarCollapsed}
+					class="hidden rounded-lg p-2 text-neutral-500 transition hover:bg-surface/70 hover:text-accent-strong sm:block"
+					title={m.close_sidebar()}
+					aria-label={m.close_sidebar()}
+				>
+					<Icon name="panel-left" size={18} />
 				</button>
 				<button
 					onclick={() => (sidebarOpen = false)}
@@ -398,15 +418,27 @@
 
 	<!-- Chat area -->
 	<div class="relative flex min-w-0 flex-1 flex-col">
-		<div class="flex shrink-0 items-center justify-between px-4 pt-3 sm:justify-end">
-			<button
-				onclick={() => (sidebarOpen = true)}
-				class="rounded-lg border border-edge bg-surface p-2 text-neutral-600 sm:hidden"
-				title={m.open_sidebar()}
-				aria-label={m.open_sidebar()}
-			>
-				<Icon name="menu" size={18} />
-			</button>
+		<div class="flex shrink-0 items-center justify-between px-4 pt-3">
+			<div class="flex items-center">
+				<button
+					onclick={() => (sidebarOpen = true)}
+					class="rounded-lg border border-edge bg-surface p-2 text-neutral-600 sm:hidden"
+					title={m.open_sidebar()}
+					aria-label={m.open_sidebar()}
+				>
+					<Icon name="menu" size={18} />
+				</button>
+				{#if sidebarCollapsed}
+					<button
+						onclick={toggleSidebarCollapsed}
+						class="hidden rounded-lg border border-edge bg-surface p-2 text-neutral-600 transition hover:text-accent-strong sm:block"
+						title={m.open_sidebar()}
+						aria-label={m.open_sidebar()}
+					>
+						<Icon name="panel-left" size={18} />
+					</button>
+				{/if}
+			</div>
 			{#key currentId}
 				<ConversationDocs conversationId={currentId} />
 			{/key}

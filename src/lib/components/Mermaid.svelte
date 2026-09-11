@@ -72,8 +72,15 @@
 
 	const ink = $derived(chartInk($darkTheme));
 
+	// Streaming replaces message objects on every delta, so the `code` prop's
+	// dependency chain invalidates per token even though the string is frozen
+	// once the tool returned. Route it through $derived — which only propagates
+	// on a real value change — or every delta piles another full mermaid+dagre
+	// render onto the main thread until the page freezes.
+	const source = $derived(code);
+
 	$effect(() => {
-		if (!browser || !code) return;
+		if (!browser || !source) return;
 		const dark = $darkTheme;
 		let cancelled = false;
 
@@ -112,8 +119,8 @@
 							}
 				});
 				// Parse first for a clean error instead of a broken render.
-				await mermaid.parse(code);
-				const { svg: rendered } = await mermaid.render(`mermaid-${Date.now()}-${counter++}`, code);
+				await mermaid.parse(source);
+				const { svg: rendered } = await mermaid.render(`mermaid-${Date.now()}-${counter++}`, source);
 				if (!cancelled) {
 					svg = rendered;
 					error = null;
