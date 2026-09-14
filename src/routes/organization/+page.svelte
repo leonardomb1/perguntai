@@ -463,16 +463,16 @@
 								</button>
 							</div>
 							<div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-edge-soft pt-4">
-								{#if embedInfo && !embedInfo.configured}
-									<p class="text-xs text-red-600">{m.cap_embed_not_configured()}</p>
-								{:else if embedInfo}
-									<p class="text-xs text-neutral-500">
-										{m.cap_embed_status({
-											model: embedInfo.model,
-											n: embedInfo.maxMessages,
-											tokens: embedInfo.dailyTokens.toLocaleString('pt-BR')
-										})}
-									</p>
+								{#if embedInfo}
+									<div class="min-w-0 space-y-0.5">
+										<p class="text-xs text-neutral-500">
+											{m.cap_embed_status({
+												model: embedInfo.model,
+												n: embedInfo.maxMessages,
+												tokens: embedInfo.dailyTokens.toLocaleString('pt-BR')
+											})}
+										</p>
+									</div>
 								{/if}
 								<span class="min-w-0 flex-1"></span>
 								<span class="flex items-center gap-1.5">

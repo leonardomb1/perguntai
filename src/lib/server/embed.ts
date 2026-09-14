@@ -47,8 +47,6 @@ const intEnv = (value: string | undefined, fallback: number): number => {
 };
 
 export function embedConfig() {
-	const username = env.EMBED_STARROCKS_USER ?? '';
-	const password = env.EMBED_STARROCKS_PASSWORD ?? '';
 	// Restricted to the sonnet tier or lower whatever the env says — the embed
 	// surface never gets an opus/fable-class model.
 	const requested = env.EMBED_MODEL ?? '';
@@ -57,8 +55,6 @@ export function embedConfig() {
 			? requested
 			: DEFAULT_MODEL;
 	return {
-		configured: Boolean(username && password),
-		credentials: { username, password },
 		model,
 		/** User messages allowed per conversation before the client must reset. */
 		maxMessages: intEnv(env.EMBED_MAX_MESSAGES, 10),
@@ -70,9 +66,9 @@ export function embedConfig() {
 }
 
 /**
- * Resolve what one embed request may do: an embed key (per-portal service
- * account + limits, minted in the console) wins; the env service account is
- * the keyless fallback. Null → no valid access path.
+ * Resolve what one embed request may do: only an embed key (per-portal
+ * service account + limits, minted in the console) grants access — there is
+ * no keyless path. Null → invalid, revoked or missing key.
  */
 export interface EmbedAccess {
 	credentials: { username: string; password: string };
@@ -86,27 +82,18 @@ export interface EmbedAccess {
 }
 
 export async function resolveEmbedAccess(rawKey?: string | null): Promise<EmbedAccess | null> {
+	if (!rawKey) return null;
+	const access = await verifyEmbedKey(rawKey);
+	if (!access) return null;
 	const config = embedConfig();
-	if (rawKey) {
-		const access = await verifyEmbedKey(rawKey);
-		if (!access) return null; // an invalid key never falls back to the env account
-		return {
-			credentials: access.credentials,
-			model: config.model,
-			maxMessages: access.maxMessages ?? config.maxMessages,
-			dailyTokens: access.dailyTokens ?? config.dailyTokens,
-			usageUser: `${EMBED_USAGE_USER}-${access.id.slice(0, 8)}`,
-			keyId: access.id,
-			keyLabel: access.label
-		};
-	}
-	if (!config.configured) return null;
 	return {
-		credentials: config.credentials,
+		credentials: access.credentials,
 		model: config.model,
-		maxMessages: config.maxMessages,
-		dailyTokens: config.dailyTokens,
-		usageUser: EMBED_USAGE_USER
+		maxMessages: access.maxMessages ?? config.maxMessages,
+		dailyTokens: access.dailyTokens ?? config.dailyTokens,
+		usageUser: `${EMBED_USAGE_USER}-${access.id.slice(0, 8)}`,
+		keyId: access.id,
+		keyLabel: access.label
 	};
 }
 

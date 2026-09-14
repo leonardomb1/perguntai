@@ -214,7 +214,6 @@ export interface EmailInfo {
 }
 
 export interface EmbedInfo {
-	configured: boolean;
 	model: string;
 	maxMessages: number;
 	dailyTokens: number;

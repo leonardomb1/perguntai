@@ -41,7 +41,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	}
 
 	const body = await request.json().catch(() => null);
-	// Per-portal embed key (emb_…) or the keyless env service account.
+	// Per-portal embed key (emb_…) — the only access path.
 	const access = await resolveEmbedAccess(
 		typeof body?.embedKey === 'string' ? body.embedKey : null
 	);

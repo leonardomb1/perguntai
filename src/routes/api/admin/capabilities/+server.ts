@@ -24,7 +24,6 @@ export const GET: RequestHandler = async ({ request }) => {
 	return json({
 		capabilities: await getCapabilities(),
 		embed: {
-			configured: config.configured,
 			model: config.model,
 			maxMessages: config.maxMessages,
 			dailyTokens: config.dailyTokens
