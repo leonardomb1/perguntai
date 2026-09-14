@@ -480,7 +480,8 @@ export async function listSandboxes(): Promise<{ backend: string; sandboxes: San
 	const handles: Awaited<ReturnType<typeof Sandbox.get>>[] = [];
 	let cursor: string | undefined;
 	do {
-		const page = await Sandbox.listWith((l) => (cursor ? l.cursor(cursor).limit(200) : l.limit(200)));
+		// The SDK caps a page at 100; pages are walked by cursor.
+		const page = await Sandbox.listWith((l) => (cursor ? l.cursor(cursor).limit(100) : l.limit(100)));
 		handles.push(...page.sandboxes);
 		cursor = page.nextCursor;
 	} while (cursor && handles.length < 2000);
