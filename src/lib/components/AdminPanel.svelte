@@ -95,6 +95,8 @@
 	/** Which policy's / user's egress editor is expanded inline (one each). */
 	let openEgressPolicy = $state<string | null>(null);
 	let openEgressUser = $state<string | null>(null);
+	/** Visible width of the users table's scroll box (the expanded block pins to it). */
+	let usersViewW = $state(800);
 	/** Effective read-only view for a user row: the policies they matched this month. */
 	function inheritedEgress(u: AdminUser): { name: string; rules: string[] }[] {
 		const names = new Set(u.policyNames ?? []);
@@ -595,7 +597,7 @@
 						/>
 					</div>
 					{#if codeExecution && openEgressPolicy === p.id}
-						<div class="mt-3">
+						<div class="mt-3 border-t border-edge-soft pt-3">
 							<EgressRules
 								rules={p.sandboxEgress ?? []}
 								onchange={(next) => (policies[pi].sandboxEgress = next)}
@@ -648,7 +650,7 @@
 		{/if}
 
 		{#if adminUsers.length > 0}
-			<div class="overflow-x-auto rounded-b-xl">
+			<div class="overflow-x-auto rounded-b-xl" bind:clientWidth={usersViewW}>
 				<table class="w-full text-left">
 					<thead>
 						<tr class="border-y border-edge-soft bg-canvas/60 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase">
@@ -918,13 +920,16 @@
 								</td>
 							</tr>
 							{#if codeExecution && !u.unlisted && openEgressUser === u.username}
-								<tr class="border-b border-edge-soft bg-canvas/40">
+								<tr class="border-b border-edge-soft">
 									<td colspan="10" class="px-4 py-3">
+										<!-- the table scrolls sideways; pin the block to the visible viewport -->
+										<div class="sticky left-4" style="width:{Math.max(320, usersViewW - 32)}px">
 										<EgressRules
 											rules={u.sandboxEgress ?? []}
 											inherited={inheritedEgress(u)}
 											onchange={(next) => runAdmin(() => patchUser(u.username, { sandboxEgress: next }))}
 										/>
+										</div>
 									</td>
 								</tr>
 							{/if}
