@@ -12,6 +12,8 @@ export interface AdminUser {
 	allowedModels?: string[];
 	/** Lets the model write (INSERT/UPDATE/DELETE/CREATE) under this user's DB grants. */
 	sqlWrite?: boolean;
+	/** Sandbox egress allow-list entries on this user's own record (see $lib/egress). */
+	sandboxEgress?: string[];
 	addedBy: string;
 	addedAt: string;
 	envAdmin: boolean;
@@ -111,6 +113,7 @@ export interface AccessPolicy {
 	role: 'admin' | 'builder' | 'user';
 	allowedModels?: string[];
 	sqlWrite?: boolean;
+	sandboxEgress?: string[];
 	maxDailyTokens: number | null;
 }
 
@@ -174,6 +177,7 @@ export async function patchUser(
 		maxDailyTokens?: number | null;
 		allowedModels?: string[];
 		sqlWrite?: boolean;
+		sandboxEgress?: string[];
 	}
 ): Promise<string | null> {
 	const res = await authFetch('/api/admin/users', {
@@ -256,6 +260,60 @@ export async function testCodeExecution(): Promise<
 	} catch {
 		return { ok: false, error: 'network' };
 	}
+}
+
+// --- sandboxes (console monitor for the code-execution microVMs) ---
+
+export interface SandboxRow {
+	name: string;
+	status: 'running' | 'stopped' | 'crashed' | 'draining';
+	kind: 'conversation' | 'ephemeral' | 'unknown';
+	user: string | null;
+	conversationId: string | null;
+	conversationTitle: string | null;
+	cpus: number;
+	memoryMib: number;
+	image: string;
+	createdAt: number | null;
+	updatedAt: number | null;
+	metrics: {
+		cpuPercent: number;
+		memoryBytes: number;
+		memoryLimitBytes: number;
+		diskReadBytes: number;
+		diskWriteBytes: number;
+		netRxBytes: number;
+		netTxBytes: number;
+		uptimeMs: number;
+	} | null;
+}
+
+export async function fetchSandboxes(): Promise<
+	{ ok: true; enabled: boolean; backend: string | null; sandboxes: SandboxRow[] } | { ok: false; error: string }
+> {
+	try {
+		const res = await authFetch('/api/admin/sandboxes', { headers: headers() });
+		const data = await res.json().catch(() => ({}));
+		if (!res.ok) return { ok: false, error: data.error ?? `HTTP ${res.status}` };
+		return {
+			ok: true,
+			enabled: data.enabled === true,
+			backend: data.backend ?? null,
+			sandboxes: data.sandboxes ?? []
+		};
+	} catch {
+		return { ok: false, error: 'network' };
+	}
+}
+
+export async function sandboxAction(action: 'stop' | 'remove', name: string): Promise<string | null> {
+	const res = await authFetch('/api/admin/sandboxes', {
+		method: 'POST',
+		headers: headers(),
+		body: JSON.stringify({ action, name })
+	});
+	if (res.ok) return null;
+	return (await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`;
 }
 
 // --- security / audit (admin console) ---

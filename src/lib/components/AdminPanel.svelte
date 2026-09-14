@@ -5,9 +5,11 @@
 	import Icon from './Icon.svelte';
 	import SelectMenu from './SelectMenu.svelte';
 	import DeptRuleEditor from './DeptRuleEditor.svelte';
+	import EgressRules from './EgressRules.svelte';
 	import HelpTip from './HelpTip.svelte';
 	import {
 		addUser,
+		fetchCapabilities,
 		formatLimit,
 		formatTokens,
 		listUsers,
@@ -83,8 +85,22 @@
 		return list.map((p) => ({
 			...p,
 			match: { mode: p.match?.mode === 'all' ? 'all' : 'any', rules: p.match?.rules ?? [] },
-			allowedModels: p.allowedModels ?? []
+			allowedModels: p.allowedModels ?? [],
+			sandboxEgress: p.sandboxEgress ?? []
 		}));
+	}
+
+	// --- sandbox network grants (only meaningful while code execution is on) ---
+	let codeExecution = $state(false);
+	/** Which policy's / user's egress editor is expanded inline (one each). */
+	let openEgressPolicy = $state<string | null>(null);
+	let openEgressUser = $state<string | null>(null);
+	/** Effective read-only view for a user row: the policies they matched this month. */
+	function inheritedEgress(u: AdminUser): { name: string; rules: string[] }[] {
+		const names = new Set(u.policyNames ?? []);
+		return policies
+			.filter((p) => names.has(p.name) && (p.sandboxEgress?.length ?? 0) > 0)
+			.map((p) => ({ name: p.name, rules: p.sandboxEgress ?? [] }));
 	}
 
 	function addPolicy() {
@@ -98,6 +114,7 @@
 				role: 'user',
 				allowedModels: [],
 				sqlWrite: false,
+				sandboxEgress: [],
 				maxDailyTokens: null
 			}
 		];
@@ -194,6 +211,7 @@
 	}
 	$effect(() => {
 		void refreshAdmin();
+		fetchCapabilities().then((c) => (codeExecution = c?.capabilities.codeExecution === true));
 	});
 
 	async function runAdmin(action: () => Promise<string | null>) {
@@ -533,6 +551,28 @@
 						>
 							<Icon name="square-pen" size={12} />
 						</button>
+						{#if codeExecution}
+							{@const n = p.sandboxEgress?.length ?? 0}
+							<button
+								type="button"
+								onclick={() => (openEgressPolicy = openEgressPolicy === p.id ? null : p.id)}
+								title={m.egress_chip_title({ n })}
+								aria-expanded={openEgressPolicy === p.id}
+								class="flex shrink-0 items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-medium transition {n > 0
+									? 'border-accent/40 bg-accent-wash text-accent-strong'
+									: 'border-edge bg-surface text-neutral-400 hover:bg-canvas'} {openEgressPolicy === p.id
+									? 'ring-2 ring-accent/15'
+									: ''}"
+							>
+								<Icon name="globe" size={12} />
+								{n}
+								<Icon
+									name="chevron-down"
+									size={11}
+									class="text-neutral-400 transition-transform {openEgressPolicy === p.id ? 'rotate-180' : ''}"
+								/>
+							</button>
+						{/if}
 						<input
 							type="text"
 							inputmode="numeric"
@@ -554,6 +594,14 @@
 							class="w-24 shrink-0 rounded-lg border border-edge bg-surface px-2 py-1 text-right text-xs text-neutral-600 transition focus:border-accent focus:outline-none"
 						/>
 					</div>
+					{#if codeExecution && openEgressPolicy === p.id}
+						<div class="mt-3">
+							<EgressRules
+								rules={p.sandboxEgress ?? []}
+								onchange={(next) => (policies[pi].sandboxEgress = next)}
+							/>
+						</div>
+					{/if}
 				</div>
 			{/each}
 		</div>
@@ -609,6 +657,9 @@
 							<th class="px-3 py-2 font-semibold">{m.admin_col_role()}</th>
 							<th class="px-3 py-2 font-semibold">{m.admin_col_models()}</th>
 							<th class="px-3 py-2 font-semibold">{m.admin_col_write()}</th>
+							{#if codeExecution}
+								<th class="px-3 py-2 font-semibold">{m.admin_col_network()}</th>
+							{/if}
 							<th class="px-3 py-2 font-semibold">{m.admin_col_limit()}</th>
 							<th class="px-3 py-2 text-right font-semibold">{m.admin_col_usage()}</th>
 							<th class="px-3 py-2 font-semibold">{m.admin_col_active()}</th>
@@ -652,6 +703,9 @@
 									<td class="px-3 py-2.5 text-sm text-neutral-300" title={m.admin_policy_grants_hint()}>—</td>
 									<td class="px-3 py-2.5 text-sm text-neutral-300" title={m.admin_policy_grants_hint()}>—</td>
 									<td class="px-3 py-2.5 text-sm text-neutral-300" title={m.admin_policy_grants_hint()}>—</td>
+									{#if codeExecution}
+										<td class="px-3 py-2.5 text-sm text-neutral-300" title={m.admin_policy_grants_hint()}>—</td>
+									{/if}
 									<td class="px-3 py-2.5 text-sm text-neutral-300" title={m.admin_policy_grants_hint()}>—</td>
 								{:else}
 									<td class="px-3 py-2.5">
@@ -764,6 +818,31 @@
 											</button>
 										</div>
 									</td>
+									{#if codeExecution}
+										{@const n = u.sandboxEgress?.length ?? 0}
+										{@const inherited = inheritedEgress(u).reduce((s, g) => s + g.rules.length, 0)}
+										<td class="px-3 py-2.5">
+											<button
+												type="button"
+												onclick={() => (openEgressUser = openEgressUser === u.username ? null : u.username)}
+												title={m.egress_chip_title({ n })}
+												aria-expanded={openEgressUser === u.username}
+												class="flex shrink-0 items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-medium transition {n > 0
+													? 'border-accent/40 bg-accent-wash text-accent-strong'
+													: 'border-edge bg-surface text-neutral-400 hover:bg-canvas'} {openEgressUser === u.username
+													? 'ring-2 ring-accent/15'
+													: ''}"
+											>
+												<Icon name="globe" size={12} />
+												{n}{#if inherited > 0}<span class="text-neutral-400">+{inherited}</span>{/if}
+												<Icon
+													name="chevron-down"
+													size={11}
+													class="text-neutral-400 transition-transform {openEgressUser === u.username ? 'rotate-180' : ''}"
+												/>
+											</button>
+										</td>
+									{/if}
 									<td class="px-3 py-2.5">
 										<input
 											type="text"
@@ -838,6 +917,17 @@
 									</div>
 								</td>
 							</tr>
+							{#if codeExecution && !u.unlisted && openEgressUser === u.username}
+								<tr class="border-b border-edge-soft bg-canvas/40">
+									<td colspan="10" class="px-4 py-3">
+										<EgressRules
+											rules={u.sandboxEgress ?? []}
+											inherited={inheritedEgress(u)}
+											onchange={(next) => runAdmin(() => patchUser(u.username, { sandboxEgress: next }))}
+										/>
+									</td>
+								</tr>
+							{/if}
 						{/each}
 					</tbody>
 				</table>

@@ -3,6 +3,7 @@ import { env } from '$env/dynamic/private';
 import { DEFAULT_MODEL, MODEL_IDS } from './models';
 import type { UserProfile } from './auth';
 import { matchesDept, sanitizeMatch, type DeptMatch, type ProfileClaims } from '$lib/dept-rules';
+import { sanitizeEgressRules } from '$lib/egress';
 
 /**
  * Runtime access control, replacing the ALLOWED_USERS env var: an admin-managed
@@ -41,6 +42,14 @@ export interface AccessUser {
 	 * Chat only — flow runs are always read-only. Admin-set; never self-granted.
 	 */
 	sqlWrite?: boolean;
+	/**
+	 * Destinations the code-execution sandbox may reach for this user, on top
+	 * of the deny-everything default: FQDNs, `*.suffix`es, or IPv4 CIDRs, each
+	 * with optional ports (see $lib/egress). Composes as a UNION with every
+	 * matching policy — a per-user record can only add destinations. Empty =
+	 * no network. Admin-set; a security setting, audited on change.
+	 */
+	sandboxEgress?: string[];
 	addedBy: string;
 	addedAt: string;
 }
@@ -96,6 +105,8 @@ export interface AccessPolicy {
 	/** Extra model IDs, on top of DEFAULT_MODEL (same semantics as AccessUser). */
 	allowedModels?: string[];
 	sqlWrite?: boolean;
+	/** Sandbox egress destinations granted by this policy (same grammar as AccessUser). */
+	sandboxEgress?: string[];
 	/** Daily token cap granted by this policy; null = uncapped. */
 	maxDailyTokens: number | null;
 }
@@ -158,12 +169,30 @@ function sanitizePolicies(raw: unknown): AccessPolicy[] {
 					}
 				: {}),
 			sqlWrite: p.sqlWrite === true,
+			...(Array.isArray(p.sandboxEgress) && p.sandboxEgress.length
+				? { sandboxEgress: sanitizeEgressRules(p.sandboxEgress) }
+				: {}),
 			maxDailyTokens:
 				typeof p.maxDailyTokens === 'number' && p.maxDailyTokens > 0
 					? Math.round(p.maxDailyTokens)
 					: null
 		}))
 		.filter((p) => p.name.trim());
+}
+
+/** Per-user records are stored as submitted; re-canonicalize the egress list on read. */
+function sanitizeUsers(raw: unknown): Record<string, AccessUser> {
+	if (typeof raw !== 'object' || raw === null) return {};
+	const out: Record<string, AccessUser> = {};
+	for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+		if (typeof value !== 'object' || value === null) continue;
+		const u = value as AccessUser;
+		const egress = sanitizeEgressRules(u.sandboxEgress);
+		out[key] = { ...u };
+		if (egress.length) out[key].sandboxEgress = egress;
+		else delete out[key].sandboxEgress;
+	}
+	return out;
 }
 
 function sanitizeKnowledge(raw: unknown): OrgKnowledgeEntry[] {
@@ -240,7 +269,7 @@ async function load(): Promise<AccessFile> {
 		}
 		const parsed = JSON.parse(await store().readText(path));
 		const data: AccessFile = {
-			users: typeof parsed.users === 'object' && parsed.users ? parsed.users : {},
+			users: sanitizeUsers(parsed.users),
 			capabilities: {
 				codeExecution: parsed.capabilities?.codeExecution === true,
 				embedChat: parsed.capabilities?.embedChat === true,
@@ -365,6 +394,25 @@ export async function resolveDailyLimit(
 	return Math.max(...matched.map((p) => p.maxDailyTokens as number));
 }
 
+/**
+ * Effective sandbox egress allow-list: the union of the user's own record and
+ * every matching policy, canonical and sorted so equal grants hash equal (the
+ * sandbox module keys workspace VMs on this). Empty = the VM gets no network.
+ * Not implied by the admin role: opening an exfiltration path for model-written
+ * code is a per-person decision, like sqlWrite. Re-read per request.
+ */
+export async function resolveSandboxEgress(
+	username: string,
+	profile?: UserProfile | null
+): Promise<string[]> {
+	const data = await load();
+	const rules = new Set(data.users[username.toLowerCase()]?.sandboxEgress ?? []);
+	for (const p of matchedPolicies(data, profile)) {
+		for (const r of p.sandboxEgress ?? []) rules.add(r);
+	}
+	return [...rules].sort();
+}
+
 export async function getAccessEntry(username: string): Promise<AccessUser | null> {
 	const { users } = await load();
 	return users[username.toLowerCase()] ?? null;
@@ -377,7 +425,10 @@ export async function listAccessUsers(): Promise<Record<string, AccessUser>> {
 export async function upsertAccessUser(
 	username: string,
 	patch: Partial<
-		Pick<AccessUser, 'role' | 'blocked' | 'maxDailyTokens' | 'allowedModels' | 'sqlWrite'>
+		Pick<
+			AccessUser,
+			'role' | 'blocked' | 'maxDailyTokens' | 'allowedModels' | 'sqlWrite' | 'sandboxEgress'
+		>
 	>,
 	actor: string
 ): Promise<void> {
@@ -396,6 +447,10 @@ export async function upsertAccessUser(
 		patch.allowedModels !== undefined
 			? patch.allowedModels.filter((id) => MODEL_IDS.includes(id) && id !== DEFAULT_MODEL)
 			: current?.allowedModels;
+	const sandboxEgress =
+		patch.sandboxEgress !== undefined
+			? sanitizeEgressRules(patch.sandboxEgress)
+			: current?.sandboxEgress;
 	data.users[key] = {
 		role: patch.role ?? current?.role ?? 'user',
 		blocked: patch.blocked ?? current?.blocked ?? false,
@@ -403,6 +458,7 @@ export async function upsertAccessUser(
 			patch.maxDailyTokens !== undefined ? patch.maxDailyTokens : (current?.maxDailyTokens ?? null),
 		...(allowedModels && allowedModels.length ? { allowedModels } : {}),
 		sqlWrite: patch.sqlWrite ?? current?.sqlWrite ?? false,
+		...(sandboxEgress && sandboxEgress.length ? { sandboxEgress } : {}),
 		addedBy: current?.addedBy ?? actor,
 		addedAt: current?.addedAt ?? new Date().toISOString()
 	};

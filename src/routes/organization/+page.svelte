@@ -11,6 +11,7 @@
 	import AdminPanel from '$lib/components/AdminPanel.svelte';
 	import SecurityPanel from '$lib/components/SecurityPanel.svelte';
 	import SkillsPanel from '$lib/components/SkillsPanel.svelte';
+	import SandboxMonitor from '$lib/components/SandboxMonitor.svelte';
 	import TypstTemplatesPanel from '$lib/components/TypstTemplatesPanel.svelte';
 	import { authFetch, hasSession } from '$lib/session';
 	import { createPanelWidth } from '$lib/resizable.svelte';
@@ -53,13 +54,22 @@
 		});
 	});
 
-	type Section = 'knowledge' | 'skills' | 'pdftemplates' | 'users' | 'stats' | 'audit' | 'capabilities';
+	type Section =
+		| 'knowledge'
+		| 'skills'
+		| 'pdftemplates'
+		| 'users'
+		| 'stats'
+		| 'audit'
+		| 'sandboxes'
+		| 'capabilities';
 	let section = $state<Section>('knowledge');
 	/** Users/stats apply immediately — no batch save, so no Save button there. */
 	const adminSection = $derived(
 		section === 'users' ||
 		section === 'stats' ||
 		section === 'audit' ||
+		section === 'sandboxes' ||
 		section === 'capabilities' ||
 		section === 'skills' ||
 		section === 'pdftemplates'
@@ -244,6 +254,7 @@
 		{ id: 'users' as const, icon: 'users' as const, label: m.admin_users_title() },
 		{ id: 'stats' as const, icon: 'activity' as const, label: m.admin_stats_tab() },
 		{ id: 'audit' as const, icon: 'eye' as const, label: m.org_nav_audit() },
+		{ id: 'sandboxes' as const, icon: 'cpu' as const, label: m.org_nav_sandboxes() },
 		{ id: 'capabilities' as const, icon: 'sparkle' as const, label: m.org_nav_capabilities() }
 	];
 
@@ -255,6 +266,7 @@
 			users: { title: m.admin_users_title(), subtitle: m.org_users_subtitle() },
 			stats: { title: m.admin_stats_tab(), subtitle: m.org_stats_subtitle() },
 			audit: { title: m.org_nav_audit(), subtitle: m.org_audit_subtitle() },
+			sandboxes: { title: m.org_nav_sandboxes(), subtitle: m.org_sandboxes_subtitle() },
 			capabilities: { title: m.org_nav_capabilities(), subtitle: m.org_capabilities_subtitle() }
 		})[section]
 	);
@@ -370,6 +382,8 @@
 						<SkillsPanel />
 					{:else if section === 'audit'}
 						<SecurityPanel />
+					{:else if section === 'sandboxes'}
+						<SandboxMonitor />
 					{:else if section === 'capabilities'}
 						<div class="space-y-5">
 						<div class="rounded-xl border border-edge bg-surface p-5">

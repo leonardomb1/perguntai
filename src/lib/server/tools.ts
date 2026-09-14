@@ -580,7 +580,9 @@ export function pdfReportTool(
 	username: string,
 	credentials: { username: string; password?: string },
 	/** Set when the sandbox workspace is available — enables sourcePath/dataPath. */
-	sandboxConversationId?: string
+	sandboxConversationId?: string,
+	/** The user's effective sandbox egress allow-list (keys the workspace VM). */
+	sandboxEgress: string[] = []
 ) {
 	return tool({
 		description:
@@ -635,7 +637,8 @@ export function pdfReportTool(
 			const readWorkspaceFile = async (path: string, cap: number) => {
 				const { sandbox, workdir } = await getConversationSandbox(
 					username,
-					sandboxConversationId as string
+					sandboxConversationId as string,
+					sandboxEgress
 				);
 				const full = path.startsWith('/') ? path : `${workdir}/${path}`;
 				const text = await sandbox.fs().readToString(full);
@@ -1016,7 +1019,11 @@ const MAX_SANDBOX_INPUT_BYTES = 8 * 1024 * 1024;
  * capability. `dataQuery` runs read-only AS THE USER and feeds the full result
  * into the sandbox server-side, so datasets never pass through the model.
  */
-export function sandboxPythonTool(credentials: { username: string; password?: string }) {
+export function sandboxPythonTool(
+	credentials: { username: string; password?: string },
+	/** The user's effective sandbox egress allow-list (default: no network). */
+	sandboxEgress: string[] = []
+) {
 	return tool({
 		description:
 			'Run a Python script in an isolated sandbox for advanced analysis: statistics, forecasting, ' +
@@ -1064,7 +1071,7 @@ export function sandboxPythonTool(credentials: { username: string; password?: st
 				}
 			}
 			try {
-				const run = await runSandboxedPython(code, data);
+				const run = await runSandboxedPython(code, data, undefined, sandboxEgress);
 				return run.ok
 					? { output: run.stdout, durationMs: run.durationMs, rows: data?.length }
 					: { error: run.stderr || run.stdout || `exit ${run.exitCode}`, durationMs: run.durationMs };
@@ -1100,7 +1107,9 @@ function sheetToCsv(sheet: SheetData): string {
 
 export function sandboxFileTools(
 	credentials: { username: string; password?: string },
-	conversationId: string
+	conversationId: string,
+	/** The user's effective sandbox egress allow-list (default: no network). */
+	sandboxEgress: string[] = []
 ) {
 	const username = credentials.username;
 	const resolvePath = (w: string, path: string) =>
@@ -1112,7 +1121,7 @@ export function sandboxFileTools(
 				'Fetch warehouse data into the sandbox workspace WITHOUT it passing through you: runs a ' +
 				'single read-only SQL statement (database-qualified names, executed with the user\u2019s own ' +
 				`permissions, up to ${MAX_SANDBOX_INPUT_ROWS} rows) and writes the full result as a JSON ` +
-				'array of row objects to a workspace file. Then analyze it with sandboxExec (python/basalt).',
+				'array of row objects to a workspace file. Then analyze it with sandboxExec (python).',
 			inputSchema: z.object({
 				sql: z.string().describe('A single read-only SQL statement'),
 				path: z
@@ -1140,7 +1149,7 @@ export function sandboxFileTools(
 							error: `result exceeds ${MAX_SANDBOX_INPUT_BYTES / 1024 / 1024} MiB — aggregate or select fewer columns`
 						};
 					}
-					const { sandbox, workdir } = await getConversationSandbox(username, conversationId);
+					const { sandbox, workdir } = await getConversationSandbox(username, conversationId, sandboxEgress);
 					const full = resolvePath(workdir, path?.trim() || 'data.json');
 					await sandbox.fs().write(full, body);
 					return {
@@ -1166,7 +1175,7 @@ export function sandboxFileTools(
 			}),
 			execute: async ({ path, content }) => {
 				try {
-					const { sandbox, workdir } = await getConversationSandbox(username, conversationId);
+					const { sandbox, workdir } = await getConversationSandbox(username, conversationId, sandboxEgress);
 					const full = resolvePath(workdir, path);
 					const dir = full.slice(0, full.lastIndexOf('/'));
 					if (dir) await sandbox.fs().mkdir(dir).catch(() => {});
@@ -1186,7 +1195,7 @@ export function sandboxFileTools(
 			}),
 			execute: async ({ path }) => {
 				try {
-					const { sandbox, workdir } = await getConversationSandbox(username, conversationId);
+					const { sandbox, workdir } = await getConversationSandbox(username, conversationId, sandboxEgress);
 					const text = await sandbox.fs().readToString(resolvePath(workdir, path));
 					return {
 						content: text.slice(0, MAX_FILE_READ_CHARS),
@@ -1210,7 +1219,7 @@ export function sandboxFileTools(
 			}),
 			execute: async ({ path, oldText, newText, replaceAll }) => {
 				try {
-					const { sandbox, workdir } = await getConversationSandbox(username, conversationId);
+					const { sandbox, workdir } = await getConversationSandbox(username, conversationId, sandboxEgress);
 					const full = resolvePath(workdir, path);
 					const text = await sandbox.fs().readToString(full);
 					const count = text.split(oldText).length - 1;
@@ -1233,13 +1242,13 @@ export function sandboxFileTools(
 		sandboxExec: tool({
 			description:
 				'Run a shell command in this conversation\u2019s sandbox workspace (cwd = the workspace; ' +
-				'python and basalt are available). Output is truncated — keep it compact (head, wc, > file).',
+				'python is available). Output is truncated — keep it compact (head, wc, > file).',
 			inputSchema: z.object({
 				command: z.string().describe('Shell command line (sh -c)')
 			}),
 			execute: async ({ command }) => {
 				try {
-					const { sandbox, workdir } = await getConversationSandbox(username, conversationId);
+					const { sandbox, workdir } = await getConversationSandbox(username, conversationId, sandboxEgress);
 					const out = await sandbox.execWith('sh', (b) =>
 						b.arg('-c').arg(command).cwd(workdir).timeout(60_000)
 					);
@@ -1266,7 +1275,7 @@ export function sandboxFileTools(
 				try {
 					const doc = await getConversationDoc(username, conversationId, name);
 					if (!doc) return { error: `no attached document matches "${name}" in this conversation` };
-					const { sandbox, workdir } = await getConversationSandbox(username, conversationId);
+					const { sandbox, workdir } = await getConversationSandbox(username, conversationId, sandboxEgress);
 					const slug =
 						doc.name
 							.replace(/\.[^.]+$/, '')
@@ -1315,7 +1324,7 @@ export function sandboxFileTools(
 			}),
 			execute: async ({ path, filename }) => {
 				try {
-					const { sandbox, workdir } = await getConversationSandbox(username, conversationId);
+					const { sandbox, workdir } = await getConversationSandbox(username, conversationId, sandboxEgress);
 					const full = resolvePath(workdir, path);
 					const name = (filename?.trim() || full.split('/').pop() || 'arquivo').replace(
 						/[^\w.\- ()]/g,

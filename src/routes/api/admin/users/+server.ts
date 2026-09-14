@@ -48,6 +48,7 @@ export const GET: RequestHandler = async ({ request }) => {
 				maxDailyTokens: entry?.maxDailyTokens ?? null,
 				...(entry?.allowedModels ? { allowedModels: entry.allowedModels } : {}),
 				sqlWrite: entry?.sqlWrite ?? false,
+				...(entry?.sandboxEgress?.length ? { sandboxEgress: entry.sandboxEgress } : {}),
 				addedBy: entry?.addedBy ?? '',
 				addedAt: entry?.addedAt ?? '',
 				/** No access record — seen via usage only (admitted by a policy). */
@@ -168,6 +169,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		maxDailyTokens?: number | null;
 		allowedModels?: string[];
 		sqlWrite?: boolean;
+		sandboxEgress?: string[];
 	} = {};
 	if (body.role === 'admin' || body.role === 'builder' || body.role === 'user')
 		patch.role = body.role;
@@ -179,6 +181,9 @@ export const PATCH: RequestHandler = async ({ request }) => {
 	// upsertAccessUser validates/filters against the model registry.
 	if (Array.isArray(body.allowedModels))
 		patch.allowedModels = body.allowedModels.filter((x: unknown): x is string => typeof x === 'string');
+	// upsertAccessUser canonicalizes/drops invalid entries (see $lib/egress).
+	if (Array.isArray(body.sandboxEgress))
+		patch.sandboxEgress = body.sandboxEgress.filter((x: unknown): x is string => typeof x === 'string');
 
 	try {
 		await upsertAccessUser(body.username, patch, admin.username);
