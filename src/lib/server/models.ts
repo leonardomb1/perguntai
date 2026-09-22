@@ -138,6 +138,19 @@ const CLAUDE_MODELS: ServerModelOption[] = [
 		promptCache: true,
 		thinking: true,
 		maxOutputTokens: 32_000
+	},
+	{
+		// Thinking can't be disabled and forced tool_choice 400s on this model —
+		// both already hold here (always adaptive, toolChoice never forced).
+		id: 'claude-opus-5-5',
+		label: 'Opus 5.5',
+		hint: 'Opus mais recente, mais barato que o Opus 5',
+		provider: 'anthropic',
+		kind: 'anthropic',
+		serverTools: !foundryServerToolGap,
+		promptCache: true,
+		thinking: true,
+		maxOutputTokens: 32_000
 	}
 ];
 
