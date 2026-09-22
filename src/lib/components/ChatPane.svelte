@@ -15,7 +15,9 @@
 	import ModelPicker from './ModelPicker.svelte';
 	import Icon from './Icon.svelte';
 	import { MODEL_STORAGE_KEY, type Provider } from '$lib/models';
-	import { getToken, getDisplayName, clearSession } from '$lib/session';
+	import { authFetch, getToken, getDisplayName, clearSession } from '$lib/session';
+	import CompactionDivider from './CompactionDivider.svelte';
+	import { formatTokens } from '$lib/admin';
 	import { faviconDone, faviconReset, faviconRunning } from '$lib/favicon';
 	import { saveConversation, type ConversationMeta } from '$lib/history';
 	import { imageToDataUrl } from '$lib/image';
@@ -26,7 +28,8 @@
 		conversationId,
 		initialMessages,
 		displayName,
-		onSaved
+		onSaved,
+		onNewChat
 	}: {
 		conversationId: string;
 		initialMessages: UIMessage[];
@@ -34,6 +37,7 @@
 		displayName?: string;
 		/** Receives the saved index entry (null on no-op) to update the sidebar in place. */
 		onSaved: (meta: ConversationMeta | null) => void;
+		onNewChat?: () => void;
 	} = $props();
 
 	// Login username seeds the identicon (must match the sidebar avatar);
@@ -60,7 +64,7 @@
 	// fetch; until then an empty pick is fine — the server resolves '' (or any
 	// unknown id) to its default model.
 	const MODEL_KEY = MODEL_STORAGE_KEY;
-	let models = $state<{ id: string; label: string; hint: string; provider: Provider }[]>([]);
+	let models = $state<{ id: string; label: string; hint: string; provider: Provider; contextWindow?: number }[]>([]);
 	let selectedModel = $state(
 		(typeof localStorage !== 'undefined' && localStorage.getItem(MODEL_KEY)) || ''
 	);
@@ -219,6 +223,67 @@
 			method: 'DELETE',
 			headers: { Authorization: `Bearer ${getToken() ?? ''}` }
 		}).catch(() => {});
+	}
+
+	// --- context meter + compaction ---
+	// Each assistant message carries the prompt size the model reported for
+	// it; a compaction marker resets the count to its summary.
+	type ChatMeta = {
+		compaction?: { summary: string; contextBefore?: number };
+		context?: { tokens: number; window: number };
+	};
+	const metaOf = (msg: UIMessage) => (msg.metadata ?? {}) as ChatMeta;
+
+	const context = $derived.by(() => {
+		const msgs = chat.messages;
+		let marker = -1;
+		for (let i = msgs.length - 1; i >= 0; i--) {
+			if (metaOf(msgs[i]).compaction) {
+				marker = i;
+				break;
+			}
+		}
+		const modelWindow = models.find((mo) => mo.id === selectedModel)?.contextWindow ?? 0;
+		for (let i = msgs.length - 1; i > marker; i--) {
+			const c = metaOf(msgs[i]).context;
+			if (msgs[i].role === 'assistant' && c) return { tokens: c.tokens, window: c.window || modelWindow };
+		}
+		if (marker >= 0) {
+			return { tokens: Math.round(metaOf(msgs[marker]).compaction!.summary.length / 3), window: modelWindow };
+		}
+		return null;
+	});
+	const contextRatio = $derived(context?.window ? context.tokens / context.window : 0);
+	const overflowed = $derived(!!chat.error?.message.includes('context_overflow'));
+	const mustCompact = $derived(overflowed || contextRatio >= 0.95);
+	const meterColor = $derived(
+		contextRatio >= 0.9 ? 'bg-red-500' : contextRatio >= 0.7 ? 'bg-amber-500' : 'bg-neutral-400'
+	);
+
+	let compacting = $state(false);
+	let compactError = $state<string | null>(null);
+	async function compact() {
+		if (compacting || busy) return;
+		compacting = true;
+		compactError = null;
+		try {
+			const res = await authFetch('/api/chat/compact', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ conversationId, messages: chat.messages })
+			});
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok || !data.message) {
+				compactError = data.error ?? m.compaction_failed();
+				return;
+			}
+			chat.clearError();
+			chat.messages = [...chat.messages, data.message as UIMessage];
+		} catch {
+			compactError = m.compaction_failed();
+		} finally {
+			compacting = false;
+		}
 	}
 
 	let input = $state('');
@@ -473,7 +538,7 @@
 
 	function send() {
 		const text = input.trim();
-		if ((!text && pendingAttachments.length === 0) || busy || inputLocked) return;
+		if ((!text && pendingAttachments.length === 0) || busy || inputLocked || mustCompact) return;
 		const files = pendingAttachments.map((p) => ({
 			type: 'file' as const,
 			mediaType: p.dataUrl.slice(5, p.dataUrl.indexOf(';')),
@@ -593,6 +658,12 @@
 			     must not brick the whole app — the boundary swaps that message
 			     for a fallback and keeps everything else interactive. -->
 			<svelte:boundary onerror={(e) => console.error('message render failed:', e)}>
+				{#if metaOf(message).compaction}
+					<CompactionDivider
+						summary={metaOf(message).compaction!.summary}
+						contextBefore={metaOf(message).compaction!.contextBefore}
+					/>
+				{:else}
 				<ChatMessage
 					{message}
 					username={loginName}
@@ -603,6 +674,7 @@
 					onAsk={answerAsk}
 					onChatInstead={message.id === chat.messages.at(-1)?.id ? chatInstead : undefined}
 				/>
+				{/if}
 				{#snippet failed(_error, reset)}
 					<div
 						class="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
@@ -626,7 +698,7 @@
 			</div>
 		{/if}
 
-		{#if chat.error}
+		{#if chat.error && !overflowed}
 			<div
 				class="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
 				role="alert"
@@ -655,6 +727,31 @@
 				<Icon name={uploadNote.error ? 'x' : 'check'} size={12} />
 				{uploadNote.error ? `${uploadNote.name}: ${uploadNote.error}` : m.upload_added({ name: uploadNote.name })}
 			</span>
+		</div>
+	{/if}
+	{#if mustCompact}
+		<div
+			class="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+			role="alert"
+		>
+			<span class="min-w-0 flex-1 basis-64">{compactError ?? m.compaction_full()}</span>
+			<div class="flex shrink-0 items-center gap-2">
+				{#if onNewChat}
+					<button
+						onclick={onNewChat}
+						class="rounded-lg border border-amber-300 bg-surface px-3 py-1.5 text-xs font-medium transition hover:bg-amber-100"
+					>
+						{m.new_chat()}
+					</button>
+				{/if}
+				<button
+					onclick={compact}
+					disabled={compacting || busy}
+					class="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-accent-strong disabled:opacity-50"
+				>
+					{compacting ? m.compacting() : m.compact_conversation()}
+				</button>
+			</div>
 		</div>
 	{/if}
 	<div
@@ -739,7 +836,7 @@
 			<button
 				type="button"
 				onclick={send}
-				disabled={(!input.trim() && pendingAttachments.length === 0) || inputLocked}
+				disabled={(!input.trim() && pendingAttachments.length === 0) || inputLocked || mustCompact}
 				class="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-white transition hover:bg-accent-strong disabled:opacity-40"
 				title={m.send_message()}
 				aria-label={m.send_message()}
@@ -748,9 +845,37 @@
 			</button>
 		{/if}
 		</div>
-		{#if models.length > 1}
-			<div class="flex items-center px-1 pt-1.5">
-				<ModelPicker {models} bind:value={selectedModel} onSelect={pickModel} anchor={composerEl} />
+		{#if models.length > 1 || context?.window}
+			<div class="flex items-center gap-2 px-1 pt-1.5">
+				{#if models.length > 1}
+					<ModelPicker {models} bind:value={selectedModel} onSelect={pickModel} anchor={composerEl} />
+				{/if}
+				{#if context?.window}
+					<div
+						class="ml-auto flex items-center gap-2 text-[11px] text-neutral-400 tabular-nums"
+						title={m.context_meter_title({
+							used: context.tokens.toLocaleString('pt-BR'),
+							max: context.window.toLocaleString('pt-BR')
+						})}
+					>
+						{#if contextRatio >= 0.7 && !mustCompact}
+							<button
+								onclick={compact}
+								disabled={compacting || busy}
+								class="font-medium text-accent-strong transition hover:underline disabled:opacity-50"
+							>
+								{compacting ? m.compacting() : m.compact_action()}
+							</button>
+						{/if}
+						<span class="h-1 w-14 overflow-hidden rounded-full bg-fill">
+							<span
+								class="block h-full rounded-full {meterColor}"
+								style:width="{Math.min(100, contextRatio * 100)}%"
+							></span>
+						</span>
+						<span>{formatTokens(context.tokens)} / {formatTokens(context.window)}</span>
+					</div>
+				{/if}
 			</div>
 		{/if}
 	</div>

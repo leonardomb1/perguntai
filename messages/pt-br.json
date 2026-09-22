@@ -549,5 +549,14 @@
 	"sbx_net_tx": "enviado",
 	"sbx_stop": "Parar",
 	"sbx_remove": "Remover",
-	"sbx_remove_confirm": "Remover a sandbox {name}? Os arquivos do workspace serão perdidos; a conversa recria uma sandbox vazia no próximo uso."
+	"sbx_remove_confirm": "Remover a sandbox {name}? Os arquivos do workspace serão perdidos; a conversa recria uma sandbox vazia no próximo uso.",
+	"compaction_divider": "Conversa compactada",
+	"compaction_divider_tokens": "Conversa compactada ({tokens} tokens resumidos)",
+	"compaction_summary_hint": "O modelo agora trabalha com este resumo no lugar das mensagens acima.",
+	"compaction_full": "O contexto desta conversa está cheio. Compacte-a para continuar: o histórico continua visível, e o modelo passa a trabalhar com um resumo. Depois, reenvie sua última pergunta (anexos grandes não entram no resumo).",
+	"compact_action": "Compactar",
+	"compact_conversation": "Compactar conversa",
+	"compacting": "Compactando…",
+	"compaction_failed": "Não foi possível compactar a conversa.",
+	"context_meter_title": "Contexto usado: {used} de {max} tokens"
 }

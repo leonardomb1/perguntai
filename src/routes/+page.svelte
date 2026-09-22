@@ -462,6 +462,7 @@
 					initialMessages={pane.messages}
 					displayName={shownName}
 					onSaved={upsertConversation}
+					onNewChat={newChat}
 				/>
 			{:else}
 				<div class="flex flex-1 items-center justify-center">

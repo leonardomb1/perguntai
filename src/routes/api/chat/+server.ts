@@ -16,6 +16,16 @@ import {
 } from '$lib/server/access';
 import { addUsage, usageToday, weightedTokens } from '$lib/server/usage';
 import { logAudit, requestMeta } from '$lib/server/audit';
+import { modelContextWindow } from '$lib/server/models';
+import {
+	applyCompaction,
+	CONTEXT_OVERFLOW_CODE,
+	isContextOverflow,
+	lastMeasuredContext,
+	stepContextTokens,
+	type ChatMessageMetadata
+} from '$lib/server/compaction';
+import type { LanguageModelUsage, TextStreamPart, ToolSet } from 'ai';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -69,6 +79,14 @@ export const POST: RequestHandler = async ({ request }) => {
 		user.profile
 	);
 
+	// A transcript already at the window's edge would only bounce off the
+	// provider — ask the client to compact first (it offers the button).
+	const contextWindow = modelContextWindow(model);
+	const measured = lastMeasuredContext(messages);
+	if (measured && measured.tokens >= contextWindow * 0.95) {
+		return json({ error: CONTEXT_OVERFLOW_CODE, code: CONTEXT_OVERFLOW_CODE }, { status: 409 });
+	}
+
 	// Settings drive personalization (names, custom instructions) and carry the
 	// user's own MCP servers — their tools act with THE USER'S credentials.
 	const settings = await getUserSettings(user.username);
@@ -80,6 +98,16 @@ export const POST: RequestHandler = async ({ request }) => {
 	// us verify the provider actually reports cache read/write splits so the
 	// cost-weighting is correct rather than falling back to full-price input.
 	const raw = { input: 0, noCache: 0, cacheRead: 0, cacheWrite: 0, output: 0, steps: 0 };
+	// The LAST step's prompt is the conversation's true context size (history,
+	// tools, system prompt) — read from the stream so it precedes `finish`.
+	let lastStepUsage: LanguageModelUsage | undefined;
+	const trackContext = () =>
+		new TransformStream<TextStreamPart<ToolSet>, TextStreamPart<ToolSet>>({
+			transform(chunk, controller) {
+				if (chunk.type === 'finish-step') lastStepUsage = chunk.usage;
+				controller.enqueue(chunk);
+			}
+		});
 
 	// The run is DECOUPLED from the client connection: it aborts on an explicit
 	// stop, on a newer send for the same conversation, or at the hard timeout —
@@ -101,7 +129,13 @@ export const POST: RequestHandler = async ({ request }) => {
 			tokenBudget,
 			model
 		),
-		uiMessages: messages,
+		// The model sees the latest compaction summary + what followed it.
+		uiMessages: applyCompaction(messages),
+		experimental_transform: trackContext,
+		messageMetadata: ({ part }): ChatMessageMetadata | undefined =>
+			part.type === 'finish' && lastStepUsage
+				? { context: { tokens: stepContextTokens(lastStepUsage), window: contextWindow, model } }
+				: undefined,
 		// NOT request.signal — a mobile network switch mid-run used to abort the
 		// whole (CPU-expensive) response. See beginRun above for what aborts it.
 		abortSignal: runSignal,
@@ -168,6 +202,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		onError: (error) => {
 			console.error('chat stream error:', error);
 			const message = error instanceof Error ? error.message : String(error);
+			if (isContextOverflow(message)) return CONTEXT_OVERFLOW_CODE;
 			return message.slice(0, 300);
 		}
 	})));

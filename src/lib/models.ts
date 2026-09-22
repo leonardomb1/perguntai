@@ -39,6 +39,8 @@ export interface ModelOption {
 	 * Always false for non-Anthropic models.
 	 */
 	serverTools: boolean;
+	/** Maximum prompt size in tokens — drives the conversation context meter. */
+	contextWindow: number;
 }
 
 /** localStorage key for the user's sticky model pick (shared by chat + flows). */

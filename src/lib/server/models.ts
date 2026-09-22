@@ -100,7 +100,8 @@ const CLAUDE_MODELS: ServerModelOption[] = [
 		serverTools: !foundryServerToolGap,
 		promptCache: true,
 		thinking: true,
-		maxOutputTokens: 32_000
+		maxOutputTokens: 32_000,
+		contextWindow: 1_000_000
 	},
 	{
 		id: 'claude-opus-4-8',
@@ -111,7 +112,8 @@ const CLAUDE_MODELS: ServerModelOption[] = [
 		serverTools: true,
 		promptCache: true,
 		thinking: true,
-		maxOutputTokens: 32_000
+		maxOutputTokens: 32_000,
+		contextWindow: 1_000_000
 	},
 	{
 		// Catalog id kept stable so admin grants and sticky picks survive the
@@ -125,7 +127,8 @@ const CLAUDE_MODELS: ServerModelOption[] = [
 		serverTools: true,
 		promptCache: true,
 		thinking: true,
-		maxOutputTokens: 32_000
+		maxOutputTokens: 32_000,
+		contextWindow: 1_000_000
 	},
 	{
 		id: 'claude-opus-5',
@@ -137,7 +140,8 @@ const CLAUDE_MODELS: ServerModelOption[] = [
 		serverTools: !foundryServerToolGap,
 		promptCache: true,
 		thinking: true,
-		maxOutputTokens: 32_000
+		maxOutputTokens: 32_000,
+		contextWindow: 1_000_000
 	},
 	{
 		// Thinking can't be disabled and forced tool_choice 400s on this model —
@@ -150,12 +154,15 @@ const CLAUDE_MODELS: ServerModelOption[] = [
 		serverTools: !foundryServerToolGap,
 		promptCache: true,
 		thinking: true,
-		maxOutputTokens: 32_000
+		maxOutputTokens: 32_000,
+		contextWindow: 1_000_000
 	}
 ];
 
 /** One MODELS_EXTRA entry as the deployment writes it (see .env.example). */
 interface ExtraModelConfig {
+	/** Context window in tokens (default 1M for anthropic, 128k otherwise). */
+	contextWindow?: number;
 	id?: string;
 	label?: string;
 	hint?: string;
@@ -224,7 +231,13 @@ function parseExtraModels(): ServerModelOption[] {
 					// Reasoning models bill thinking as output; 8k would starve them.
 					: kind === 'openai-compatible'
 						? 8_192
-						: 32_000
+						: 32_000,
+			contextWindow:
+				typeof entry.contextWindow === 'number' && entry.contextWindow > 0
+					? entry.contextWindow
+					: kind === 'anthropic'
+						? 1_000_000
+						: 128_000
 		});
 	}
 	return out;
@@ -287,6 +300,11 @@ export function modelThinking(id: string): boolean {
 	return entryOf(id)?.thinking ?? false;
 }
 
+/** Context window in tokens (see ModelOption.contextWindow). */
+export function modelContextWindow(id: string): number {
+	return entryOf(id)?.contextWindow ?? 200_000;
+}
+
 /** Output ceiling for this model (see ServerModelOption.maxOutputTokens). */
 export function modelMaxOutputTokens(id: string): number {
 	return entryOf(id)?.maxOutputTokens ?? 32_000;
@@ -303,12 +321,13 @@ export function webSearchAvailable(): boolean {
 
 /** The catalog as the client sees it (server-only fields stripped). */
 export function clientModels(): ModelOption[] {
-	return MODELS.map(({ id, label, hint, provider, serverTools }) => ({
+	return MODELS.map(({ id, label, hint, provider, serverTools, contextWindow }) => ({
 		id,
 		label,
 		hint,
 		provider,
-		serverTools
+		serverTools,
+		contextWindow
 	}));
 }
 

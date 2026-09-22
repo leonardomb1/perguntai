@@ -549,5 +549,14 @@
 	"sbx_net_tx": "sent",
 	"sbx_stop": "Stop",
 	"sbx_remove": "Remove",
-	"sbx_remove_confirm": "Remove sandbox {name}? Workspace files will be lost; the conversation recreates an empty sandbox on next use."
+	"sbx_remove_confirm": "Remove sandbox {name}? Workspace files will be lost; the conversation recreates an empty sandbox on next use.",
+	"compaction_divider": "Conversation compacted",
+	"compaction_divider_tokens": "Conversation compacted ({tokens} tokens summarized)",
+	"compaction_summary_hint": "The model now works from this summary instead of the messages above.",
+	"compaction_full": "This conversation’s context is full. Compact it to continue: the history stays visible, and the model works from a summary. Then resend your last question (large attachments don’t carry over).",
+	"compact_action": "Compact",
+	"compact_conversation": "Compact conversation",
+	"compacting": "Compacting…",
+	"compaction_failed": "Could not compact the conversation.",
+	"context_meter_title": "Context used: {used} of {max} tokens"
 }
