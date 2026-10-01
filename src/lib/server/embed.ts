@@ -12,7 +12,7 @@ import {
 import { cachedPrepareStep, sortTools } from './agent';
 import { schemaContext } from './schema';
 import { visibleDatabases } from './warehouse-access';
-import { verifyEmbedKey } from './embedKeys';
+import { normalizeOrigins, verifyEmbedKey } from './embedKeys';
 import { agentTelemetry } from './telemetry';
 import { weightedTokens } from './usage';
 import {
@@ -61,7 +61,7 @@ export function embedConfig() {
 		/** Shared daily weighted-token budget for the whole embed surface. */
 		dailyTokens: intEnv(env.EMBED_DAILY_TOKENS, 1_000_000),
 		/** CSP frame-ancestors for /embed — who may iframe it. */
-		frameAncestors: env.EMBED_ALLOWED_ORIGINS || "'self'"
+		frameAncestors: normalizeOrigins(env.EMBED_ALLOWED_ORIGINS) || "'self'"
 	};
 }
 

@@ -27,6 +27,7 @@
 		listEmbedKeys,
 		createEmbedKey,
 		revokeEmbedKey,
+		updateEmbedKeyOrigins,
 		type PublicEmbedKey,
 		testCodeExecution,
 		type Capabilities,
@@ -137,6 +138,23 @@
 			ekFreshCopied = false;
 			ekLabel = ekUser = ekPass = ekOrigins = '';
 			embedKeys = null; // refetch
+		}
+	}
+	// Inline edit of a live key's framing origins (CSP frame-ancestors).
+	let ekEditing = $state<string | null>(null);
+	let ekEditOrigins = $state('');
+	function editEmbedOrigins(ek: PublicEmbedKey) {
+		ekEditing = ek.id;
+		ekEditOrigins = ek.allowedOrigins ?? '';
+	}
+	async function saveEmbedOrigins(id: string) {
+		if (ekBusy) return;
+		ekBusy = true;
+		const record = await updateEmbedKeyOrigins(id, ekEditOrigins);
+		ekBusy = false;
+		if (record && embedKeys) {
+			embedKeys = embedKeys.map((k) => (k.id === id ? record : k));
+			ekEditing = null;
 		}
 	}
 	async function dropEmbedKey(id: string) {
@@ -529,6 +547,45 @@
 												<span class="min-w-0 flex-1">
 													<span class="block truncate text-sm font-medium text-neutral-800">{ek.label}</span>
 													<span class="block truncate font-mono text-[11px] text-neutral-400">{ek.hint} · {ek.starrocksUser}</span>
+													{#if ekEditing === ek.id}
+														<span class="mt-1.5 flex items-center gap-1.5">
+															<input
+																bind:value={ekEditOrigins}
+																placeholder={m.embedkey_origins_ph()}
+																onkeydown={(e) => {
+																	if (e.key === 'Enter') saveEmbedOrigins(ek.id);
+																	if (e.key === 'Escape') ekEditing = null;
+																}}
+																class="min-w-0 flex-1 rounded-lg border border-edge bg-surface px-2 py-1 font-mono text-[11px] transition focus:border-accent focus:outline-none"
+															/>
+															<button
+																onclick={() => saveEmbedOrigins(ek.id)}
+																disabled={ekBusy}
+																class="shrink-0 rounded-lg bg-accent px-2.5 py-1 text-xs font-medium text-white transition hover:bg-accent-strong disabled:opacity-50"
+															>
+																{m.embedkey_save()}
+															</button>
+															<button
+																onclick={() => (ekEditing = null)}
+																class="shrink-0 rounded-lg p-1 text-neutral-400 transition hover:text-neutral-700"
+																aria-label={m.embedkey_cancel()}
+															>
+																<Icon name="x" size={12} />
+															</button>
+														</span>
+													{:else}
+														<span class="flex items-center gap-1 text-[11px] text-neutral-400">
+															<span class="min-w-0 truncate font-mono">{m.embedkey_origins_label()}: {ek.allowedOrigins ?? m.embedkey_origins_default()}</span>
+															{#if !ek.revoked}
+																<button
+																	onclick={() => editEmbedOrigins(ek)}
+																	class="shrink-0 rounded px-1 font-medium text-accent-strong transition hover:underline"
+																>
+																	{m.embedkey_edit()}
+																</button>
+															{/if}
+														</span>
+													{/if}
 												</span>
 												<span class="hidden shrink-0 text-[11px] text-neutral-400 sm:block">{m.embedkey_by({ user: ek.createdBy })}</span>
 												{#if ek.revoked}

@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { authenticateRequest, type AuthUser } from '$lib/server/auth';
 import { resolveRole } from '$lib/server/access';
-import { createEmbedKey, listEmbedKeys, revokeEmbedKey } from '$lib/server/embedKeys';
+import { createEmbedKey, listEmbedKeys, revokeEmbedKey, updateEmbedKeyOrigins } from '$lib/server/embedKeys';
 import { logAudit, requestMeta } from '$lib/server/audit';
 import type { RequestHandler } from './$types';
 
@@ -54,6 +54,29 @@ export const POST: RequestHandler = async ({ request }) => {
 		detail: { label: record.label, starrocksUser: record.starrocksUser }
 	});
 	return json({ key, record }, { status: 201 });
+};
+
+/** Edit a key's framing origins (CSP frame-ancestors) in place. */
+export const PATCH: RequestHandler = async ({ request }) => {
+	const admin = await requireAdmin(request);
+	if (admin instanceof Response) return admin;
+	const body = await request.json().catch(() => ({}));
+	const id = typeof body.id === 'string' ? body.id : '';
+	if (!id) return json({ error: 'Missing id' }, { status: 400 });
+	const allowedOrigins = typeof body.allowedOrigins === 'string' ? body.allowedOrigins : undefined;
+	const record = await updateEmbedKeyOrigins(id, allowedOrigins);
+	if (!record) return json({ error: 'Not found' }, { status: 404 });
+	logAudit({
+		actor: admin.username,
+		via: 'session',
+		...requestMeta(request),
+		category: 'keys',
+		action: 'embedkey.update',
+		target: id,
+		status: 'ok',
+		detail: { allowedOrigins: record.allowedOrigins ?? null }
+	});
+	return json({ record });
 };
 
 export const DELETE: RequestHandler = async ({ request, url }) => {

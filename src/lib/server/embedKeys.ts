@@ -51,6 +51,20 @@ export interface PublicEmbedKey {
 	revoked?: boolean;
 }
 
+/**
+ * Canonical CSP source list from free-form admin input: commas and newlines
+ * become spaces (a comma inside a CSP header starts a second policy, which
+ * would silently drop every origin after it) and trailing slashes go.
+ * Empty input → undefined (fall back to the deployment default).
+ */
+export function normalizeOrigins(raw: string | undefined): string | undefined {
+	const parts = (raw ?? '')
+		.split(/[\s,]+/)
+		.map((p) => p.replace(/\/+$/, ''))
+		.filter(Boolean);
+	return parts.length ? parts.join(' ') : undefined;
+}
+
 function storePath(): string {
 	return 'embed-keys.json';
 }
@@ -110,7 +124,7 @@ export async function createEmbedKey(input: {
 		starrocksPasswordEnc: encrypt(input.starrocksPassword),
 		...(input.maxMessages && input.maxMessages > 0 ? { maxMessages: Math.floor(input.maxMessages) } : {}),
 		...(input.dailyTokens && input.dailyTokens > 0 ? { dailyTokens: Math.floor(input.dailyTokens) } : {}),
-		...(input.allowedOrigins?.trim() ? { allowedOrigins: input.allowedOrigins.trim() } : {}),
+		...(normalizeOrigins(input.allowedOrigins) ? { allowedOrigins: normalizeOrigins(input.allowedOrigins) } : {}),
 		createdAt: new Date().toISOString(),
 		createdBy: input.createdBy
 	};
@@ -118,6 +132,18 @@ export async function createEmbedKey(input: {
 	keys.push(record);
 	await writeAll(keys);
 	return { key, record: publicEmbedKey(record) };
+}
+
+/** Change a live key's framing origins — portals move without re-minting. */
+export async function updateEmbedKeyOrigins(id: string, allowedOrigins: string | undefined): Promise<PublicEmbedKey | null> {
+	const keys = await readAll();
+	const record = keys.find((k) => k.id === id);
+	if (!record || record.revoked) return null;
+	const origins = normalizeOrigins(allowedOrigins);
+	if (origins) record.allowedOrigins = origins;
+	else delete record.allowedOrigins;
+	await writeAll(keys);
+	return publicEmbedKey(record);
 }
 
 export async function revokeEmbedKey(id: string): Promise<boolean> {

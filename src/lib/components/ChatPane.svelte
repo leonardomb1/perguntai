@@ -592,11 +592,31 @@
 	// view never fights the user.
 	let contentEl = $state<HTMLElement | null>(null);
 	let pinned = true;
+	// Jump buttons (WhatsApp/Teams style): "to bottom" once the latest message
+	// is out of view, "to top" once scrolled past the first screenful.
+	let showJumpBottom = $state(false);
+	let showJumpTop = $state(false);
 
 	function handleScroll() {
 		const el = scrollContainer;
 		if (!el) return;
-		pinned = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+		const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+		pinned = fromBottom < 60;
+		showJumpBottom = fromBottom > 200;
+		showJumpTop = el.scrollTop > el.clientHeight;
+	}
+
+	function jumpToBottom() {
+		const el = scrollContainer;
+		if (!el) return;
+		// Mid-stream, jump instantly: a smooth scroll's intermediate positions
+		// would unpin the view and it would stop following the new text.
+		pinned = true;
+		el.scrollTo({ top: el.scrollHeight, behavior: busy ? 'instant' : 'smooth' });
+	}
+
+	function jumpToTop() {
+		scrollContainer?.scrollTo({ top: 0, behavior: 'smooth' });
 	}
 
 	$effect(() => {
@@ -606,6 +626,7 @@
 		el.scrollTop = el.scrollHeight; // opening a conversation lands at the end
 		const ro = new ResizeObserver(() => {
 			if (pinned) el.scrollTop = el.scrollHeight;
+			handleScroll(); // content growth alone can move the jump buttons in or out
 		});
 		ro.observe(content);
 		return () => ro.disconnect();
@@ -716,6 +737,34 @@
 </main>
 
 <footer class="shrink-0 px-4 pt-1 pb-4 sm:px-6">
+	{#if showJumpTop || showJumpBottom}
+		<!-- Zero-height anchor: the buttons float just above the composer, at
+		     the right edge of the message column. -->
+		<div class="relative mx-auto max-w-3xl">
+			<div class="absolute right-2 bottom-full mb-3 flex flex-col gap-2">
+				{#if showJumpTop}
+					<button
+						onclick={jumpToTop}
+						aria-label={m.scroll_to_top()}
+						title={m.scroll_to_top()}
+						class="grid size-9 place-items-center rounded-full border border-edge bg-surface text-neutral-500 shadow-md transition hover:text-accent-strong"
+					>
+						<Icon name="arrow-up" size={16} />
+					</button>
+				{/if}
+				{#if showJumpBottom}
+					<button
+						onclick={jumpToBottom}
+						aria-label={m.scroll_to_bottom()}
+						title={m.scroll_to_bottom()}
+						class="grid size-9 place-items-center rounded-full border border-edge bg-surface text-neutral-500 shadow-md transition hover:text-accent-strong"
+					>
+						<Icon name="arrow-down" size={16} />
+					</button>
+				{/if}
+			</div>
+		</div>
+	{/if}
 	{#if uploadNote}
 		<div class="mx-auto mb-1.5 max-w-3xl">
 			<span

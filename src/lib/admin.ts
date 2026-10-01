@@ -548,6 +548,20 @@ export async function createEmbedKey(input: {
 	}
 }
 
+export async function updateEmbedKeyOrigins(id: string, allowedOrigins: string): Promise<PublicEmbedKey | null> {
+	try {
+		const res = await authFetch('/api/admin/embed-keys', {
+			method: 'PATCH',
+			headers: headers(),
+			body: JSON.stringify({ id, allowedOrigins })
+		});
+		if (!res.ok) return null;
+		return (await res.json()).record ?? null;
+	} catch {
+		return null;
+	}
+}
+
 export async function revokeEmbedKey(id: string): Promise<boolean> {
 	try {
 		const res = await authFetch(`/api/admin/embed-keys?id=${encodeURIComponent(id)}`, {
