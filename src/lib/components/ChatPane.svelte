@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import { onDestroy, onMount, tick } from 'svelte';
+	import { fade } from 'svelte/transition';
 	import { Chat } from '@ai-sdk/svelte';
 	import {
 		DefaultChatTransport,
@@ -592,10 +593,8 @@
 	// view never fights the user.
 	let contentEl = $state<HTMLElement | null>(null);
 	let pinned = true;
-	// Jump buttons (WhatsApp/Teams style): "to bottom" once the latest message
-	// is out of view, "to top" once scrolled past the first screenful.
+	// "Jump to latest" button, shown once the end of the conversation is out of view.
 	let showJumpBottom = $state(false);
-	let showJumpTop = $state(false);
 
 	function handleScroll() {
 		const el = scrollContainer;
@@ -603,7 +602,6 @@
 		const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
 		pinned = fromBottom < 60;
 		showJumpBottom = fromBottom > 200;
-		showJumpTop = el.scrollTop > el.clientHeight;
 	}
 
 	function jumpToBottom() {
@@ -615,9 +613,6 @@
 		el.scrollTo({ top: el.scrollHeight, behavior: busy ? 'instant' : 'smooth' });
 	}
 
-	function jumpToTop() {
-		scrollContainer?.scrollTo({ top: 0, behavior: 'smooth' });
-	}
 
 	$effect(() => {
 		const el = scrollContainer;
@@ -737,32 +732,19 @@
 </main>
 
 <footer class="shrink-0 px-4 pt-1 pb-4 sm:px-6">
-	{#if showJumpTop || showJumpBottom}
-		<!-- Zero-height anchor: the buttons float just above the composer, at
-		     the right edge of the message column. -->
+	{#if showJumpBottom}
+		<!-- Zero-height anchor: the button floats centered just above the
+		     composer, the way most chat apps place it. -->
 		<div class="relative mx-auto max-w-3xl">
-			<div class="absolute right-2 bottom-full mb-3 flex flex-col gap-2">
-				{#if showJumpTop}
-					<button
-						onclick={jumpToTop}
-						aria-label={m.scroll_to_top()}
-						title={m.scroll_to_top()}
-						class="grid size-9 place-items-center rounded-full border border-edge bg-surface text-neutral-500 shadow-md transition hover:text-accent-strong"
-					>
-						<Icon name="arrow-up" size={16} />
-					</button>
-				{/if}
-				{#if showJumpBottom}
-					<button
-						onclick={jumpToBottom}
-						aria-label={m.scroll_to_bottom()}
-						title={m.scroll_to_bottom()}
-						class="grid size-9 place-items-center rounded-full border border-edge bg-surface text-neutral-500 shadow-md transition hover:text-accent-strong"
-					>
-						<Icon name="arrow-down" size={16} />
-					</button>
-				{/if}
-			</div>
+			<button
+				onclick={jumpToBottom}
+				transition:fade={{ duration: 120 }}
+				aria-label={m.scroll_to_bottom()}
+				title={m.scroll_to_bottom()}
+				class="absolute bottom-full left-1/2 mb-3 grid size-8 -translate-x-1/2 place-items-center rounded-full border border-edge bg-surface text-neutral-600 shadow-lg transition-colors hover:bg-fill hover:text-neutral-900"
+			>
+				<Icon name="arrow-down" size={16} />
+			</button>
 		</div>
 	{/if}
 	{#if uploadNote}
